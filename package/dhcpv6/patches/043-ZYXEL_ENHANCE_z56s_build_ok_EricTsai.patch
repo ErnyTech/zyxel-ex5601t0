@@ -1,0 +1,54 @@
+Index: wide-dhcpv6-20080615/dhcp6c.c
+===================================================================
+--- wide-dhcpv6-20080615.orig/dhcp6c.c
++++ wide-dhcpv6-20080615/dhcp6c.c
+@@ -3238,9 +3238,9 @@ int addMapInfoToMsg(struct dhcp6_optinfo
+ 				dprintf(LOG_INFO, FNAME, "malformed MAP%c options",
+ 					dhcp6cMsg.maptAssigned ? 'T' : (dhcp6cMsg.mapeAssigned ? 'E' : '?'));
+ 				if (dhcp6cMsg.mapeAssigned)
+-					dhcp6cMsg.mapeAssigned = FALSE;
++					dhcp6cMsg.mapeAssigned = false;
+ 				if (dhcp6cMsg.maptAssigned)
+-					dhcp6cMsg.maptAssigned = FALSE;
++					dhcp6cMsg.maptAssigned = false;
+ 				goto fail;
+ 			}
+ 			switch (opt) {
+@@ -3323,13 +3323,13 @@ int addMapInfoToMsg(struct dhcp6_optinfo
+ 				}
+ 				case DH6OPT_S46_BR:
+ 				{
+-					struct in6_addr addr;
+-					char br[IP6ADDR_LENGTH];
++					struct in6_addr addr = {0};
++					char br[IP6ADDR_LENGTH] = {0};
+ 
+-					dhcp6cMsg.mapeAssigned = TRUE;
++					dhcp6cMsg.mapeAssigned = true;
+ 
+ 					memcpy(&addr, cp, optlen);
+-					sprintf(br, "%s/%d", in6addr2str(&addr, 0), (optlen*8));
++					snprintf(br, IP6ADDR_LENGTH, "%s/%d", in6addr2str(&addr, 0), (optlen*8));
+ 					strncpy(dhcp6cMsg.brIPv6Prefix, br, strlen(br));
+ 					break;
+ 				}
+@@ -3346,7 +3346,7 @@ int addMapInfoToMsg(struct dhcp6_optinfo
+ 
+ 					temp_ptr++;
+ 
+-					dhcp6cMsg.maptAssigned = TRUE;
++					dhcp6cMsg.maptAssigned = true;
+ 
+ 					memcpy(&addr, temp_ptr, (len/8)); //RFC 6052: 2.2: len%8 must be 0!
+ 					sprintf(br, "%s/%d", in6addr2str(&addr, 0), len);
+@@ -3366,8 +3366,8 @@ int addMapInfoToMsg(struct dhcp6_optinfo
+ 		if (dhcp6cMsg.maptAssigned && dhcp6cMsg.mapeAssigned)
+ 		{
+ 			/* silently ignore */
+-			dhcp6cMsg.mapeAssigned = FALSE;
+-			dhcp6cMsg.maptAssigned = FALSE;
++			dhcp6cMsg.mapeAssigned = false;
++			dhcp6cMsg.maptAssigned = false;
+ 		}
+ 
+ fail:

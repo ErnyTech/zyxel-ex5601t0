@@ -1,0 +1,61 @@
+Index: busybox-1.31.1/networking/wget.c
+===================================================================
+--- busybox-1.31.1.orig/networking/wget.c
++++ busybox-1.31.1/networking/wget.c
+@@ -266,6 +266,7 @@ struct globals {
+ 	char *ifName;
+ 	char *dscp;
+ 	char *ethernetPriority;
++	FILE *output_fp;
+ #if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET)
+ 	char *speedTestEnable;
+ #endif //PLATFORM_ECONET
+@@ -1784,7 +1785,7 @@ static void NOINLINE retrieve_file_data(
+ 			if (n > 0) {
+ #if defined(ZCFG_SUPPORT) //TR143
+ 				if (!(tr143options & TR143OPTIONS_DOWNLOAD_NOWRITEDOWN)){
+-					if (safe_fwrite(G.wget_buf, 1, n, (FILE *)G.output_fd) != n)
++					if (safe_fwrite(G.wget_buf, 1, n, G.output_fp) != n)
+ 					{
+ 						strcpy(DiagnosticsState, "Error_TransferFailed");
+ 						outputDiagDlData();
+@@ -2493,7 +2494,8 @@ However, in real world it was observed t
+ #endif
+ 		if (G.output_fd < 0){
+ #if defined(ZCFG_SUPPORT) //TR143
+-			G.output_fd = (int )xfopen(G.fname_out, ((option_mask32 & WGET_OPT_CONTINUE) ? "a" : "w"));
++			G.output_fp = xfopen(G.fname_out, ((option_mask32 & WGET_OPT_CONTINUE) ? "a" : "w"));
++			G.output_fd = fileno(G.output_fp);
+ #else
+ 			G.output_fd = xopen(G.fname_out, G.o_flags);
+ #endif
+@@ -2501,7 +2503,8 @@ However, in real world it was observed t
+ 		retrieve_file_data(dfp);
+ 		if (!(option_mask32 & WGET_OPT_OUTNAME)) {
+ #if defined(ZCFG_SUPPORT) //TR143
+-			fclose((FILE *)(G.output_fd));
++			if(G.output_fp != NULL)
++				fclose(G.output_fp);
+ #else
+ 			xclose(G.output_fd);
+ #endif
+@@ -2798,7 +2801,7 @@ IF_DESKTOP(	"no-parent\0"        No_argu
+ #if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
+ 		else
+ 		{
+-			G.output_fd = (int )xfopen(G.fname_out, ((option_mask32 & WGET_OPT_CONTINUE) ? "a" : "w"));
++			G.output_fp = xfopen(G.fname_out, ((option_mask32 & WGET_OPT_CONTINUE) ? "a" : "w"));
+ 		}
+ #endif
+ 		/* compat with wget: -O FILE can overwrite */
+@@ -2818,6 +2821,10 @@ IF_DESKTOP(	"no-parent\0"        No_argu
+ 	while (*argv)
+ 		download_one_url(*argv++);
+ 
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++	if(G.output_fp != NULL)
++		fclose(G.output_fp);
++#endif
+ 	if (G.output_fd >= 0)
+ 		xclose(G.output_fd);
+ 

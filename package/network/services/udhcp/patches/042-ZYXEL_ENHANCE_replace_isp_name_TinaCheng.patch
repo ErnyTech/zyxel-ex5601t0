@@ -1,0 +1,208 @@
+Index: udhcp-0.9.8/Makefile
+===================================================================
+--- udhcp-0.9.8.orig/Makefile
++++ udhcp-0.9.8/Makefile
+@@ -85,17 +85,17 @@ CFLAGS += -DZYXEL_FAKE_IP_169_254_X_X
+ endif
+ 
+ #Sunrise customization
+-ifneq ($(strip $(SUNRISE_DHCP_FORCE_RENEW)),)
+-CFLAGS += -DSUNRISE_DHCP_FORCE_RENEW
++ifneq ($(strip $(SAAAD_DHCP_FORCE_RENEW)),)
++CFLAGS += -DSAAAD_DHCP_FORCE_RENEW
+ endif
+-ifneq ($(strip $(SUNRISE_DHCP_OPTION58_OPTION59)),)
+-CFLAGS += -DSUNRISE_DHCP_OPTION58_OPTION59
++ifneq ($(strip $(SAAAD_DHCP_OPTION58_OPTION59)),)
++CFLAGS += -DSAAAD_DHCP_OPTION58_OPTION59
+ endif
+-ifneq ($(strip $(SUNRISE_RELEASE_DHCP_PPP_BEFORE_IFDOWN)),)
+-CFLAGS += -DSUNRISE_RELEASE_DHCP_PPP_BEFORE_IFDOWN
++ifneq ($(strip $(SAAAD_RELEASE_DHCP_PPP_BEFORE_IFDOWN)),)
++CFLAGS += -DSAAAD_RELEASE_DHCP_PPP_BEFORE_IFDOWN
+ endif
+-ifneq ($(strip $(SUNRISE_VLANHUNT_CUSTOMIZATION)),)
+-CFLAGS += -DSUNRISE_VLANHUNT_CUSTOMIZATION
++ifneq ($(strip $(SAAAD_VLANHUNT_CUSTOMIZATION)),)
++CFLAGS += -DSAAAD_VLANHUNT_CUSTOMIZATION
+ endif
+ 
+ ifneq ($(strip $(CONFIG_ZYXEL_CUSTOMIZATION_DEVICELOG)),)
+Index: udhcp-0.9.8/dhcpc.c
+===================================================================
+--- udhcp-0.9.8.orig/dhcpc.c
++++ udhcp-0.9.8/dhcpc.c
+@@ -94,7 +94,7 @@ char vsi[256]="";
+ extern int last_option_index;
+ #endif
+ 
+-#ifdef SUNRISE_DHCP_FORCE_RENEW //DHCP Force Renew
++#ifdef SAAAD_DHCP_FORCE_RENEW //DHCP Force Renew
+ char Forecerenewkey[128]="";
+ #endif
+ 
+@@ -264,7 +264,7 @@ static void show_usage(void)
+ #if 1 /* vlan autohunt, ZyXEL, John */
+ "  -V, --vid				   	   vlan auto hunt\n"
+ #endif
+-#ifdef SUNRISE_DHCP_FORCE_RENEW //DHCP Force Renew
++#ifdef SAAAD_DHCP_FORCE_RENEW //DHCP Force Renew
+ "  -K, --renewkey				   Dhcp force renew key\n"
+ #endif
+ 	);
+@@ -556,7 +556,7 @@ int main(int argc, char *argv[])
+ 	int sig;
+ 	int vlanHuntEnable = 0;
+ 
+-#ifdef SUNRISE_DHCP_FORCE_RENEW //DHCP Force Renew
++#ifdef SAAAD_DHCP_FORCE_RENEW //DHCP Force Renew
+ 	char renewkey[128] = {0};
+ 	unsigned long replayDetectionNewh = 0 ;
+ 	unsigned long replayDetectionNewl = 0 ;
+@@ -592,7 +592,7 @@ int discoverSet = 0;
+ #if 1 /* vlan autohunt, ZyXEL, John */
+ 		{"vid",	required_argument,	0, 'V'},
+ #endif
+-#ifdef SUNRISE_DHCP_FORCE_RENEW //DHCP Force Renew  
++#ifdef SAAAD_DHCP_FORCE_RENEW //DHCP Force Renew
+ 		{"renewkey",	required_argument,	0, 'K'},
+ #endif
+ 		{"help",	no_argument,		0, '?'},
+@@ -604,7 +604,7 @@ int discoverSet = 0;
+ 	/* get options */
+ 	while (1) {
+ 		int option_index = 0;
+-#ifdef SUNRISE_DHCP_FORCE_RENEW //DHCP Force Renew
++#ifdef SAAAD_DHCP_FORCE_RENEW //DHCP Force Renew
+ 		c = getopt_long(argc, argv, "c:fbH:h:i:np:qr:s:vV:C:I:SW:K:", arg_options, &option_index);
+ #else
+ 		c = getopt_long(argc, argv, "c:fbH:h:i:np:qr:s:vV:C:I:SW", arg_options, &option_index);
+@@ -668,7 +668,7 @@ int discoverSet = 0;
+ 			vlanHuntEnable = 1;
+ 			break;
+ #endif
+-#ifdef SUNRISE_DHCP_FORCE_RENEW //DHCP Force Renew
++#ifdef SAAAD_DHCP_FORCE_RENEW //DHCP Force Renew
+ 		case 'K':
+ 			strcpy(Forecerenewkey, optarg);
+ 			break;
+@@ -863,7 +863,7 @@ int discoverSet = 0;
+ 				DEBUG(LOG_ERR, "couldnt get option from packet -- ignoring");
+ 				continue;
+ 			}
+-#ifdef SUNRISE_DHCP_FORCE_RENEW //DHCP Force Renew
++#ifdef SAAAD_DHCP_FORCE_RENEW //DHCP Force Renew
+ 			if (state != BOUND || *message != DHCPFORCERENEW)
+ 			{
+ 				if (packet.xid != xid) {
+@@ -884,7 +884,7 @@ int discoverSet = 0;
+ 			case INIT_SELECTING:
+ 				/* Must be a DHCPOFFER to one of our xid's */
+ 				if (*message == DHCPOFFER) {
+-#ifdef SUNRISE_VLANHUNT_CUSTOMIZATION
++#ifdef SAAAD_VLANHUNT_CUSTOMIZATION
+ 					temp = get_option(&packet, 0x2b);
+ 					if(vlanHuntEnable){
+ 						if (temp != NULL)
+@@ -925,7 +925,7 @@ int discoverSet = 0;
+ 						memcpy(&lease, temp, 4);
+ 						lease = ntohl(lease);
+ 					}
+-#ifdef SUNRISE_DHCP_OPTION58_OPTION59 /*Support DHCP option for option 58 and 59*/
++#ifdef SAAAD_DHCP_OPTION58_OPTION59 /*Support DHCP option for option 58 and 59*/
+ 					if (!(temp = get_option(&packet, DHCP_T1))) {
+ 						LOG(LOG_ERR, "No Renewal time with ACK, using leasetime/2");
+ 						t1 = lease / 2;
+@@ -956,7 +956,7 @@ int discoverSet = 0;
+ 					timeout = t1 + start;
+ 					requested_ip = packet.yiaddr;
+ #if 1 /* vlan autohunt, ZyXEL, John */
+-#ifndef SUNRISE_VLANHUNT_CUSTOMIZATION
++#ifndef SAAAD_VLANHUNT_CUSTOMIZATION
+ 					if(vlanHuntEnable){	
+ 						dhcpMsgSend(ZCFG_MSG_VLAN_HUNT_SUCCESS, ZCFG_EID_VLAN_AUTOHUNT, 0, NULL);
+ 						exit_client(0);
+@@ -973,7 +973,7 @@ int discoverSet = 0;
+ #ifdef ZYXEL_FAKE_IP_169_254_X_X
+ 					discoverSet = 0;
+ #endif
+-#ifdef SUNRISE_DHCP_FORCE_RENEW //DHCP Force Renew
++#ifdef SAAAD_DHCP_FORCE_RENEW //DHCP Force Renew
+ 					change_mode(LISTEN_KERNEL);
+ #else
+ 					change_mode(LISTEN_NONE);
+@@ -1026,7 +1026,7 @@ int discoverSet = 0;
+ 				}
+ 				break;
+ 			case BOUND:
+-#ifdef SUNRISE_DHCP_FORCE_RENEW //DHCP Force Renew
++#ifdef SAAAD_DHCP_FORCE_RENEW //DHCP Force Renew
+ 				if (*message == DHCPFORCERENEW)
+ 				{
+ 					printf("Receive DHCP_FORCE_RENEW\n");
+@@ -1127,7 +1127,7 @@ int discoverSet = 0;
+ 				break;
+ 			case SIGTERM:
+ 				LOG(LOG_INFO, "Received SIGTERM");
+-#ifdef SUNRISE_RELEASE_DHCP_PPP_BEFORE_IFDOWN
++#ifdef SAAAD_RELEASE_DHCP_PPP_BEFORE_IFDOWN
+ 				perform_release(0);
+ #endif
+ 				exit_client(0);
+Index: udhcp-0.9.8/dhcpd.h
+===================================================================
+--- udhcp-0.9.8.orig/dhcpd.h
++++ udhcp-0.9.8/dhcpd.h
+@@ -66,7 +66,7 @@
+ #endif
+ #define DHCP_6RD_OPT        0xd4
+ #define DHCP_END            0xFF
+-#ifdef SUNRISE_DHCP_FORCE_RENEW //DHCP Force Renew
++#ifdef SAAAD_DHCP_FORCE_RENEW //DHCP Force Renew
+ #define DHCP_AUTHENTICATION_INFO 0x5a
+ #endif
+ 
+@@ -89,7 +89,7 @@
+ #define DHCPNAK			6
+ #define DHCPRELEASE		7
+ #define DHCPINFORM		8
+-#ifdef SUNRISE_DHCP_FORCE_RENEW //DHCP Force Renew
++#ifdef SAAAD_DHCP_FORCE_RENEW //DHCP Force Renew
+ #define DHCPFORCERENEW 	9
+ #endif
+ 
+Index: udhcp-0.9.8/options.c
+===================================================================
+--- udhcp-0.9.8.orig/options.c
++++ udhcp-0.9.8/options.c
+@@ -48,7 +48,7 @@ struct dhcp_option options[] = {
+ 	{"message",	OPTION_STRING,				0x38},
+ 	{"tftp",	OPTION_STRING,				0x42},
+ 	{"bootfile",	OPTION_STRING,				0x43},
+-#ifdef SUNRISE_DHCP_FORCE_RENEW //DHCP Force Renew
++#ifdef SAAAD_DHCP_FORCE_RENEW //DHCP Force Renew
+ 	{"forcerenew",	OPTION_FORCERENEW,	0x5a},
+ #endif
+ 	{"sipsrv",	OPTION_STRING,				0x78}, //Keep following four option in order
+@@ -70,7 +70,7 @@ struct dhcp_option options[] = {
+ int option_lengths[] = {
+ 	[OPTION_IP] =		4,
+ 	[OPTION_IP_PAIR] =	8,
+-#ifdef SUNRISE_DHCP_FORCE_RENEW //DHCP Force Renew
++#ifdef SAAAD_DHCP_FORCE_RENEW //DHCP Force Renew
+ 	[OPTION_FORCERENEW] = 23,
+ #endif
+ 	[OPTION_BOOLEAN] =	1,
+Index: udhcp-0.9.8/options.h
+===================================================================
+--- udhcp-0.9.8.orig/options.h
++++ udhcp-0.9.8/options.h
+@@ -9,7 +9,7 @@
+ enum {
+ 	OPTION_IP=1,
+ 	OPTION_IP_PAIR,
+-#ifdef SUNRISE_DHCP_FORCE_RENEW //DHCP Force Renew
++#ifdef SAAAD_DHCP_FORCE_RENEW //DHCP Force Renew
+ 	OPTION_FORCERENEW,
+ #endif
+ 	OPTION_STRING,

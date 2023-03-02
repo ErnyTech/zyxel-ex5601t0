@@ -1,0 +1,164 @@
+Index: omcproxy-2018-12-14-722151f0/src/groups.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/groups.c
++++ omcproxy-2018-12-14-722151f0/src/groups.c
+@@ -77,6 +77,30 @@ static void querier_remove_group(struct
+ 	free(group);
+ }
+ 
++#ifdef ZYXEL_OMCPROXY
++void group_hosts_sync(struct group *group, omgp_time_t now)
++{
++	struct lh_table *hosts = group ? group->hosts : NULL;
++	struct group_host *host;
++	struct lh_entry *entry, *next;
++
++
++	if(!hosts || !hosts->count)
++		return;
++
++	entry = hosts->head;
++	while(entry){
++	    host = (struct group_host *)entry->v;
++		next = entry->next;
++		if(now > host->until)
++			lh_table_delete_entry(hosts, entry);
++	    entry = next;
++	}
++
++	L_DEBUG("%s: group hosts: %d", __FUNCTION__, hosts->count);
++}
++#endif
++
+ // Expire a group and / or its associated sources depending on the current time
+ static omgp_time_t expire_group(struct groups *groups, struct group *group,
+ 		omgp_time_t now, omgp_time_t next_event)
+@@ -282,8 +306,10 @@ static struct group* groups_get_group(st
+ 
+ 		INIT_LIST_HEAD(&group->sources);
+ #ifdef ZYXEL_OMCPROXY
+-		group->hosts = lh_kchar_table_new(OMCPROXY_DEFAULT_GROUP_HOSTS, &group_host_lh_entry_free);
+-		group->sshosts = lh_kchar_table_new(OMCPROXY_DEFAULT_GROUP_HOSTS, &group_host_lh_entry_free);
++		if(omcpzcfg_fl()) {
++			group->hosts = lh_kchar_table_new(OMCPROXY_DEFAULT_GROUP_HOSTS, &group_host_lh_entry_free);
++			group->sshosts = lh_kchar_table_new(OMCPROXY_DEFAULT_GROUP_HOSTS, &group_host_lh_entry_free);
++		}
+ #endif
+ 
+ 		*created = true;
+@@ -455,10 +481,12 @@ void groups_update_state(struct groups *
+ 	if (created)
+ 		changed = true;
+ 
+-	if(len) {
++#ifdef ZYXEL_OMCPROXY
++	if(len && omcpzcfg_fl()) {
+ 		bool creat;
+ 		group_retrieve_host(group->sshosts, &group->addr, host, &creat);
+ 	}
++#endif
+ 
+ 	omgp_time_t now = omgp_time();
+ 	omgp_time_t next_event = OMGP_TIME_MAX;
+@@ -485,9 +513,37 @@ void groups_update_state(struct groups *
+ 		else if (update == UPDATE_REPORT)
+ 			group->compat_v2_until = compat_until;
+ 
++#ifdef ZYXEL_OMCPROXY
++		if(omcpzcfg_fl()) {
++			bool creat = false;
++			if(update != UPDATE_DONE) {
++				struct group_host *h;
++				h = group_retrieve_host(group->hosts, &group->addr, host, &creat);
++				if(creat) {
++					L_DEBUG("%s: receiving report, step exclude and add a record", __FUNCTION__);
++				}
++				if(h)
++					h->until = (omcpzcfg_app_igmp()) ? (now + (groups->cfg_v4.query_response_interval / 2) +
++						(groups->cfg_v4.robustness * groups->cfg_v4.query_interval)) : (now + groups->cfg_v6.query_interval);
++			}
++			update = (update == UPDATE_DONE) ? UPDATE_TO_IN : (creat ? UPDATE_TO_EX : UPDATE_IS_EXCLUDE);
++		}else
++			update = (update == UPDATE_DONE) ? UPDATE_TO_IN : UPDATE_IS_EXCLUDE;
++#else
+ 		update = (update == UPDATE_DONE) ? UPDATE_TO_IN : UPDATE_IS_EXCLUDE;
++#endif
++
+ 		len = 0;
+ 	}
++#ifdef ZYXEL_OMCPROXY
++	else if (update == UPDATE_IS_EXCLUDE && omcpzcfg_fl() && !len) {
++		struct group_host *h;
++		h = group_retrieve_host(group->hosts, &group->addr, host, NULL);
++		if(h)
++			h->until = (omcpzcfg_app_igmp()) ? (now + (groups->cfg_v4.query_response_interval / 2) +
++				(groups->cfg_v4.robustness * groups->cfg_v4.query_interval)) : (now + groups->cfg_v6.query_interval);
++	}
++#endif
+ 
+ 	bool include = group->exclude_until <= now;
+ 	bool is_include = update == UPDATE_IS_INCLUDE || update == UPDATE_TO_IN || update == UPDATE_ALLOW;
+@@ -627,10 +683,15 @@ void groups_update_state(struct groups *
+ 
+ #ifdef ZYXEL_OMCPROXY
+ 	if(update == UPDATE_TO_EX && !len && omcpzcfg_fl()) {
++		struct group_host *h;
+ 		bool creat = false;
+-		group_retrieve_host(group->hosts, &group->addr, host, &creat);
+-		if(creat)
++		h = group_retrieve_host(group->hosts, &group->addr, host, &creat);
++		if(creat) {
+ 			L_DEBUG("%s: step exclude and add a record", __FUNCTION__);
++			if(h)
++				h->until = (omcpzcfg_app_igmp()) ? (now + (groups->cfg_v4.query_response_interval / 2) +
++				(groups->cfg_v4.robustness * groups->cfg_v4.query_interval)) : (now + groups->cfg_v6.query_interval);
++		}
+ 	}
+ 	else if(!len && update == UPDATE_TO_IN && omcpzcfg_fl()) {
+ 		int rst = group_host_abandon(group->hosts, &group->addr, host);
+@@ -638,12 +699,20 @@ void groups_update_state(struct groups *
+ 			L_DEBUG("%s: !include && step in, abandon a record", __FUNCTION__);
+ 		}
+ 		group_host_abandon(group->sshosts, &group->addr, host);
++		if (group->compat_v1_until > now || group->compat_v2_until > now) {
++			group_hosts_sync(group, now);
++		}
+ 		// don't ask
+ 		if(group->hosts->count == 0){
+ 			group->retransmit = (group->source_count == 0 && !group->sshosts->count) ? 0 : group->retransmit;
+ 			group->next_generic_transmit = (group->source_count == 0 && !group->sshosts->count) ? 0 : group->next_generic_transmit;
+ 			group->exclude_until = (group->source_count == 0 && !group->sshosts->count) ? 0 : group->exclude_until;
+ 			next_event = (group->source_count == 0 && !group->sshosts->count) ? now : next_event;
++		}else if(!group->sshosts->count){
++			group->retransmit = (group->compat_v1_until > now || group->compat_v2_until > now) ? group->retransmit : 0;
++			group->next_generic_transmit = (group->compat_v1_until > now || group->compat_v2_until > now) ? group->next_generic_transmit : 0;
++
++			group->exclude_until = !group->retransmit ? mali : group->exclude_until;
+ 		}else if(!group->source_count || !include){
+ 			group->exclude_until = mali;
+ 			next_event = now;
+Index: omcproxy-2018-12-14-722151f0/src/groups.h
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/groups.h
++++ omcproxy-2018-12-14-722151f0/src/groups.h
+@@ -57,6 +57,7 @@ struct group_source {
+ #ifdef ZYXEL_OMCPROXY
+ struct group_host {
+ 	struct in6_addr addr;
++	omgp_time_t until;
+ };
+ #endif
+ 
+Index: omcproxy-2018-12-14-722151f0/src/omcpzcfg.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/omcpzcfg.c
++++ omcproxy-2018-12-14-722151f0/src/omcpzcfg.c
+@@ -32,7 +32,7 @@ void omcpzcfg_init(char *app)
+ 		omcp_app_mld = true;
+ 	}
+ 
+-	fl = (val = (omcpzcfg_param_value((const char *)"FastLeave")) >= 0) ? val : fl;
++	fl = ((val = (omcpzcfg_param_value((const char *)"FastLeave"))) >= 0) ? val : fl;
+ }
+ 
+ // 'QueryResponseInterval', unit in s precision

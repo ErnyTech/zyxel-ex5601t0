@@ -1,0 +1,228 @@
+Index: omcproxy-2018-12-14-722151f0/src/igmp.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/igmp.c
++++ omcproxy-2018-12-14-722151f0/src/igmp.c
+@@ -27,6 +27,7 @@
+ #include <unistd.h>
+ 
+ #include "querier.h"
++#include "omcpzcfg.h"
+ 
+ // Test if multicast-group is valid and relevant
+ static inline bool igmp_is_valid_group(in_addr_t group)
+@@ -35,7 +36,11 @@ static inline bool igmp_is_valid_group(i
+ }
+ 
+ // Handle an IGMP-record from an IGMP-packet (called by igmp_receive)
++#ifdef ZYXEL_OMCPROXY
+ static ssize_t igmp_handle_record(struct groups *groups, const uint8_t *data, size_t len, struct in6_addr *host)
++#else
++static ssize_t igmp_handle_record(struct groups *groups, const uint8_t *data, size_t len)
++#endif
+ {
+ 	struct igmpv3_grec *r = (struct igmpv3_grec*)data;
+ 
+@@ -73,16 +78,30 @@ void igmp_handle(struct mrib_querier *mr
+ 	omgp_time_t now = omgp_time();
+ 	char addrbuf[INET_ADDRSTRLEN];
+ 	struct in6_addr group, host;
++#ifdef ZYXEL_OMCPROXY
++	int igmpv = omcpzcfg_igmpv();
++#endif
++
+ 
+ 	querier_map(&group, igmp->group);
+ 	inet_ntop(AF_INET, &from->sin_addr, addrbuf, sizeof(addrbuf));
+ 
+ 	if (igmp->type == IGMP_HOST_MEMBERSHIP_QUERY) {
+ 		struct igmpv3_query *query = (struct igmpv3_query*)igmp;
+-
++#ifdef ZYXEL_OMCPROXY
++		if(igmpv == 3){
++			if (len != sizeof(*igmp) && ((size_t)len < sizeof(*query) ||
++				(size_t)len < sizeof(*query) + ntohs(query->nsrcs) * sizeof(struct in_addr)))
++				return;  // ignore v1/v2
++		}else{
++			if (len > sizeof(*igmp) && ((size_t)len < sizeof(*query) + ntohs(query->nsrcs) * sizeof(struct in_addr)))
++				return;
++		}
++#else
+ 		if (len != sizeof(*igmp) && ((size_t)len < sizeof(*query) ||
+ 				(size_t)len < sizeof(*query) + ntohs(query->nsrcs) * sizeof(struct in_addr)))
+ 			return;
++#endif
+ 
+ 		if (query->group && !igmp_is_valid_group(query->group))
+ 			return;
+@@ -127,9 +146,23 @@ void igmp_handle(struct mrib_querier *mr
+ 		L_INFO("%s: detected other querier %s with priority %d on %d",
+ 				__FUNCTION__, addrbuf, election, q->ifindex);
+ 
++#ifdef ZYXEL_OMCPROXY
++		bool valid = false;
++		if(igmpv == 3){
++			// TODO: we ignore IGMPv1/v2 queriers for now, since a lot of them are dumb switches
++			if (election < 0 && !query->group && len > sizeof(*igmp))
++				valid = true;
++		}else {
++			if (election < 0 && !query->group)
++				valid = true;
++		}
++
++		if(valid){
++#else
+ 		// TODO: we ignore IGMPv1/v2 queriers for now, since a lot of them are dumb switches
+ 
+ 		if (election < 0 && !query->group && len > sizeof(*igmp)) {
++#endif
+ 			groups_update_config(&q->groups, false, mrd, query_interval, robustness);
+ 
+ 			q->igmp_other_querier = true;
+@@ -184,6 +217,10 @@ int igmp_send_query(struct querier_iface
+ 		const struct list_head *sources,
+ 		bool suppress)
+ {
++#ifdef ZYXEL_OMCPROXY
++	int igmpv = omcpzcfg_igmpv();
++#endif
++
+ 	uint8_t qqic = querier_qqic(((group) ? q->groups.cfg_v4.last_listener_query_interval :
+ 			q->groups.cfg_v4.query_response_interval) / 100);
+ 	struct {
+@@ -191,7 +228,11 @@ int igmp_send_query(struct querier_iface
+ 		struct in_addr srcs[QUERIER_MAX_SOURCE];
+ 	} query = {.q = {
+ 		.type = IGMP_HOST_MEMBERSHIP_QUERY,
++#ifdef ZYXEL_OMCPROXY
++		.code = (igmpv == 1) ? 0 : qqic,
++#else
+ 		.code = qqic,
++#endif
+ 		.qrv = q->groups.cfg_v4.robustness,
+ 		.suppress = suppress,
+ 		.qqic = querier_qqic(q->groups.cfg_v4.query_interval / 1000),
+@@ -218,7 +259,16 @@ int igmp_send_query(struct querier_iface
+ 		dest.sin_addr.s_addr = query.q.group;
+ 	}
+ 
+-	return mrib_send_igmp(&q->mrib, &query.q,
++#ifdef ZYXEL_OMCPROXY
++	int rst = (igmpv == 3) ?
++			mrib_send_igmp(&q->mrib, &query.q,
++			sizeof(query.q) + cnt * sizeof(query.srcs[0]), &dest)
++			:
++			mrib_send_igmp(&q->mrib, &query.q, sizeof(uint32_t)*2, &dest);
++	return rst;
++#else
++	return	mrib_send_igmp(&q->mrib, &query.q,
+ 			sizeof(query.q) + cnt * sizeof(query.srcs[0]), &dest);
++#endif
+ }
+ 
+Index: omcproxy-2018-12-14-722151f0/src/omcproxy.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/omcproxy.c
++++ omcproxy-2018-12-14-722151f0/src/omcproxy.c
+@@ -67,15 +67,15 @@ static int handle_proxy_set(void *data,
+ 
+ 	if ((c = tb[PROXY_ATTR_SCOPE])) {
+ 		const char *scope = blobmsg_get_string(c);
+-		if (!strcmp(scope, "global"))
++		if (!strncmp(scope, "global", strlen("global")))
+ 			flags = PROXY_GLOBAL;
+-		else if (!strcmp(scope, "organization"))
++		else if (!strncmp(scope, "organization", strlen("urganization")))
+ 			flags = PROXY_ORGLOCAL;
+-		else if (!strcmp(scope, "site"))
++		else if (!strncmp(scope, "site", strlen("situ")))
+ 			flags = PROXY_SITELOCAL;
+-		else if (!strcmp(scope, "admin"))
++		else if (!strncmp(scope, "admin", strlen("admun")))
+ 			flags = PROXY_ADMINLOCAL;
+-		else if (!strcmp(scope, "realm"))
++		else if (!strncmp(scope, "realm", strlen("realm")))
+ 			flags = PROXY_REALMLOCAL;
+ 
+ 		if (!flags) {
+@@ -155,10 +155,12 @@ int main(int argc, char **argv) {
+ #ifdef ZYXEL_OMCPROXY
+ 		else if(!strncmp(argv[i], "mld", 3)) {
+ 			omcpzcfg_init("mld");
++			omcpzcfg_set_mldv(omcpzcfg_param_value("MldVersion"));
+ 			continue;
+ 		}
+ 		else if(!strncmp(argv[i], "igmp", 4)) {
+ 			omcpzcfg_init("igmp");
++			omcpzcfg_set_igmpv(omcpzcfg_param_value("IgmpVersion"));
+ 			continue;
+ 		}
+ #endif
+Index: omcproxy-2018-12-14-722151f0/src/omcpzcfg.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/omcpzcfg.c
++++ omcproxy-2018-12-14-722151f0/src/omcpzcfg.c
+@@ -14,6 +14,10 @@
+ bool omcp_app_igmp = true, omcp_app_mld = true;
+ int fl = 0; // 1: igmpv2/mldv1, 2: igmpv2v3/mldv1v2
+ 
++int igmpv = 3;
++int mldv = 2;
++
++
+ #ifdef ZYXEL_OMCPROXY
+ static struct json_object *zcfg_omcp_obj = NULL;
+ 
+@@ -57,6 +61,18 @@ int omcpzcfg_fl()
+ 	return fl;
+ }
+ 
++
++void omcpzcfg_set_igmpv(int value)
++{
++	if(igmpv > 0 && igmpv <= 3)
++		igmpv = value;
++}
++
++int omcpzcfg_igmpv()
++{
++	return igmpv;
++}
++
+ int omcpzcfg_ifname(char *ifname, int len)
+ {
+ 	struct json_object *paramObj = NULL;
+@@ -72,5 +88,18 @@ int omcpzcfg_ifname(char *ifname, int le
+ 
+ 	return value ? 1 : -1;
+ }
++
++
++void omcpzcfg_set_mldv(int value)
++{
++	if(mldv > 0 && mldv < 3)
++		mldv = value;
++}
++
++int omcpzcfg_mldv()
++{
++	return mldv;
++}
++
+ #endif
+ 
+Index: omcproxy-2018-12-14-722151f0/src/omcpzcfg.h
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/omcpzcfg.h
++++ omcproxy-2018-12-14-722151f0/src/omcpzcfg.h
+@@ -36,4 +36,11 @@ int omcpzcfg_ifname(char *ifname, int le
+ 
+ int omcpzcfg_fl();
+ 
++
++void omcpzcfg_set_igmpv(int );
++int omcpzcfg_igmpv();
++
++void omcpzcfg_set_mldv(int );
++int omcpzcfg_mldv();
++
+ #endif

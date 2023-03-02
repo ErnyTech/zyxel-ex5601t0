@@ -1,0 +1,26 @@
+Index: ppp-2.4.3/pppd/plugins/rp-pppoe/plugin.c
+===================================================================
+--- ppp-2.4.3.orig/pppd/plugins/rp-pppoe/plugin.c
++++ ppp-2.4.3/pppd/plugins/rp-pppoe/plugin.c
+@@ -354,11 +354,21 @@ PPPOEDisconnectDevice(void)
+     sp.sa_addr.pppoe.sid = 0;
+     memcpy(sp.sa_addr.pppoe.dev, conn->ifName, IFNAMSIZ);
+     memcpy(sp.sa_addr.pppoe.remote, conn->peerEth, ETH_ALEN);
++#if 0 //zyxel, fix padt from server, pppd exit
+     if (connect(conn->sessionSocket, (struct sockaddr *) &sp,
+ 		sizeof(struct sockaddr_pppox)) < 0) {
+ 	fatal("Failed to disconnect PPPoE socket: %d %m", errno);
+ 	return;
+     }
++#else /*Due to the design "pppoe_unbind_sock_work" in ppp driver,
++       it clear down the PPP interface when receiving PADT.
++       In the design, EALREADY(114 Operation already in progress) is safe to ignore.
++       It means that the PPPoE session has already been disabled before pppd tried
++       to disable it.*/
++    if (connect(conn->sessionSocket, (struct sockaddr *) &sp,
++            sizeof(struct sockaddr_pppox)) < 0 && errno != EALREADY)
++        error("Failed to disconnect PPPoE socket: %d %m", errno);
++#endif
+     close(conn->sessionSocket);
+     /* don't send PADT?? */
+ 	if(conn->discoverySocket >= 0){

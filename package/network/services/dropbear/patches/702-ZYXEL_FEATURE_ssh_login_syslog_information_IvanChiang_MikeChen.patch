@@ -1,0 +1,167 @@
+Index: dropbear-2020.81/svr-auth.c
+===================================================================
+--- dropbear-2020.81.orig/svr-auth.c
++++ dropbear-2020.81/svr-auth.c
+@@ -36,6 +36,10 @@
+ #include "auth.h"
+ #include "runopts.h"
+ #include "dbrandom.h"
++#ifdef ZLD_APPS_ENABLE_CENTRALIZELOG /* Modified by ZyXEL */
++#include "log.h"
++#endif
++#include <syslog.h>
+ 
+ static int checkusername(const char *username, unsigned int userlen);
+ 
+@@ -98,7 +102,7 @@ void recv_msg_userauth_request() {
+ 	username = buf_getstring(ses.payload, &userlen);
+ 	servicename = buf_getstring(ses.payload, &servicelen);
+ 	methodname = buf_getstring(ses.payload, &methodlen);
+-
++	openlog("ssh", LOG_PID | LOG_CONS, LOG_USER);
+ 	/* only handle 'ssh-connection' currently */
+ 	if (servicelen != SSH_SERVICE_CONNECTION_LEN
+ 			&& (strncmp(servicename, SSH_SERVICE_CONNECTION,
+@@ -111,11 +115,42 @@ void recv_msg_userauth_request() {
+ 		dropbear_exit("unknown service in auth");
+ 	}
+ 
++	#if SSH_TAR_PIT
++	char *pp;
++	char *remoteaddr;
++	char peeripstring[NI_MAXHOST];
++
++	FILE *input;
++	char logfilename[100] = "/tmp/sshloginfaillog_";
++	int fail_cnt = 0;
++	time_t fail_time_1= 0;
++	time_t fail_time_2 = time(NULL);
++
++	remoteaddr=svr_ses.addrstring;
++	strlcpy(peeripstring, remoteaddr, (pp = strchr(remoteaddr, ':')) ? &pp[0] - &remoteaddr[0] + 1 : NI_MAXHOST);
++	strcat(logfilename, peeripstring);
++
++	input = fopen(logfilename, "r");
++	if(input){
++		fscanf(input, "%d %ld", &fail_cnt, &fail_time_1);
++		if((fail_time_2-fail_time_1) > TAR_PIT_TIME)
++			fail_cnt = 0;
++	}
++
++	if(fail_cnt>=MAX_FAIL_CNT)
++		goto out;
++	#endif
++
+ 	/* check username is good before continuing. 
+ 	 * the 'incrfail' varies depending on the auth method to
+ 	 * avoid giving away which users exist on the system through
+ 	 * the time delay. */
+ 	if (checkusername(username, userlen) == DROPBEAR_SUCCESS) {
++		#if SSH_TAR_PIT
++		char cmd[100];
++		sprintf(cmd, "echo '%d %ld' > %s", ++fail_cnt, fail_time_2, logfilename);
++		system(cmd);
++		#endif
+ 		valid_user = 1;
+ 	}
+ 
+@@ -234,7 +269,11 @@ static int checkusername(const char *use
+ 	char* listshell = NULL;
+ 	char* usershell = NULL;
+ 	uid_t uid;
+-
++	char *sshaddr = NULL;
++#ifdef ZLD_APPS_ENABLE_CENTRALIZELOG /* Modified by ZyXEL */
++	char *pp;
++	char logStr[LOG_INFOSIZE], peeripstring[NI_MAXHOST];
++#endif
+ 	TRACE(("enter checkusername"))
+ 	if (userlen > MAX_USERNAME_LEN) {
+ 		return DROPBEAR_FAILURE;
+@@ -264,9 +303,17 @@ static int checkusername(const char *use
+ 
+ 	/* check that user exists */
+ 	if (!ses.authstate.pw_name) {
++		sshaddr = svr_ses.addrstring;
++		syslog(LOG_INFO, "Account: User '%s' doesn't exist from the host(%s).",username,sshaddr);
+ 		TRACE(("leave checkusername: user '%s' doesn't exist", username))
+ 		dropbear_log(LOG_WARNING,
+ 				"Login attempt for nonexistent user");
++#ifdef ZLD_APPS_ENABLE_CENTRALIZELOG /* Modified by ZyXEL */
++		remoteaddr=svr_ses.addrstring;
++		strlcpy(peeripstring, remoteaddr, (pp = strchr(remoteaddr, ':')) ? &pp[0] - &remoteaddr[0] + 1 : NI_MAXHOST);
++		sprintf(logStr,"SSH Login Fail from IP:%s", peeripstring);
++		zySyslog(IDENT_REMOTE_MANAGEMENT, LOG_INFO, logStr);
++#endif
+ 		ses.authstate.checkusername_failed = 1;
+ 		return DROPBEAR_FAILURE;
+ 	}
+@@ -290,6 +337,15 @@ static int checkusername(const char *use
+ 		return DROPBEAR_FAILURE;
+ 	}
+ 
++	/* check for an empty password */
++	if (ses.authstate.pw_passwd[0] == '\0') {
++		TRACE(("leave checkusername: empty pword"))
++		dropbear_log(LOG_WARNING, "user '%s' has blank password, rejected",
++				ses.authstate.pw_name);
++		send_msg_userauth_failure(0, 1);
++		return DROPBEAR_FAILURE;
++	}
++
+ 	/* check for login restricted to certain group if desired */
+ #ifdef HAVE_GETGROUPLIST
+ 	if (svr_opts.restrict_group) {
+Index: dropbear-2020.81/svr-authpam.c
+===================================================================
+--- dropbear-2020.81.orig/svr-authpam.c
++++ dropbear-2020.81/svr-authpam.c
+@@ -30,7 +30,7 @@
+ #include "buffer.h"
+ #include "dbutil.h"
+ #include "auth.h"
+-
++#include <syslog.h>
+ #if DROPBEAR_SVR_PAM_AUTH
+ 
+ #if defined(HAVE_SECURITY_PAM_APPL_H)
+@@ -194,7 +194,10 @@ void svr_auth_pam(int valid_user) {
+ 
+ 	int rc = PAM_SUCCESS;
+ 	unsigned char changepw;
+-
++	char * username = NULL;
++	char *remoteaddr;
++	username = ses.authstate.username;
++	remoteaddr = svr_ses.addrstring;
+ 	/* check if client wants to change password */
+ 	changepw = buf_getbool(ses.payload);
+ 	if (changepw) {
+@@ -250,6 +253,7 @@ void svr_auth_pam(int valid_user) {
+ 	/* (void) pam_set_item(pamHandlep, PAM_FAIL_DELAY, (void*) pamDelayFunc); */
+ 
+ 	if ((rc = pam_authenticate(pamHandlep, 0)) != PAM_SUCCESS) {
++		syslog(LOG_INFO, "Account: Enter an invalid password for User '%s' from the host(%s).",username,remoteaddr);
+ 		dropbear_log(LOG_WARNING, "pam_authenticate() failed, rc=%d, %s", 
+ 				rc, pam_strerror(pamHandlep, rc));
+ 		dropbear_log(LOG_WARNING,
+@@ -279,6 +283,7 @@ void svr_auth_pam(int valid_user) {
+ 	}
+ 
+ 	/* successful authentication */
++	syslog(LOG_INFO, "Account: User '%s' login from the host(%s).",username,remoteaddr);
+ 	dropbear_log(LOG_NOTICE, "PAM password auth succeeded for '%s' from %s",
+ 			ses.authstate.pw_name,
+ 			svr_ses.addrstring);
+Index: dropbear-2020.81/svr-authpasswd.c
+===================================================================
+--- dropbear-2020.81.orig/svr-authpasswd.c
++++ dropbear-2020.81/svr-authpasswd.c
+@@ -114,6 +114,7 @@ void svr_auth_password(int valid_user) {
+ 
+ 	/* check for empty password */
+ 	if (passwdcrypt[0] == '\0') {
++		syslog(LOG_INFO, "Account: Enter blank password for User '%s', rejected.",username);
+ 		dropbear_log(LOG_WARNING, "User '%s' has blank password, rejected",
+ 				ses.authstate.pw_name);
+ 		send_msg_userauth_failure(0, 1);

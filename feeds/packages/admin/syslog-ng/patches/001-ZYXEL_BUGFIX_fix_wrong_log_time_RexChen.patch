@@ -1,0 +1,13 @@
+Index: syslog-ng-2.0.10/src/logmsg.c
+===================================================================
+--- syslog-ng-2.0.10.orig/src/logmsg.c	2008-05-16 18:49:48.000000000 +0800
++++ syslog-ng-2.0.10/src/logmsg.c	2020-05-26 11:23:11.751212805 +0800
+@@ -359,7 +359,7 @@
+ 
+       nowtm = localtime(&now);
+       tm = *nowtm;
+-      strptime(self->date.str, "%b %e %H:%M:%S", &tm);
++      //strptime(self->date.str, "%b %e %H:%M:%S", &tm);
+       tm.tm_isdst = -1;
+       tm.tm_year = nowtm->tm_year;
+       if (tm.tm_mon > nowtm->tm_mon)

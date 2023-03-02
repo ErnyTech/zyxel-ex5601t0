@@ -1,0 +1,129 @@
+Index: wide-dhcpv6-20080615/common.c
+===================================================================
+--- wide-dhcpv6-20080615.orig/common.c	2021-02-26 20:17:29.362360894 +0800
++++ wide-dhcpv6-20080615/common.c	2021-02-26 20:17:29.390360894 +0800
+@@ -1348,7 +1348,7 @@
+ #ifdef __linux__
+ 	struct sockaddr_ll *sll;
+ #endif
+-	ssize_t l;
++	ssize_t l = 0;
+ 
+ #ifdef __sun__
+ 	if (ifname == NULL) {
+@@ -4890,8 +4890,10 @@
+ 			"Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+ 		};
+ 
+-		if ((now = time(NULL)) < 0)
++		if ((now = time(NULL)) < 0){
++			va_end(ap);
+ 			exit(1); /* XXX */
++		}
+ 		tm_now = localtime(&now);
+ 		fprintf(stderr, "%3s/%02d/%04d %02d:%02d:%02d: %s%s%s\n",
+ 		    month[tm_now->tm_mon], tm_now->tm_mday,
+@@ -4901,6 +4903,8 @@
+ 		    logbuf);
+ 	} else
+ 		syslog(level, "%s%s%s", fname, printfname ? ": " : "", logbuf);
++
++	va_end(ap);
+ }
+ 
+ int
+Index: wide-dhcpv6-20080615/config.c
+===================================================================
+--- wide-dhcpv6-20080615.orig/config.c	2021-02-26 20:17:29.370360894 +0800
++++ wide-dhcpv6-20080615/config.c	2021-02-26 20:17:29.390360894 +0800
+@@ -1216,7 +1216,7 @@
+ 	}
+ 
+ 	for (ifa = ifap; ifa; ifa = ifa->ifa_next) {
+-		char *cp;
++		char *cp = NULL;
+ 
+ 		if (strcmp(ifa->ifa_name, pif->ifname) != 0)
+ 			continue;
+@@ -1254,15 +1254,17 @@
+ 		memset(pif->ifid, 0, sizeof(pif->ifid));
+ 		cp = (char *)(sll->sll_addr);
+ #endif
+-		pif->ifid[8] = cp[0];
+-		pif->ifid[8] ^= 0x02; /* reverse the u/l bit*/
+-		pif->ifid[9] = cp[1];
+-		pif->ifid[10] = cp[2];
+-		pif->ifid[11] = 0xff;
+-		pif->ifid[12] = 0xfe;
+-		pif->ifid[13] = cp[3];
+-		pif->ifid[14] = cp[4];
+-		pif->ifid[15] = cp[5];
++		if(cp) {
++			pif->ifid[8] = cp[0];
++			pif->ifid[8] ^= 0x02; /* reverse the u/l bit*/
++			pif->ifid[9] = cp[1];
++			pif->ifid[10] = cp[2];
++			pif->ifid[11] = 0xff;
++			pif->ifid[12] = 0xfe;
++			pif->ifid[13] = cp[3];
++			pif->ifid[14] = cp[4];
++			pif->ifid[15] = cp[5];
++		}
+ 
+ 		break;
+ 	}
+Index: wide-dhcpv6-20080615/lease.c
+===================================================================
+--- wide-dhcpv6-20080615.orig/lease.c	2021-02-26 20:17:29.238360894 +0800
++++ wide-dhcpv6-20080615/lease.c	2021-02-26 20:17:29.390360894 +0800
+@@ -308,6 +308,7 @@
+ 	memset(entry, 0, sizeof(*entry));
+ 
+ 	if ((entry->val = malloc(size)) == NULL) {
++		free(entry);
+ 		return (-1);
+ 	}
+ 	memcpy(entry->val, val, size);
+Index: wide-dhcpv6-20080615/cfparse.y
+===================================================================
+--- wide-dhcpv6-20080615.orig/cfparse.y	2021-02-26 20:17:29.358360894 +0800
++++ wide-dhcpv6-20080615/cfparse.y	2021-02-26 19:54:06.860746100 +0800
+@@ -935,6 +935,7 @@
+ 			}
+ 			if ((pool->name = strdup($1)) == NULL) {
+ 				yywarn("can't allocate memory");
++				free(pool);
+ 				free($1);
+ 				return (-1);
+ 			}
+@@ -960,6 +961,7 @@
+ 			}
+ 			if ((pool->name = strdup($1)) == NULL) {
+ 				yywarn("can't allocate memory");
++				free(pool);
+ 				free($1);
+ 				return (-1);
+ 			}
+Index: wide-dhcpv6-20080615/dhcp6c.c
+===================================================================
+--- wide-dhcpv6-20080615.orig/dhcp6c.c	2021-02-26 20:17:29.378360894 +0800
++++ wide-dhcpv6-20080615/dhcp6c.c	2021-02-26 20:17:29.390360894 +0800
+@@ -1133,8 +1133,8 @@
+ 					continue;
+ 
+ 				/* set vlt plt of WAN Global IP */
+-				char str[200]="";
+-				sprintf(str, "ip -6 addr change %s dev %s preferred_lft %lu valid_lft %lu",
++				char str[200]={0};
++				snprintf(str, sizeof(str), "ip -6 addr change %s dev %s preferred_lft %lu valid_lft %lu",
+ 						in6addr2str(&sa->addr.addr, 0), sa->dhcpif->ifname,
+ 						sa->addr.pltime, sa->addr.vltime);
+ 				system(str);
+@@ -3134,6 +3134,7 @@
+ 	if (infreq_mode)
+ 		printf("%s\n", logbuf);
+ 
++	va_end(ap);
+ 	return;
+ }
+ 

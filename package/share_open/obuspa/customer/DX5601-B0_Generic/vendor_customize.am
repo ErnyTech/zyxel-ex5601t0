@@ -1,0 +1,7 @@
+# customize Source files in vendor
+SOURCES += src/vendor/zyxel/tr181_customize/Device_Customize_Main_Entry.c
+SOURCES += src/vendor/zyxel/tr181_customize/Device_Dummy.c
+
+
+
+

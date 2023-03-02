@@ -1,0 +1,22 @@
+Index: pure-ftpd-1.0.30/src/ftpd.h
+===================================================================
+--- pure-ftpd-1.0.30.orig/src/ftpd.h
++++ pure-ftpd-1.0.30/src/ftpd.h
+@@ -216,7 +216,7 @@
+  */
+ 
+ #if defined(HAVE_STATVFS) || defined(HAVE_STATVFS64)
+-# ifdef HAVE_STATVFS64
++#if defined(HAVE_STATVFS64) && !defined(LIBC_USE_MUSL) //MUSL define statvfs64 as statvfs
+ #  define STATFS_STRUCT struct statvfs64
+ #  define STATFS(PATH, STR) statvfs64(PATH, STR)
+ #  define FSTATFS(FD, STR) fstatvfs64(FD, STR)
+@@ -768,8 +768,6 @@ Your platform has a very large MAXPATHLE
+ #endif    
+     
+ #include "bsd-realpath.h"    
+-#ifndef LIBC_USE_MUSL
+ #include "fakechroot.h"
+-#endif
+         
+ #endif

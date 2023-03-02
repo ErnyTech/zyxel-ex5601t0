@@ -1,0 +1,171 @@
+include $(TOPDIR)/rules.mk
+
+PKG_NAME:=syslog-ng
+#PKG_VERSION:=3.35.1
+#PKG_RELEASE:=$(AUTORELEASE)
+PKG_VERSION:=2.0.10
+PKG_RELEASE:=1
+
+#PKG_MAINTAINER:=Josef Schlehofer <josef.schlehofer@nic.cz>
+#PKG_LICENSE:=LGPL-2.1-or-later GPL-2.0-or-later
+#PKG_LICENSE_FILES:=COPYING LGPL.txt GPL.txt
+#PKG_CPE_ID:=cpe:/a:balabit:syslog-ng
+PKG_LICENSE:=GPL-2.0
+
+#PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
+PKG_SOURCE:=$(PKG_NAME)_$(PKG_VERSION).tar.gz
+#PKG_SOURCE_URL:=https://github.com/syslog-ng/syslog-ng/releases/download/$(PKG_NAME)-$(PKG_VERSION)/
+#PKG_HASH:=1d0238b06b3e5987c859e5b529ecee738f75bacff04b149398b1fe8cbb121e53
+
+PKG_SOURCE_URL:=@ZyXEL_SITE/opensource/utils
+
+#PKG_BUILD_PARALLEL:=1
+PKG_INSTALL:=1
+
+PKG_CONFIG_DEPENDS:= \
+	CONFIG_IPV6 \
+
+include $(INCLUDE_DIR)/package.mk
+include $(INCLUDE_DIR)/nls.mk
+
+define Package/syslog-ng
+  SECTION:=admin
+  CATEGORY:=Administration
+  TITLE:=A powerful syslog daemon
+#  URL:=https://www.syslog-ng.com/products/open-source-log-management/
+#  DEPENDS:=+libpcre +glib2 +libopenssl +libpthread +librt +zlib +libdbi +libjson-c +libcurl +libuuid
+  DEPENDS:=+libeventlog +glib2 +libopenssl +libpthread +librt +zlib +libdbi +libjson-c +libcurl +libuuid
+endef
+
+ifeq ("$(strip ${ZCFG_PLATFORM})","BROADCOM")
+ifeq ("$(strip ${BRCM_SDK_VERSION})","502L04")
+TARGET_CFLAGS += -DSUPPORT_502L04
+endif
+endif
+
+ZLIBS:=
+ifneq ($(CONFIG_PACKAGE_libiconv-full),)
+ZLIBS += -liconv
+endif
+ifneq ($(CONFIG_PACKAGE_libintl-full),)
+ZLIBS += -lintl
+endif
+
+define Package/syslog-ng/description
+  syslog-ng reads and logs messages to the system console, log
+  files, other machines and/or users as specified by its
+  configuration file.
+endef
+
+define CheckDependencies
+endef
+
+define Package/syslog-ng/conffiles
+/etc/syslog-ng.conf
+/etc/syslog-ng.d/
+/etc/scl.conf
+endef
+
+define Build/Configure
+	$(SED) 's,-I/usr/include,,' $(PKG_BUILD_DIR)/configure
+	$(Build/Configure/Default)
+endef
+
+#CONFIGURE_ARGS +=  \
+	--disable-afsnmp \
+	$(call autoconf_bool,CONFIG_IPV6,ipv6) \
+	--disable-tcp-wrapper \
+	--disable-spoof-source \
+	--disable-sql \
+	--disable-linux-caps \
+	--with-jsonc=system \
+	--enable-json=yes \
+	--enable-http=yes \
+	--disable-smtp \
+	--disable-mqtt \
+	--disable-redis \
+	--disable-dependency-tracking \
+	--disable-python \
+	--disable-geoip2 \
+	--disable-java \
+	--disable-java-modules \
+	--with-librabbitmq-client=no \
+	--with-mongoc=no
+
+CONFIGURE_ARGS +=  \
+	$(call autoconf_bool,CONFIG_IPV6,ipv6) \
+	--disable-spoof-source \
+	--disable-sql \
+	--with-jsonc=system \
+	--enable-json=yes \
+	--disable-dependency-tracking \
+	--enable-dynamic-linking \
+	--with-librabbitmq-client=no \
+	--with-mongoc=no
+
+CONFIGURE_VARS += \
+	LIBDBI_CFLAGS="-I$(STAGING_DIR)/usr/include"
+
+MAKE_VARS += \
+	LDFLAGS="$(ZLIBS)"
+
+#define Package/syslog-ng/install
+#	cd $(PKG_BUILD_DIR); make DESTDIR=$(1) install
+
+#	$(call libtool_remove_files,$(1)) # This removes .la files in folder (including subfolders) /usr/lib
+#	rm -rf $(1)/usr/lib/pkgconfig \
+#	$(1)/usr/lib/*.a \
+#	$(1)/usr/include \
+#	$(1)/var
+
+#	$(INSTALL_DIR) $(1)/etc/init.d
+#	$(INSTALL_BIN) ./files/syslog-ng.init $(1)/etc/init.d/syslog-ng
+#	$(INSTALL_DIR) $(1)/etc/syslog-ng.d
+#	$(INSTALL_DATA) ./files/syslog-ng.conf $(1)/etc
+#	touch $(1)/etc/syslog-ng.d/.keep
+
+#	$(INSTALL_DIR) $(1)/sbin
+#	$(INSTALL_BIN) ./files/logread $(1)/sbin
+
+#	$(INSTALL_DIR) $(1)/usr/share/syslog-ng/include/
+#	$(CP) -r ./files/scl $(1)/usr/share/syslog-ng/include/
+#endef
+
+define Package/syslog-ng/install
+	$(INSTALL_DIR) $(1)/usr/sbin
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/sbin/syslog-ng $(1)/usr/sbin
+	$(INSTALL_DIR) $(1)/etc/syslog-ng
+	$(INSTALL_DATA) ./files/syslog-ng_init.conf $(1)/etc/syslog-ng
+	$(INSTALL_DIR) $(1)/etc/init.d
+	#$(INSTALL_DIR) $(1)/etc/rc3.d
+	
+	$(INSTALL_BIN) ./files/syslog-ng_zcfg.init $(1)/etc/init.d/syslog-ng
+	#$(CP) ./files/syslog-ng.sh $(1)/etc/init.d
+	#ln -s ../init.d/syslog-ng.sh $(1)/etc/rc3.d/S46syslog-ng
+ifneq ("$(CONFIG_PACKAGE_procd)","")
+	$(CP) ./files/crond_p.sh $(1)/etc/init.d/crond.sh
+else
+	$(CP) ./files/crond.sh $(1)/etc/init.d
+	ln -s ../init.d/crond.sh $(1)/etc/rc3.d/S46crond
+endif
+endef
+
+define Package/syslog-ng/postinst
+#!/bin/sh
+
+[ -n "$$IPKG_INSTROOT" ] || {
+/etc/init.d/syslog-ng enable
+/etc/init.d/syslog-ng restart
+}
+endef
+
+define Package/syslog-ng/prerm
+#!/bin/sh
+
+[ -n "$$IPKG_INSTROOT" ] || {
+/etc/init.d/syslog-ng disable
+/etc/init.d/syslog-ng stop
+}
+endef
+
+$(eval $(call BuildPackage,syslog-ng))

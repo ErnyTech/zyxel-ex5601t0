@@ -1,0 +1,12 @@
+
+menu "zcfg support"
+
+config ZYXEL_SUPPORT_ZCFG
+	bool "ZCFG support"
+	default y
+
+config ZCFG_TR98_COMPATIBLE
+	bool "ZCFG is compatible with TR098"
+	default n
+
+endmenu

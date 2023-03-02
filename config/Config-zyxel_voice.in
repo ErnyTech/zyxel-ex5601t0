@@ -1,0 +1,534 @@
+
+menu "ZyXEL Voice (ZyIMS VoIP)"
+
+	config BUILD_ZYXEL_VOICE_406
+		bool "Support BRCM SDK 4.06L.03 codebase."
+		default n
+
+	config BUILD_ZYXEL_VOICE_412
+		bool "Support BRCM SDK 4.12L codebase."
+		default n
+
+	#-------------------------------------------------------------------------------------------------------------------------------------------
+	choice
+		prompt "Config System (which the ZyIMS VCM module relies on)"
+		default ZYXEL_VOICE_CONFIG_SYS_ZYXEL_ZCFG
+		help
+			This option decides which system-wise Config System the ZyIMS VCM module replies on.
+
+		config ZYXEL_VOICE_CONFIG_SYS_ZYXEL_ZCFG
+			bool "ZyXEL ZCFG"
+			help
+				Support the config system: ZyXEL ZCFG.
+
+		config ZYXEL_VOICE_CONFIG_SYS_ZYXEL_CCC
+			bool "ZyXEL CCC"
+			help
+				Support the config system: ZyXEL CCC.
+
+		config ZYXEL_VOICE_CONFIG_SYS_ZYXEL_ZYIMS_CONF
+			bool "ZyXEL zyims.conf"
+			help
+				Support the config system: a stand-alone Application-proprietary config file - zyims.conf.
+
+		config ZYXEL_VOICE_CONFIG_SYS_BRCM_CMS
+			bool "BRCM CMS"
+			help
+				Support the config system: Broadcom CMS.
+
+		config ZYXEL_VOICE_CONFIG_SYS_MTK_SNCFG
+			bool "MTK SNCFG"
+			help
+				Support the config system: MediaTek SNCFG.
+
+		config ZYXEL_VOICE_CONFIG_SYS_MTK_TCAPI
+			bool "MTK TCAPI"
+			help
+				Support the config system: MediaTek TCAPI.
+
+		config ZYXEL_VOICE_CONFIG_SYS_OPENWRT_UCI
+			bool "OpenWRT UCI"
+			help
+				Support the config system: OpenWRT UCI.
+	endchoice
+
+	config BUILD_ZYXEL_VOICE_CONFIG_SYS
+		string
+		default "zcfg"			if ZYXEL_VOICE_CONFIG_SYS_ZYXEL_ZCFG
+		default "ccc"			if ZYXEL_VOICE_CONFIG_SYS_ZYXEL_CCC
+		default "zyims_conf"	if ZYXEL_VOICE_CONFIG_SYS_ZYXEL_ZYIMS_CONF
+		default "brcm_cms"		if ZYXEL_VOICE_CONFIG_SYS_BRCM_CMS
+		default "mtk_sncfg"		if ZYXEL_VOICE_CONFIG_SYS_MTK_SNCFG
+		default "mtk_tcapi"		if ZYXEL_VOICE_CONFIG_SYS_MTK_TCAPI
+		default "uci"			if ZYXEL_VOICE_CONFIG_SYS_OPENWRT_UCI
+
+	#-------------------------------------------------------------------------------------------------------------------------------------------
+	config BUILD_ZYXEL_VOICE_MTK_D2_VE_SUPPORT
+		bool "Support D2 third party voice engine."
+		depends on	MTK_CHIP_MT7986
+		default y	if TARGET_mediatek_ex5601t0
+		default n
+
+	config BUILD_ZYXEL_VOICE_KSOCKET_RTP
+		bool "Support Kernel Socket function for the VoIP Media Stream (including RTP, RTCP & UDPTL/T38)."
+		default n
+		select BRCMSDK_ZYXEL_VOICE_KSOCKET_RTP	if CONFIG_TARGET_brcm963xx
+		help
+		    This config MUST SYNC to the BRCM SDK/Kernel one(s): make menuconfig --> brcm963xx configuration -->
+		    Broadcom SDK Configuration --> ZyXEL Features --> Support Kernel Socket for the VoIP Media Stream
+		    (including RTP, RTCP & UDPTL/T38) (CONFIG_BRCMSDK$(BRCM_SDK_VER)_ZYXEL_VOICE_KSOCKET_RTP).
+
+	config BUILD_ZYXEL_VOICE_SUPPORT_SRTP
+		bool "Support Secure RTP (SRTP) function."
+		default n
+
+	config BUILD_ZYXEL_VOICE_SUPPORT_SIPS
+		bool "Support Secure SIP (SIPS):SIP-over-TLS function."
+		default n
+
+	config BUILD_ZYXEL_VOICE_EMBEDDED_IVR
+		bool "Support Local Embedded IVR function."
+		default n
+
+	config BUILD_ZYXEL_VOICE_EARLY_MEDIA
+		bool "Support Early Media (media stream generation) function."
+		default y
+		depends on BUILD_ZYXEL_VOICE_EMBEDDED_IVR
+
+	config BUILD_ZYXEL_VOICE_MUSIC_ON_HOLD
+		bool "Support Music-on-Hold (MOH) (media stream generation) function."
+		default y
+		depends on BUILD_ZYXEL_VOICE_EMBEDDED_IVR
+
+	config BUILD_ZYXEL_VOICE_IGNORE_DIRECT_IP
+		bool "Support Non-Proxy P2P (Direct) Call Block/Reject."
+		default n
+
+	config BUILD_ZYXEL_VOICE_SIP_UNREG_OUT_CALL_TO_SAME_SERVER_SUPPORT
+		bool "Support to make the Un-Registered SIP Account be able to issue the OutCall SIP INVITE."
+		default n
+		help
+		    This is the key function of the Emergency Call feature.
+		    Thus, if the following 'BUILD_ZYXEL_VOICE_EMERGENCY_CALL_SUPPORT' is enabled,
+		    it MUST be AUTO Enabled/Supported accordingly. However, this function is originally designed to be a stand-alone call feature,
+		    thus, if the following 'BUILD_ZYXEL_VOICE_EMERGENCY_CALL_SUPPORT' is NOT enabled, it can also control by itself.
+
+	config BUILD_ZYXEL_VOICE_EMERGENCY_CALL_SUPPORT
+		bool "Support Emergency Call feature."
+		default n
+		select BUILD_ZYXEL_VOICE_SIP_UNREG_OUT_CALL_TO_SAME_SERVER_SUPPORT
+		help
+		    This config, if Enabled, MUST also AUTO Enable the following one(s):
+		    "Support to make the Un-Registered SIP Account be able to issue the OutCall SIP INVITE
+		    (BUILD_ZYXEL_VOICE_SIP_UNREG_OUT_CALL_TO_SAME_SERVER_SUPPORT)", which is the key function of the Emergency Call feature.
+		    However, the 'BUILD_ZYXEL_VOICE_SIP_UNREG_OUT_CALL_TO_SAME_SERVER_SUPPORT' is originally designed
+		    to be a stand-alone call feature, thus, if this config is NOT enabled, it can also control by itself.
+
+	config BUILD_ZYXEL_VOICE_SIP_SUCCESSIVE_REGISTER_SESSION_TIME_GAP_SUPPORT
+		bool "Support the Successive SIP Register Session Time Gap mechanism."
+		default n
+
+	config BUILD_ZYXEL_VOICE_AUTO_QOS
+		bool "Support VOICE AUTO QOS."
+		default n
+
+	config BUILD_ZYXEL_VOICE_VLAN_ID_MARK
+		bool "Support SIP/RTP VLAN ID Mark."
+		default n
+
+	config BUILD_ZYXEL_VOICE_OPTION_SIPSERVER
+		bool "Support Option SIP Server."
+		default n
+
+	config BUILD_ZYXEL_VOICE_SIP_HEARTBEAT_MECHANISM
+		bool "Support SIP Heartbeat Mechanism to periodically send SIP OPTIONS to SIP server for Keep-alive."
+		default n
+
+	config BUILD_ZYXEL_VOICE_RFC3263_DNS_NAPTR_SUPPORT
+		bool "Support RFC3263 DNS NAPTR"
+		select PACKAGE_libcares
+		default y
+		depends on PACKAGE_ZyIMS
+#		deselect PACKAGE_ares
+
+	config BUILD_ZYXEL_VOICE_RFC3611_RTCP_XR
+		bool "Support RFC-3611 RTCP eXtended Reports (XR)."
+		default n
+
+	config BUILD_ZYXEL_VOICE_ZYIMS_KEEPALIVE_WATCHDOG
+		bool "Support ZyIMS VoIP Keep-alive WatchDog."
+		default n
+
+	config BUILD_ZYXEL_VOICE_ZYIMS_CMD_TEST
+		bool "Support ZyIMS VoIP Tone/Ring Test CLI Command."
+		default n
+
+	config BUILD_ZYXEL_VOICE_FAX_MODE_G711_PT_DISABLE_T38_CAP
+		bool "Support to Disable T.38 (Image) Codec Capability when the FAX Mode is configured to be the G.711 Passthrough(PT)."
+		default n
+		help
+		    This is the base function of the feature "Using the TR-104 standard parameter 'FaxT38.Enable' to config the FAX mode".
+		    Thus, if the 'BUILD_ZYXEL_VOICE_CONFIG_TR069_FAXT38_ENABLE_MAPPING_TO_FAXMODE' somewhere in the below is enabled,
+		    it MUST be AUTO Enabled/Supported accordingly. However, this function is originally designed to be a stand-alone call feature,
+		    thus, if the 'BUILD_ZYXEL_VOICE_CONFIG_TR069_FAXT38_ENABLE_MAPPING_TO_FAXMODE' somewhere in the below is NOT enabled,
+		    it can also control by itself.
+
+	config BUILD_ZYXEL_VOICE_USING_DSP_AND_PHONE_API_FROM_SINGLE_PROCESS
+		bool "Support to Use/Access the platform's DSP and Phone API through ONLY the MM module's Process."
+		default n
+		help
+		    For some platforms, it's required to MUST utilize the DSP and Phone API through a Single Process
+		    to ensure the function should be Normal (i.e. Identical all the time).
+		    This is because some of the (global) operation parameters are stored in these DSP and Phone APIs' userspace parts, and
+		    accessing/utilizing these APIs from DIFFerent Processes MAY use DIFFerent values of such kind of operation parameters
+		    to trigger the functions to (consequently) have DIFFerent operation behaviors/results.
+
+
+	#-------------------------------------------------------------------------------------------------------------------------------------------
+	config BUILD_ZYXEL_PHONE_FXS_SUPPORT
+		bool "Support FXS Phone."
+		default y
+
+	config BUILD_ZYXEL_PHONE_FXS_CH_NUM
+		int "Max FXS phone port number (1-2)."
+		range 1 2
+		default 2
+		depends on BUILD_ZYXEL_PHONE_FXS_SUPPORT
+
+	#-------------------------------------------------------------------------------------------------------------------------------------------
+	choice
+		prompt "FXS Phone port SLIC chip Vendor Type"
+		depends on TC_SDK_7_3_245_300
+		default ZYXEL_PHONE_FXS_SLIC_VENDOR_SILABS	if (TARGET_en75xx_dx3301_t0 || TARGET_en75xx_dx3401_t0)
+		default ZYXEL_PHONE_FXS_SLIC_VENDOR_NONE
+		help
+			This option is to specify the 'Vendor' type of the SLIC chip used for the FXS phone port(s). NOTE: This option is NOW Dedicated to the MTK/Econet platform (SDK v7.3.245.300) Only.
+
+		config ZYXEL_PHONE_FXS_SLIC_VENDOR_NONE
+			bool "(None)"
+			help
+				Unknown or Do NOT Specify the SLIC chip Vendor type.
+
+		config ZYXEL_PHONE_FXS_SLIC_VENDOR_MICROSEMI
+			bool "Microsemi/Zarlink"
+			help
+				Use the SLIC chip(s) from the Vendor 'Microsemi/Zarlink' for the FXS phone port(s).
+
+		config ZYXEL_PHONE_FXS_SLIC_VENDOR_SILABS
+			bool "SiliconLabs"
+			help
+				Use the SLIC chip(s) from the Vendor 'SiliconLabs' for the FXS phone port(s).
+	endchoice
+
+	config BUILD_ZYXEL_PHONE_FXS_SLIC_VENDOR
+		string
+		default ""				if ZYXEL_PHONE_FXS_SLIC_VENDOR_NONE
+		default "microsemi"		if ZYXEL_PHONE_FXS_SLIC_VENDOR_MICROSEMI
+		default "silabs"		if ZYXEL_PHONE_FXS_SLIC_VENDOR_SILABS
+
+	#-------------------------------------------------------------------------------------------------------------------------------------------
+	choice
+		prompt "FXS Phone port SLIC chip Model Name"
+		depends on TC_SDK_7_3_245_300
+		default ZYXEL_PHONE_FXS_SLIC_MODEL_SI3228X	if (TARGET_en75xx_dx3301_t0 || TARGET_en75xx_dx3401_t0)
+		default ZYXEL_PHONE_FXS_SLIC_MODEL_NONE
+		help
+			This option is to specify the 'Model' name of the SLIC chip used for the FXS phone port(s). NOTE: This option is NOW Dedicated to the MTK/Econet platform (SDK v7.3.245.300) Only.
+
+		config ZYXEL_PHONE_FXS_SLIC_MODEL_NONE
+			bool "(None)"
+			help
+				Unknown or Do NOT Specify the SLIC chip Model name.
+
+		config ZYXEL_PHONE_FXS_SLIC_MODEL_LE9642
+			depends on ZYXEL_PHONE_FXS_SLIC_VENDOR_MICROSEMI
+			bool "Le9642"
+			help
+				Use the 'Microsemi/Zarlink' SLIC chip 'Le9642 (2 FXS ports)' for the FXS phone port(s).
+
+		config ZYXEL_PHONE_FXS_SLIC_MODEL_SI3228X
+			depends on ZYXEL_PHONE_FXS_SLIC_VENDOR_SILABS
+			bool "Si3228x (Si32280)"
+			help
+				Use the 'SiliconLabs' SLIC chip 'Si3228x (2 FXS ports)' for the FXS phone port(s).
+	endchoice
+
+	config BUILD_ZYXEL_PHONE_FXS_SLIC_MODEL
+		string
+		default ""				if ZYXEL_PHONE_FXS_SLIC_MODEL_NONE
+		default "le9642"		if ZYXEL_PHONE_FXS_SLIC_MODEL_LE9642
+		default "si3228x"		if ZYXEL_PHONE_FXS_SLIC_MODEL_SI3228X
+
+	#-------------------------------------------------------------------------------------------------------------------------------------------
+	config BUILD_ZYXEL_PHONE_FXO_SUPPORT
+		bool "Support FXO Phone."
+		default n
+
+	config BUILD_ZYXEL_PHONE_FXO_CH_NUM
+		int "Max FXO phone port number (1-2)."
+		range 1 2
+		default 1
+		depends on BUILD_ZYXEL_PHONE_FXO_SUPPORT
+
+	config BUILD_ZYXEL_PHONE_DECT_SUPPORT
+		bool "Support DECT Phone."
+		default n
+		select BRCMSDK_ZYXEL_EXTERNAL_DECT	if CONFIG_TARGET_brcm963xx_vmg8948
+		help
+		    This config, if Enabled, MUST AUTO SYNC to the BRCM SDK/Kernel one(s): make menuconfig --> brcm963xx configuration -->
+		    Broadcom SDK Configuration --> ZyXEL Features --> Support DSPG DECT module (CONFIG_BRCMSDK$(BRCM_SDK_VER)_ZYXEL_EXTERNAL_DECT),
+		    to ensure ZyIMS VoIP could start-up successfully w/o fail on 'vrgEndptCreate()'
+		    due to Endpoint Num Mis-match between the (i)APP (ZyIMS VoIP) & (ii)DSP & Phone port driver.
+
+	config BUILD_ZYXEL_PHONE_DECT_CH_NUM
+		int "Max DECT phone port/handset number (1-5)."
+		range 1 5
+		default 5
+		depends on BUILD_ZYXEL_PHONE_DECT_SUPPORT
+
+	#-------------------------------------------------------------------------------------------------------------------------------------------
+	config BUILD_ZYXEL_PHONE_GR909_PHONE_LINE_TEST
+		bool "Support the Industry standard GR-909 (FXS) Phone Line Test function."
+		default n
+
+	config BUILD_ZYXEL_PHONE_VMWI_FUNCTION_DISABLE
+		bool "Support to disable VMWI(Visual Message Waiting Indicator) function/feature."
+		default n
+
+	config BUILD_ZYXEL_PHONE_LED_ONLY_GREEN_REG_LED_PER_PORT_OPERATION_SUPPORT
+		bool "Support [LED]only Single One Green(REG) LED operation for Each Local phone port."
+		default n
+
+	config BUILD_ZYXEL_PHONE_LED_RED_FAIL_LED_OPERATION_SUPPORT
+		bool "Support [LED]the Red(Fail/Err) LED operation for Each Local phone port."
+		default n
+		help
+		    This is the base/prerequisite function of the feature "Amber(MWI) LED is composed of the Green(REG) & Red(Fail/Err) ones".
+		    Thus, if the following 'BUILD_ZYXEL_PHONE_LED_AMBER_MWI_LED_IS_COMPOSED_OF_GREEN_AND_RED_LED_OPERATION_SUPPORT' is enabled,
+		    it MUST be AUTO Enabled/Supported accordingly. However, this function is originally designed to be a stand-alone call feature,
+		    thus, if the following 'BUILD_ZYXEL_PHONE_LED_AMBER_MWI_LED_IS_COMPOSED_OF_GREEN_AND_RED_LED_OPERATION_SUPPORT' is NOT enabled,
+		    it can also control by itself.
+
+	config BUILD_ZYXEL_PHONE_LED_AMBER_MWI_LED_IS_COMPOSED_OF_GREEN_AND_RED_LED_OPERATION_SUPPORT
+		bool "Support [LED]to have a Amber(MWI) LED by combining the Green(REG) & Red(Fail/Err) ones for Each Local phone port."
+		default n
+		select BUILD_ZYXEL_PHONE_LED_RED_FAIL_LED_OPERATION_SUPPORT
+		help
+		    This config, if Enabled, MUST also AUTO Enable the following one(s):
+		    "Support [LED]the Red(Fail/Err) LED operation for Each Local phone port
+		    (BUILD_ZYXEL_PHONE_LED_RED_FAIL_LED_OPERATION_SUPPORT)", which is the base/prerequisite function of this feature.
+		    However, the 'BUILD_ZYXEL_PHONE_LED_RED_FAIL_LED_OPERATION_SUPPORT' is originally designed
+		    to be a stand-alone call feature, thus, if this config is NOT enabled, it can also control by itself.
+
+	config BUILD_ZYXEL_PHONE_LED_SINGLE_SET_LED_COMMON_USED_BY_SEVERAL_PORTS_OPERATION_SUPPORT
+		bool "Support [LED]to use a Single Set LED (Green + Amber [+ Red]) to represent the operation of Several Local phone ports."
+		default n
+
+	#-------------------------------------------------------------------------------------------------------------------------------------------
+	config BUILD_ZYXEL_VOICE_CODEC_G729_SUPPORT
+		bool "Support [Codec]G.729 Audio Codec."
+		default n
+
+	config BUILD_ZYXEL_VOICE_CODEC_G726_SUPPORT_G726_32_ONLY
+		bool "Support [Codec]G.726-32 ONLY for the G.726 Audio Codec Type."
+		default n
+
+	#-------------------------------------------------------------------------------------------------------------------------------------------
+	config BUILD_ZYXEL_VOICE_CONFIG_TR069_FAXT38_ENABLE_MAPPING_TO_FAXMODE
+		bool "Support [TR069]to use the TR-104 standard parameter 'FaxT38.Enable' to config the FAX mode ('X_ZyXEL_COM_FaxMode')."
+		default n
+		select BUILD_ZYXEL_VOICE_FAX_MODE_G711_PT_DISABLE_T38_CAP
+		help
+		    This config, if Enabled, MUST also AUTO Enable the following one(s):
+		    "Support to Disable T.38 (Image) Codec Capability when the FAX Mode is configured to be the G.711 Passthrough(PT)
+		    (BUILD_ZYXEL_VOICE_FAX_MODE_G711_PT_DISABLE_T38_CAP)", which is the base function of this feature.
+		    However, the 'BUILD_ZYXEL_VOICE_FAX_MODE_G711_PT_DISABLE_T38_CAP' is originally designed
+		    to be a stand-alone call feature, thus, if this config is NOT enabled, it can also control by itself.
+
+	config BUILD_ZYXEL_VOICE_CONFIG_TR069_SIP_PHONE_MAPPING_BY_STD_PHY_REFERENCE_LIST
+		bool "Support [TR069]to use the TR-104 standard parameter 'PhyReferenceList' to config the SIP<=>Phone Mapping relationship."
+		default n
+
+	#-------------------------------------------------------------------------------------------------------------------------------------------
+	menu "VoIP Region Support"
+		config BUILD_ZYXEL_VOICE_REGION_All
+		bool "Support All Region"
+		default y
+
+if BUILD_ZYXEL_VOICE_REGION_All
+		config BUILD_ZYXEL_VOICE_REGION_AE
+		bool "ARE - United Arab Emirates"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_AR
+		bool "ARG - Argentina"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_AT
+		bool "AUT - Austria"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_AU
+		bool "AUS - Australia"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_BE
+		bool "BEL - Beligium"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_BR
+		bool "BRA - Brazil"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_CH
+		bool "CHE - Switzerland"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_CL
+		bool "CHL - Chile"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_CN
+		bool "CHN - China"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_CO
+		bool "COL - Colombia"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_CZ
+		bool "CZE - Czech"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_DE
+		bool "DEU - Germany"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_DK
+		bool "DNK - Denmark"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_ES
+		bool "ESP - Spain"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_FI
+		bool "FIN - Finland"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_FR
+		bool "FRA - France"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_GB
+		bool "GBR - UK"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_HR
+		bool "HRV - CROATIA"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_HU
+		bool "HUN - Hungary"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_IE
+		bool "IRL - Ireland"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_IN
+		bool "IND - India"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_IS
+		bool "ISL - Iceland"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_IT
+		bool "ITA - Italy"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_JP
+		bool "JPN - Japan"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_NL
+		bool "NLD - Netherlands"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_NO
+		bool "NOR - Norway"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_NZ
+		bool "NZL - Newzealand"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_PK
+		bool "PAK - Pakistan"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_PL
+		bool "POL - Poland"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_RO
+		bool "ROU - Romania"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_RU
+		bool "RUS - Russian Federation"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_SA
+		bool "SAU - Saudi Arabia"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_SE
+		bool "SWE - Sweden"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_SI
+		bool "SVN - Slovenia"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_SK
+		bool "SVK - Slovakia"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_TH
+		bool "THA - Thailand"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_TR
+		bool "TUR - Turkey"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_TW
+		bool "TWN - Taiwan"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_UA
+		bool "UKR - Ukraine"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_US
+		bool "USA - Northamerica"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_VN
+		bool "VNM - Vietnam"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_XE
+		bool "ETS - ETSI"
+		default n
+
+		config BUILD_ZYXEL_VOICE_REGION_XT
+		bool "T57 - TR57"
+		default n
+endif
+
+	endmenu
+
+endmenu

@@ -1,0 +1,173 @@
+Index: xl2tpd-1.3.14/Makefile
+===================================================================
+--- xl2tpd-1.3.14.orig/Makefile	2019-04-18 00:23:39.000000000 +0800
++++ xl2tpd-1.3.14/Makefile	2021-06-21 16:48:51.380995869 +0800
+@@ -114,6 +114,7 @@
+ BINDIR?=$(DESTDIR)${PREFIX}/bin
+ MANDIR?=$(DESTDIR)${PREFIX}/share/man
+ 
++LDLIBS ?= -ljson -lzcfg_msg
+ 
+ all: $(EXEC) pfc $(CONTROL_EXEC)
+ 
+Index: xl2tpd-1.3.14/network.c
+===================================================================
+--- xl2tpd-1.3.14.orig/network.c	2019-04-18 00:23:39.000000000 +0800
++++ xl2tpd-1.3.14/network.c	2021-06-21 16:56:31.170263399 +0800
+@@ -30,6 +30,14 @@
+ #include "ipsecmast.h"
+ #include "misc.h"    /* for IPADDY macro */
+ 
++#include "zcfg_common.h"
++#include "zcfg_eid.h"
++#include "zcfg_fe_rdm_access.h"
++#include "zcfg_msg.h"
++#include "zcfg_net.h"
++#include <json/json.h>
++extern zcfgRet_t sendRetryConnectMsg(void);
++
+ char hostname[256];
+ struct sockaddr_in server, from;        /* Server and transmitter structs */
+ int server_socket;              /* Server socket */
+@@ -233,6 +241,29 @@
+             return;
+         }
+     }
++	
++	if(t->state == SCCRQ)
++	{
++		l2tp_log(LOG_INFO, "%s: keep sending SCCRQ!\n",__FUNCTION__);
++		/*
++		 * Adaptive timeout with exponential backoff.  The delay grows
++		 * exponentialy, unless it's capped by configuration.
++		 */
++		unsigned shift_by = (buf->retries-1);
++		if (shift_by > 31)
++			shift_by = 31;
++
++		tv.tv_sec = 1LL << shift_by;
++		tv.tv_usec = 0;
++		schedule (tv, control_xmit, buf);
++	#ifdef DEBUG_CONTROL_XMIT
++		l2tp_log (LOG_DEBUG, "%s: Scheduling and transmitting packet %d, t->state=%d\n",
++			 __FUNCTION__, ns, t->state);
++	#endif
++		udp_xmit (buf, t);
++		goto finish;
++	}
++	
+     if (buf->retries > gconfig.max_retries)
+     {
+         /*
+@@ -280,6 +311,9 @@
+ #endif
+         udp_xmit (buf, t);
+     }
++finish:
++	return;
++
+ }
+ 
+ unsigned char* get_inner_tos_byte (struct buffer *buf)
+@@ -501,6 +535,11 @@
+                         "%s: select returned error %d (%s)\n",
+                         __FUNCTION__, errno, strerror (errno));
+                 }
++				if(errno != 4) //EINTR
++				{
++					l2tp_log (LOG_INFO, "%s: Send retry connect msg!!\n", __FUNCTION__);
++					sendRetryConnectMsg();
++				}
+             }
+             continue;
+         }
+Index: xl2tpd-1.3.14/xl2tpd.c
+===================================================================
+--- xl2tpd-1.3.14.orig/xl2tpd.c	2021-06-21 16:48:51.368995868 +0800
++++ xl2tpd-1.3.14/xl2tpd.c	2021-06-21 16:55:54.258777675 +0800
+@@ -43,6 +43,13 @@
+ #include <arpa/inet.h>
+ #include "l2tp.h"
+ 
++#include "zcfg_common.h"
++#include "zcfg_eid.h"
++#include "zcfg_fe_rdm_access.h"
++#include "zcfg_msg.h"
++#include "zcfg_net.h"
++#include <json/json.h>
++
+ struct tunnel_list tunnels;
+ int rand_source;
+ int ppd = 1;                    /* Packet processing delay */
+@@ -1826,6 +1833,63 @@
+     }
+ }
+ 
++/*
++ * Ralph Implement: Retry Connection
++*/
++zcfgRet_t xl2tpdMsgSend(uint32_t msgType, zcfgEid_t dstEid, int payloadLen, const char *payload)
++{
++	zcfgRet_t ret;
++	void *sendBuf = NULL;
++	void *recvBuf = NULL;
++	zcfgMsg_t *sendMsgHdr = NULL;
++	char *recv_str = NULL;
++	int buf_size = 0;
++
++	buf_size = sizeof(zcfgMsg_t) + payloadLen;
++	sendBuf = malloc(buf_size);
++	sendMsgHdr = (zcfgMsg_t*)sendBuf;
++
++	sendMsgHdr->type = msgType;
++	sendMsgHdr->length = payloadLen;
++	sendMsgHdr->srcEid = ZCFG_EID_L2TP;
++	sendMsgHdr->dstEid = dstEid;
++
++	if(payload != NULL)
++		memcpy(sendBuf+sizeof(zcfgMsg_t), payload, payloadLen);
++
++	sleep(30);
++	ret = zcfgMsgSendAndGetReply(sendMsgHdr, (zcfgMsg_t **)&recvBuf, 0);
++
++	if(ret == ZCFG_SUCCESS)
++	{
++		recv_str = (char *)recvBuf + sizeof(zcfgMsg_t);
++		l2tp_log(LOG_INFO, "Receive message : %s\n", recv_str);
++	}
++
++	return ret;
++}
++
++zcfgRet_t sendRetryConnectMsg(void)
++{
++	zcfgRet_t ret;
++	struct json_object *xl2tp_arg = NULL;
++	const char *payload = NULL;
++	int payloadLen = 0;
++
++	xl2tp_arg = json_object_new_object();
++
++	json_object_object_add(xl2tp_arg, "connectStatus", json_object_new_int(0));
++
++	payload = json_object_to_json_string(xl2tp_arg);
++	payloadLen = strlen(payload) + 1;
++	ret = xl2tpdMsgSend(ZCFG_MSG_XL2TPD_EVENT , ZCFG_EID_ESMD, payloadLen, payload);
++
++	json_object_put(xl2tp_arg);
++
++	return ret;
++}
++
++
+ static void open_controlfd()
+ {
+     control_fd = open (gconfig.controlfile, O_RDONLY | O_NONBLOCK, 0600);
+@@ -1850,6 +1914,7 @@
+     struct in_addr listenaddr;
+     struct utsname uts;
+ 
++	zcfgEidInit(ZCFG_EID_L2TP, "L2TP");
+     init_args (argc,argv);
+     srand( time(NULL) );
+     rand_source = 0;

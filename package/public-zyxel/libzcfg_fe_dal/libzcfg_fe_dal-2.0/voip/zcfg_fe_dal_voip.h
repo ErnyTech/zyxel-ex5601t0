@@ -1,0 +1,9 @@
+
+#ifndef ZYXEL_SIP_LINE_PER_PROFILE_NUM_MAX
+	#define ZYXEL_SIP_LINE_PER_PROFILE_NUM_MAX 4
+#endif
+#ifndef ZYXEL_SIP_PROFILE_NUM_MAX
+	#define ZYXEL_SIP_PROFILE_NUM_MAX 2
+#endif
+
+#define MISSED_CALL_MAIL_TITLE_DEFAULT "You have Got 1 Missed Call"  //Amber.20171228.Add

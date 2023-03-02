@@ -1,0 +1,163 @@
+Index: pure-ftpd-1.0.30/src/ftp_parser.c
+===================================================================
+--- pure-ftpd-1.0.30.orig/src/ftp_parser.c
++++ pure-ftpd-1.0.30/src/ftp_parser.c
+@@ -352,7 +352,7 @@ void parser(void)
+             if (guest == 0) {
+                 randomdelay();
+             }
+-#ifdef MSTC_TTNET_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
++#ifdef MSTC_TAAAG_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
+ 			char *ReturnLoginValue[16] = {0}; 
+ 			dopass(arg,ReturnLoginValue);
+ 			if ( !strcmp(ReturnLoginValue, "2")) {
+@@ -364,7 +364,7 @@ void parser(void)
+             dopass(arg);
+ #endif
+         } else if (!strcmp(cmd, "quit")) {
+-#ifdef ZYXEL_TT_CUSTOMIZATION
++#ifdef ZYXEL_TAAAB_CUSTOMIZATION
+ 			char hostip[64] = {0};
+ 			getnameinfo((struct sockaddr *) &peer, STORAGE_LEN(peer), hostip, sizeof hostip, NULL, (size_t) 0U, NI_NUMERICHOST);
+         	syslog(LOG_INFO, "Account: User '%s' logout from the host(%s) by ftp.",account,hostip);
+Index: pure-ftpd-1.0.30/src/ftpd.c
+===================================================================
+--- pure-ftpd-1.0.30.orig/src/ftpd.c
++++ pure-ftpd-1.0.30/src/ftpd.c
+@@ -41,7 +41,7 @@
+ #include "zcfg_rdm_obj.h"
+ #include "zcfg_rdm_oid.h"
+ #include "zcfg_fe_rdm_struct.h"
+-#ifdef MSTC_TTNET_MULTI_USER
++#ifdef MSTC_TAAAG_MULTI_USER
+ #include "zcfg_msg.h"
+ #endif
+ 
+@@ -53,7 +53,7 @@ enum{
+ 	SIZE_OF_VALUE = 64 // maximum supported username length is 64
+ };
+ 
+-#ifdef MSTC_TTNET_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
++#ifdef MSTC_TAAAG_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
+ extern void *msgHandle;
+ #endif
+ 
+@@ -875,7 +875,7 @@ static int checknamesanity(const char *n
+         return -1;
+     }
+ 
+-#ifdef ZYXEL_TT_CUSTOMIZATION
++#ifdef ZYXEL_TAAAB_CUSTOMIZATION
+ 			if(strstr(name,"/mnt")==NULL){
+ 			  return -1; 
+ 			}
+@@ -1624,11 +1624,11 @@ static AuthResult pw_check(const char *a
+ {
+     Authentications *auth_scan = first_authentications;
+     AuthResult result;
+-#ifdef CBT_CUSTOMIZATION
++#ifdef CAAAB_CUSTOMIZATION
+     const char* cbt_pw = "cinbell";
+ #endif
+ 
+-#ifdef HAWAIIAN_TELCOM
++#ifdef HAAAA_CUSTOMIZATION
+     const char* ht_pw = "HT3512@RMA#TestBedUseOnly#";
+ #endif
+ 
+@@ -1658,9 +1658,9 @@ static AuthResult pw_check(const char *a
+ #endif
+         result.backend_data = NULL;
+ 
+-#if defined(CBT_CUSTOMIZATION)
++#if defined(CAAAB_CUSTOMIZATION)
+         if(!strcmp(cbt_pw,password))
+-#elif defined(HAWAIIAN_TELCOM)
++#elif defined(HAAAA_CUSTOMIZATION)
+         if(!strcmp(ht_pw,password))
+ #else
+         if(0)
+@@ -2066,7 +2066,7 @@ void checkClientFromLANWAN(char *remoadd
+ }
+ #endif
+ 
+-#ifdef MSTC_TTNET_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
++#ifdef MSTC_TAAAG_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
+ //Send message to ssk for get some information of User info.
+ bool checkIsFromLan(char *addr){
+ 
+@@ -2141,7 +2141,7 @@ bool queryUserInfo(char *password,char *
+ 	strncpy(paword,password, 257);
+ 
+ 	IID_INIT(iidStack);
+-	while ((ret = zcfgFeObjStructGetNext(RDM_OID_TT_USER, &iidStack, (void **) &UsersUserObj)) == ZCFG_SUCCESS)
++	while ((ret = zcfgFeObjStructGetNext(RDM_OID_TAAAB_USER, &iidStack, (void **) &UsersUserObj)) == ZCFG_SUCCESS)
+    	{
+ 		if(strcmp(UsersUserObj->Username, username) == 0 )
+    	{
+@@ -2228,7 +2228,7 @@ int UserAllow(char *password,char *hosti
+ }
+ #endif	/* _MSTC_, Linda, CPE User Definitions and Rights_END. */
+ 
+-#ifdef MSTC_TTNET_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
++#ifdef MSTC_TAAAG_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
+ void dopass(char *password, char *val)
+ #else
+ void dopass(char *password)
+@@ -2394,14 +2394,14 @@ void dopass(char *password)
+ 
+ 	if(chk_account_is_locked(cur_user_idx, &login_fail_cnt, last_login_time, retry_times, lock_period)){
+ 		puts("Account has been blocked temporarily, please try later!");
+-#ifdef MSTC_TTNET_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
++#ifdef MSTC_TAAAG_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
+ 		addreply_noformat(530, "Account has been blocked temporarily, please try later!");
+ #endif	/*_MSTC_, Linda, CPE User Definitions and Rights_END.*/
+ 		logfile(LOG_WARNING, "Account has been blocked temporarily, please try later!");
+ 		return;
+ 	}
+ 	
+-#ifdef MSTC_TTNET_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
++#ifdef MSTC_TAAAG_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
+ 	char passwordCopy[128] = {0};
+ 	if(strlen(password))
+ 		strcpy(passwordCopy,password);
+@@ -2444,7 +2444,7 @@ void dopass(char *password)
+         doreply();
+         return;
+     }
+-#ifdef MSTC_TTNET_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
++#ifdef MSTC_TAAAG_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
+ 		//Determine user can log in or not by using FTP.
+ 		if (UserAllow(passwordCopy,hostip) == -1)
+ 		{
+@@ -2455,7 +2455,7 @@ void dopass(char *password)
+ 		}
+ #endif	/*_MSTC_, Linda, CPE User Definitions and Rights_END.*/
+     reset_authorize_fail_cnt(cur_user_idx);
+-#ifdef ZYXEL_TT_CUSTOMIZATION
++#ifdef ZYXEL_TAAAB_CUSTOMIZATION
+ 	syslog(LOG_INFO, "Account: User '%s' login from the host(%s) by ftp.",account,hostip);
+ #endif
+ #ifdef PER_USER_LIMITS
+@@ -2484,7 +2484,7 @@ void dopass(char *password)
+ #endif
+     }
+ 
+-#ifdef ZYXEL_TT_CUSTOMIZATION
++#ifdef ZYXEL_TAAAB_CUSTOMIZATION
+ 		sprintf(authresult.dir,"%s","/mnt");
+ #endif
+ 
+Index: pure-ftpd-1.0.30/src/ftpd.h
+===================================================================
+--- pure-ftpd-1.0.30.orig/src/ftpd.h
++++ pure-ftpd-1.0.30/src/ftpd.h
+@@ -323,7 +323,7 @@ void parser(void);
+ void stripctrl(char * const buf, size_t len);
+ void dobanner(const int type);
+ void douser(const char *name);
+-#ifdef MSTC_TTNET_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
++#ifdef MSTC_TAAAG_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
+ void dopass(char *password, char *val);
+ #else
+ void dopass(char *password);

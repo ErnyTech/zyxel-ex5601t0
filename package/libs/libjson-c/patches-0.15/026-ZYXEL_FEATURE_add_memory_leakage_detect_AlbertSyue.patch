@@ -1,0 +1,433 @@
+Index: json-c-0.15/json_object.c
+===================================================================
+--- json-c-0.15.orig/json_object.c
++++ json-c-0.15/json_object.c
+@@ -35,6 +35,10 @@
+ #include "snprintf_compat.h"
+ #include "strdup_compat.h"
+ 
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++#include <pthread.h>
++#endif
++
+ #if SIZEOF_LONG_LONG != SIZEOF_INT64_T
+ #error "The long long type isn't 64-bits"
+ #endif
+@@ -140,6 +144,12 @@ static json_object_to_json_string_fn jso
+ static json_object_to_json_string_fn json_object_array_to_json_string;
+ static json_object_to_json_string_fn _json_object_userdata_to_json_string;
+ 
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++struct json_object *ZcfgAllocFrontendLineRecordJobj = NULL;
++struct json_object *ZcfgAllocFrontendAddrRecordJobj = NULL;
++pthread_mutex_t recordAllocDataMutex = PTHREAD_MUTEX_INITIALIZER;
++#endif
++
+ #ifndef JSON_NORETURN
+ #if defined(_MSC_VER)
+ #define JSON_NORETURN __declspec(noreturn)
+@@ -305,7 +315,10 @@ int json_object_put(struct json_object *
+ 	/* Avoid invalid free and crash explicitly instead of (silently)
+ 	 * segfaulting.
+ 	 */
++#ifndef ZCFG_MEMORY_LEAK_DETECT
+ 	assert(jso->_ref_count > 0);
++#endif
++
+ 
+ #if defined(HAVE_ATOMIC_BUILTINS) && defined(ENABLE_THREADING)
+ 	/* Note: this only allow the refcount to remain correct
+@@ -342,6 +355,12 @@ static void json_object_generic_delete(s
+ 	lh_table_delete(json_object_table, jso);
+ #endif /* REFCOUNT_DEBUG */
+ 	printbuf_free(jso->_pb);
++
++
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++	_json_object_generic_delete(jso);
++#endif
++
+ 	free(jso);
+ }
+ 
+@@ -567,7 +586,7 @@ static void json_object_object_delete(st
+ 	json_object_generic_delete(jso_base);
+ }
+ 
+-struct json_object *json_object_new_object(void)
++struct json_object *json_object_new_object()
+ {
+ 	struct json_object_object *jso = JSON_OBJECT_NEW(object);
+ 	if (!jso)
+@@ -583,6 +602,26 @@ struct json_object *json_object_new_obje
+ 	return &jso->base;
+ }
+ 
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++struct json_object* _json_object_new_object(const char *fileName, int line)
++{
++	struct json_object *jso = json_object_new_object();
++
++	if(!jso)
++	{
++		return NULL;
++	}
++	else
++	{
++		pthread_mutex_lock(&recordAllocDataMutex);
++		recordFrontendZcfgAllocData(jso, fileName, line);
++		pthread_mutex_unlock(&recordAllocDataMutex);
++	}
++
++	return jso;
++}
++#endif
++
+ struct json_object* json_object_new_c_object(int table_entries)
+ {
+ 	struct json_object_object *jso = JSON_OBJECT_NEW(object);
+@@ -1336,6 +1375,27 @@ int json_object_set_param(struct json_ob
+ 	return 0;
+ }
+ 
++
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++struct json_object* _zmld_json_object_new_string(const char *str, const char *fileName, int line)
++{
++	struct json_object *jso = json_object_new_string(str);
++
++	if(!jso)
++	{
++		return NULL;
++	}
++	else
++	{
++		pthread_mutex_lock(&recordAllocDataMutex);
++		recordFrontendZcfgAllocData(jso, fileName, line);
++		pthread_mutex_unlock(&recordAllocDataMutex);
++	}
++
++	return jso;
++}
++#endif
++
+ static struct json_object *_json_object_new_string(const char *s, const size_t len)
+ {
+ 	size_t objsize;
+@@ -1517,7 +1577,7 @@ static void json_object_array_delete(str
+ 	json_object_generic_delete(jso);
+ }
+ 
+-struct json_object *json_object_new_array(void)
++struct json_object *json_object_new_array()
+ {
+ 	return json_object_new_array_ext(ARRAY_LIST_DEFAULT_SIZE);
+ }
+@@ -1553,6 +1613,26 @@ struct array_list *json_object_get_array
+ 	}
+ }
+ 
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++struct json_object* _json_object_new_array(const char *fileName, int line)
++{
++	struct json_object *jso = json_object_new_array();
++
++	if(!jso)
++	{
++		return NULL;
++	}
++	else
++	{
++		pthread_mutex_lock(&recordAllocDataMutex);
++		recordFrontendZcfgAllocData(jso, fileName, line);
++		pthread_mutex_unlock(&recordAllocDataMutex);
++	}
++
++	return jso;
++}
++#endif
++
+ struct json_object* json_object_new_array_list(int array_list_size)
+ {
+ 	struct json_object_array *jso = JSON_OBJECT_NEW(array);
+@@ -1924,3 +2004,91 @@ static void json_abort(const char *messa
+ 		fprintf(stderr, "json-c aborts with error: %s\n", message);
+ 	abort();
+ }
++
++//================================================================================
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++void dumpZcfgAllocFrontendRecord(void)
++{
++	if(ZcfgAllocFrontendAddrRecordJobj != NULL){
++		printf("============================================================\n");
++		printf("json-c Alloc Address Record\n");
++		printf("%s\n", json_object_to_json_string(ZcfgAllocFrontendAddrRecordJobj));
++		printf("============================================================\n\n");
++	}
++	else
++		printf("json-c ZcfgAllocFrontendAddrRecordJobj is not init.\n");
++
++	if(ZcfgAllocFrontendLineRecordJobj != NULL){
++		printf("============================================================\n");
++		printf("json-c Alloc File Line Record\n");
++		printf("%s\n", json_object_to_json_string(ZcfgAllocFrontendLineRecordJobj));
++		printf("============================================================\n\n");
++	}
++	else
++		printf("json-c ZcfgAllocFrontendLineRecordJobj is not init.\n");
++}
++#endif
++
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++void recordFrontendAllocData(char *pointerAddr, char *fileLine)
++{
++	int allocCnt = 0;
++
++	if(ZcfgAllocFrontendAddrRecordJobj == NULL)
++		ZcfgAllocFrontendAddrRecordJobj = json_object_new_object();
++	if(ZcfgAllocFrontendLineRecordJobj == NULL)
++		ZcfgAllocFrontendLineRecordJobj = json_object_new_object();
++
++	if(ZcfgAllocFrontendAddrRecordJobj != NULL){
++		json_object_object_add(ZcfgAllocFrontendAddrRecordJobj, pointerAddr, json_object_new_string(fileLine));
++	}
++
++	if(ZcfgAllocFrontendLineRecordJobj != NULL){
++		allocCnt = json_object_get_int(json_object_object_get(ZcfgAllocFrontendLineRecordJobj, fileLine));
++		allocCnt++;
++		json_object_object_add(ZcfgAllocFrontendLineRecordJobj, fileLine, json_object_new_int(allocCnt));
++	}
++}
++#endif
++
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++void recordFrontendZcfgAllocData(void *objStruct, const char *fileName, int line)
++{
++	char fileLine[ZCFG_ALLOC_RECORD_LEN] = {0};
++	char pointerAddr[ZCFG_ALLOC_RECORD_LEN] = {0};
++
++	sprintf(pointerAddr, "%p", objStruct);
++	sprintf(fileLine, "%s:%d", fileName, line);
++
++	recordFrontendAllocData(pointerAddr, fileLine);
++}
++#endif
++
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++void _json_object_generic_delete(void* obj)
++{
++	char pointerAddr[ZCFG_ALLOC_RECORD_LEN] = {0};
++	const char *fileLine = NULL;
++	int allocCnt = 0;
++
++	if(obj == NULL){
++		//ZLOG_DEBUG("Free NULL pointer");
++		printf("Free NULL pointer\n");
++		return;
++	}
++	if(ZcfgAllocFrontendAddrRecordJobj != NULL){
++		sprintf(pointerAddr, "%p", obj);
++		fileLine = json_object_get_string(json_object_object_get(ZcfgAllocFrontendAddrRecordJobj, pointerAddr));
++
++		if(fileLine != NULL && *fileLine != '\0' && ZcfgAllocFrontendLineRecordJobj != NULL){
++			allocCnt = json_object_get_int(json_object_object_get(ZcfgAllocFrontendLineRecordJobj, fileLine));
++			allocCnt --;
++			if(allocCnt > 0)
++				json_object_object_add(ZcfgAllocFrontendLineRecordJobj, fileLine, json_object_new_int(allocCnt));
++			else
++				json_object_object_del(ZcfgAllocFrontendLineRecordJobj, fileLine);
++		}
++		json_object_object_del(ZcfgAllocFrontendAddrRecordJobj, pointerAddr);
++	}
++}
++#endif
+Index: json-c-0.15/json_object.h
+===================================================================
+--- json-c-0.15.orig/json_object.h
++++ json-c-0.15/json_object.h
+@@ -347,6 +347,10 @@ JSON_EXPORT json_object_to_json_string_f
+  */
+ JSON_EXPORT struct json_object *json_object_new_object(void);
+ 
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++struct json_object* _json_object_new_object(const char *fileName, int line);
++#endif
++
+ /** Create a new empty object and set table entries num
+  * @returns a json_object of type json_type_object
+  */
+@@ -544,6 +548,10 @@ JSON_EXPORT void json_object_object_del(
+  */
+ JSON_EXPORT struct json_object *json_object_new_array(void);
+ 
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++struct json_object* _json_object_new_array(const char *fileName, int line);
++#endif
++
+ /** Create a new empty json_object of type json_type_array and set its item num
+  * @returns a json_object of type json_type_array
+  */
+@@ -949,6 +957,10 @@ JSON_EXPORT int json_object_set_double(s
+  */
+ JSON_EXPORT struct json_object *json_object_new_string(const char *s);
+ 
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++struct json_object* _zmld_json_object_new_string(const char *s, const char *fileName, int line);
++#endif
++
+ /** Create a new empty json_object of type json_type_string and allocate
+  * len characters for the new string.
+  *
+@@ -1099,6 +1111,14 @@ JSON_EXPORT int json_object_array_delete
+ 
+ int json_object_set_param(struct json_object *obj, char *v);
+ 
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++#define ZCFG_ALLOC_RECORD_LEN 64
++void dumpZcfgAllocFrontendRecord(void);
++void recordFrontendAllocData(char *, char *);
++void recordFrontendZcfgAllocData(void *, const char *, int);
++void _json_object_generic_delete(void*);
++#endif
++
+ #ifdef __cplusplus
+ }
+ #endif
+Index: json-c-0.15/json_tokener.h
+===================================================================
+--- json-c-0.15.orig/json_tokener.h
++++ json-c-0.15/json_tokener.h
+@@ -137,6 +137,10 @@ struct json_tokener
+  */
+ JSON_EXPORT size_t json_tokener_get_parse_end(struct json_tokener *tok);
+ 
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++struct json_object* _json_tokener_parse(const char *str, const char *fileName, int line);
++#endif
++
+ /**
+  * @deprecated Unused in json-c code
+  */
+Index: json-c-0.15/json_util.c
+===================================================================
+--- json-c-0.15.orig/json_util.c
++++ json-c-0.15/json_util.c
+@@ -57,6 +57,11 @@
+ #include "json_util.h"
+ #include "printbuf.h"
+ 
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++#include <pthread.h>
++extern pthread_mutex_t recordAllocDataMutex;
++#endif
++
+ static int _json_object_to_fd(int fd, struct json_object *obj, int flags, const char *filename);
+ 
+ static char _last_err[256] = "";
+@@ -147,6 +152,27 @@ struct json_object *json_object_from_fil
+ 	return obj;
+ }
+ 
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++struct json_object* _json_object_from_file(const char *str, const char *fileName, int line)
++{
++	struct json_object* obj = NULL;
++	obj = json_object_from_file(str);
++
++	if(!obj)
++	{
++		return NULL;
++	}
++	else
++	{
++		pthread_mutex_lock(&recordAllocDataMutex);
++		recordFrontendZcfgAllocData(obj, fileName, line);
++		pthread_mutex_unlock(&recordAllocDataMutex);
++	}
++
++	return obj;
++}
++#endif
++
+ /* extended "format and write to file" function */
+ int cmsFile_isFilePresent(const char *filename)
+ {
+Index: json-c-0.15/json_util.h
+===================================================================
+--- json-c-0.15.orig/json_util.h
++++ json-c-0.15/json_util.h
+@@ -43,6 +43,10 @@ extern "C" {
+  */
+ JSON_EXPORT struct json_object *json_object_from_file(const char *filename);
+ 
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++struct json_object* _json_object_from_file(const char *filename, const char *file, int line);
++#endif
++
+ /**
+  * Create a JSON object from already opened file descriptor.
+  *
+Index: json-c-0.15/json.h
+===================================================================
+--- json-c-0.15.orig/json.h
++++ json-c-0.15/json.h
+@@ -31,6 +31,14 @@ extern "C" {
+ #include "json_util.h"
+ #include "linkhash.h"
+ 
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++#define json_object_new_object(void) _json_object_new_object(__FILE__, __LINE__)
++#define json_object_new_array(void) _json_object_new_array(__FILE__, __LINE__)
++#define json_object_new_string(strParameter) _json_object_new_string(strParameter, __FILE__, __LINE__)
++#define json_object_from_file(strParameter) _json_object_from_file(strParameter, __FILE__, __LINE__)
++#define json_tokener_parse(strParameter) _json_tokener_parse(strParameter, __FILE__, __LINE__)
++#endif
++
+ #ifdef __cplusplus
+ }
+ #endif
+Index: json-c-0.15/json_tokener.c
+===================================================================
+--- json-c-0.15.orig/json_tokener.c
++++ json-c-0.15/json_tokener.c
+@@ -99,6 +99,11 @@ static json_bool json_tokener_validate_u
+ 
+ static int json_tokener_parse_double(const char *buf, int len, double *retval);
+ 
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++#include <pthread.h>
++extern pthread_mutex_t recordAllocDataMutex;
++#endif
++
+ const char *json_tokener_error_desc(enum json_tokener_error jerr)
+ {
+ 	int jerr_int = (int)jerr;
+@@ -191,6 +196,27 @@ struct json_object *json_tokener_parse(c
+ 	return obj;
+ }
+ 
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++struct json_object* _json_tokener_parse(const char *str, const char *fileName, int line)
++{
++	struct json_object* obj = NULL;
++	obj = json_tokener_parse(str);
++
++	if(!obj)
++	{
++		return NULL;
++	}
++	else
++	{
++		pthread_mutex_lock(&recordAllocDataMutex);
++		recordFrontendZcfgAllocData(obj, fileName, line);
++		pthread_mutex_unlock(&recordAllocDataMutex);
++	}
++
++	return obj;
++}
++#endif
++
+ struct json_object *json_tokener_parse_verbose(const char *str, enum json_tokener_error *error)
+ {
+ 	struct json_tokener *tok;

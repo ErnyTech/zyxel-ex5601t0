@@ -1,0 +1,254 @@
+Index: udhcp-0.9.8/Makefile
+===================================================================
+--- udhcp-0.9.8.orig/Makefile	2020-09-02 11:08:31.680684938 +0800
++++ udhcp-0.9.8/Makefile	2020-09-02 16:38:02.486980296 +0800
+@@ -98,6 +98,10 @@
+ CFLAGS += -DSUNRISE_VLANHUNT_CUSTOMIZATION
+ endif
+ 
++ifneq ($(strip $(CONFIG_ZYXEL_CUSTOMIZATION_DEVICELOG)),)
++CFLAGS += -DCONFIG_ZYXEL_CUSTOMIZATION_DEVICELOG
++endif
++
+ all: clean $(EXEC1) $(EXEC2) $(EXEC3)
+ 	$(STRIP) --remove-section=.note --remove-section=.comment $(EXEC1) $(EXEC2) $(EXEC3)
+ 
+Index: udhcp-0.9.8/clientpacket.c
+===================================================================
+--- udhcp-0.9.8.orig/clientpacket.c	2020-09-02 11:08:31.672684939 +0800
++++ udhcp-0.9.8/clientpacket.c	2020-09-02 16:36:56.930851111 +0800
+@@ -126,6 +126,10 @@
+ 
+ 	add_requests(&packet);
+ 	LOG(LOG_DEBUG, "Sending discover...");
++	#ifdef CONFIG_ZYXEL_CUSTOMIZATION_DEVICELOG
++	if(ttchecklogInif(client_config.interface))
++	   TTDHCPLOG(LOG_DEBUG, "DHCP_Client: DHCPDISCOVERY src mac=%02x:%02x:%02x:%02x:%02x:%02x dst mac=ff:ff:ff:ff:ff:ff src ip=0.0.0.0 dst ip=255.255.255.255",client_config.arp[0], client_config.arp[1], client_config.arp[2],client_config.arp[3], client_config.arp[4], client_config.arp[5]);
++	#endif
+ 	return raw_packet(&packet, INADDR_ANY, CLIENT_PORT, INADDR_BROADCAST, 
+ 				SERVER_PORT, MAC_BCAST_ADDR, client_config.ifindex);
+ }
+Index: udhcp-0.9.8/debug.h
+===================================================================
+--- udhcp-0.9.8.orig/debug.h	2020-09-02 11:08:31.672684939 +0800
++++ udhcp-0.9.8/debug.h	2020-09-02 16:37:09.380979057 +0800
+@@ -13,6 +13,9 @@
+ # define LOG(level, str, args...) do { printf(str, ## args); \
+ 				printf("\n"); \
+ 				syslog(level, str, ## args); } while(0)
++#ifdef CONFIG_ZYXEL_CUSTOMIZATION_DEVICELOG
++# define TTDHCPLOG(level, str, args...) syslog(level, str, ## args)
++#endif
+ # define OPEN_LOG(name) openlog(name, LOG_PID, 0)
+ #define CLOSE_LOG() closelog()
+ #else
+Index: udhcp-0.9.8/dhcpc.c
+===================================================================
+--- udhcp-0.9.8.orig/dhcpc.c	2020-09-02 11:08:31.680684938 +0800
++++ udhcp-0.9.8/dhcpc.c	2020-09-02 16:37:47.183720690 +0800
+@@ -50,6 +50,11 @@
+ #include "zcfg_common.h"
+ #include "zcfg_fe_rdm_access.h"
+ #include "zcfg_msg.h"
++#ifdef CONFIG_ZYXEL_CUSTOMIZATION_DEVICELOG
++#include "zcfg_rdm_obj.h"
++#include "zcfg_rdm_oid.h"
++#include "zcfg_fe_rdm_struct.h"
++#endif
+ 
+ #if 1 //__ZyXEL__,20150331,Cj_Lai Transation ID + last four words of WAN interface MAC address.
+ #include <math.h>
+@@ -144,6 +149,96 @@
+ 	return(0);
+ }
+ 
++#ifdef CONFIG_ZYXEL_CUSTOMIZATION_DEVICELOG
++int ttchecklogInif(char* intfName)
++{
++	rdm_IpIface_t *ipIface = NULL;
++	objIndex_t ipIfaceIid;
++    int dhcplogflag = 0;
++
++	/*find tt iptv interface via tt interface name*/
++	IID_INIT(ipIfaceIid);
++	while(zcfgFeObjStructGetNextWithoutUpdate(RDM_OID_IP_IFACE, &ipIfaceIid, (void **)&ipIface) == ZCFG_SUCCESS) {
++		if ( !strcmp(ipIface->X_ZYXEL_IfName, intfName) && strstr(ipIface->X_TT_SrvName,"IPTV") ){
++			dhcplogflag = 1;
++			free(ipIface);
++			break;
++		}
++		free(ipIface);
++	}
++
++	return dhcplogflag;
++}
++
++void setStatus(int status)
++{
++   static int wasAssigned=0;
++
++   if (status == 1)
++   {
++      wasAssigned = 1;
++      /*
++       * We don't have to send out a DHCPC_STATUS_CHANGED msg here.
++       * We did that from run_script.
++       */
++   }
++   else
++   {
++      /*
++       * We went from assigned to un-assigned, send a DHCPC_STATUS_CHANGED
++       * msg.
++       */
++      if (wasAssigned == 1)
++      {
++      	if(state != RELEASED)
++      	{
++      		//NACK
++      		struct in_addr temp_addr={0};
++      		struct in_addr temp2_addr={0};
++      		char message_log[128];
++      		int log_len = 0;
++      		FILE *fp;
++      		char fileIP[512];
++      		char file_row[2][32];
++			  
++      		temp_addr.s_addr = server_addr;
++      		temp2_addr.s_addr = requested_ip;
++      		if((fp = fopen("/var/dhcp_server", "r")) != NULL){
++      			while (fgets(fileIP, sizeof(fileIP), fp))
++      			{
++      				sscanf(fileIP, "%s %s", file_row[0], file_row[1]);
++      				if(strcmp(file_row[0], inet_ntoa(temp_addr))==0)
++      				{
++      					log_len += sprintf(message_log, "DHCP_Client: DHCPNACK src mac=%s dst mac=%02x:%02x:%02x:%02x:%02x:%02x src ip=%s", file_row[1],
++      						client_config.arp[0], client_config.arp[1], client_config.arp[2],client_config.arp[3], client_config.arp[4], client_config.arp[5], inet_ntoa(temp_addr));
++      					log_len += sprintf(message_log+log_len, "dst ip=%s ", inet_ntoa(temp2_addr));
++      					sprintf(message_log+log_len, "assigned ip=%s", inet_ntoa(temp2_addr));
++						if(ttchecklogInif(client_config.interface))
++      					TTDHCPLOG(LOG_DEBUG, message_log);
++      					break;	
++      				}
++      			}
++      			fclose(fp);
++      			system("rm /var/dhcp_server \n");
++      		}
++      		else
++      		{
++      			log_len += sprintf(message_log, "DHCP_Client: DHCPNACK src mac=ff:ff:ff:ff:ff:ff dst mac=%02x:%02x:%02x:%02x:%02x:%02x src ip=%s",
++      				client_config.arp[0], client_config.arp[1], client_config.arp[2],client_config.arp[3], client_config.arp[4], client_config.arp[5], inet_ntoa(temp_addr));
++      			log_len += sprintf(message_log+log_len, "dst ip=%s ", inet_ntoa(temp2_addr));
++      			sprintf(message_log+log_len, "assigned ip=%s", inet_ntoa(temp2_addr));
++				if(ttchecklogInif(client_config.interface))
++      			TTDHCPLOG(LOG_DEBUG, message_log);
++      		}
++      	}
++         wasAssigned = 0;
++      }
++   }
++
++   return;
++}
++#endif
++
+ #ifndef BB_VER
+ static void show_usage(void)
+ {
+@@ -254,6 +349,46 @@
+ 			json_object_put(dhcpc_opt);
+ 		}			
+ #endif
++#ifdef CONFIG_ZYXEL_CUSTOMIZATION_DEVICELOG				
++				//RELEASE
++				struct in_addr requested_addr={0};
++				struct in_addr tmp_addr={0};
++				char message_log[128];
++				int log_len = 0;
++				requested_addr.s_addr = requested_ip;
++				tmp_addr.s_addr = server_addr;
++				FILE *fp;
++				char fileIP[512];
++				char file_row[2][32];
++				
++				if((fp = fopen("/var/dhcp_server", "r")) != NULL){
++					while (fgets(fileIP, sizeof(fileIP), fp))
++					{
++						sscanf(fileIP, "%s %s", file_row[0], file_row[1]);
++						if(strcmp(file_row[0], inet_ntoa(tmp_addr))==0)
++						{
++							log_len += sprintf(message_log, "DHCP_Client: DHCPRELEASE src mac=%02x:%02x:%02x:%02x:%02x:%02x dst mac=%s src ip=%s ", client_config.arp[0], client_config.arp[1], 
++								client_config.arp[2],client_config.arp[3], client_config.arp[4], client_config.arp[5], file_row[1], inet_ntoa(requested_addr));
++							log_len += sprintf(message_log+log_len, "dst ip=%s ", inet_ntoa(tmp_addr));
++							sprintf(message_log+log_len, "requested ip=%s", inet_ntoa(requested_addr)); 				
++							if(ttchecklogInif(client_config.interface))
++							TTDHCPLOG(LOG_DEBUG, message_log);
++							break;	
++						}
++					}
++					fclose(fp);
++					system("rm /var/dhcp_server \n");
++				}
++				else
++				{
++					log_len += sprintf(message_log, "DHCP_Client: DHCPRELEASE src mac=%02x:%02x:%02x:%02x:%02x:%02x dst mac=ff:ff:ff:ff:ff:ff src ip=%s ", client_config.arp[0], client_config.arp[1], 
++						client_config.arp[2],client_config.arp[3], client_config.arp[4], client_config.arp[5], inet_ntoa(requested_addr));
++					log_len += sprintf(message_log+log_len, "dst ip=%s ", inet_ntoa(tmp_addr));
++					sprintf(message_log+log_len, "requested ip=%s", inet_ntoa(requested_addr)); 		
++					if(ttchecklogInif(client_config.interface))
++					TTDHCPLOG(LOG_DEBUG, message_log);
++				}
++#endif
+ 		send_release(server_addr, requested_ip, client_config.interface); /* unicast */
+ 
+ 		run_script(NULL, "deconfig");
+@@ -262,6 +397,9 @@
+ 
+ 	change_mode(LISTEN_NONE);
+ 	state = RELEASED;
++#ifdef CONFIG_ZYXEL_CUSTOMIZATION_DEVICELOG
++	setStatus(0);
++#endif
+ 	timeout = 0x7fffffff;
+ }
+ 
+@@ -566,6 +704,9 @@
+ 	signal(SIGTERM, signal_handler);
+ 	
+ 	state = INIT_SELECTING;
++#ifdef CONFIG_ZYXEL_CUSTOMIZATION_DEVICELOG
++		setStatus(0);
++#endif
+ 	run_script(NULL, "deconfig");
+ 	change_mode(LISTEN_RAW);
+ 
+@@ -599,6 +740,9 @@
+ 			/* timeout dropped to zero */
+ 			switch (state) {
+ 			case INIT_SELECTING:
++#ifdef CONFIG_ZYXEL_CUSTOMIZATION_DEVICELOG
++					setStatus(0);
++#endif
+ #ifdef ZYXEL_DHCP_DISCOVER_EXPONENTIAL
+ 				dhcp_discover_exponential(&xid, &now);
+ #else
+@@ -821,6 +965,9 @@
+ 						   ((state == RENEWING || state == REBINDING) ? "renew" : "bound"));
+ 
+ 					state = BOUND;
++#ifdef CONFIG_ZYXEL_CUSTOMIZATION_DEVICELOG
++						setStatus(1);
++#endif
+ #ifdef ZYXEL_FAKE_IP_169_254_X_X
+ 					discoverSet = 0;
+ #endif
+@@ -866,6 +1013,9 @@
+ #endif
+ 
+ 					state = INIT_SELECTING;
++#ifdef CONFIG_ZYXEL_CUSTOMIZATION_DEVICELOG
++						setStatus(0);
++#endif
+ 					timeout = now;
+ 					requested_ip = 0;
+ 					packet_num = 0;

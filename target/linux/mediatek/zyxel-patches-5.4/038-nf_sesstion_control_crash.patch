@@ -1,0 +1,12 @@
+diff -ruN a/net/netfilter/nf_conntrack_core.c b/net/netfilter/nf_conntrack_core.c
+--- a/net/netfilter/nf_conntrack_core.c	2022-05-03 14:17:08.796935000 +0800
++++ b/net/netfilter/nf_conntrack_core.c	2022-05-03 16:58:04.329456017 +0800
+@@ -1149,7 +1149,7 @@
+ 			}
+ 		}
+ 
+-		ila = kzalloc(sizeof(struct nf_sess_ref_count),GFP_KERNEL);
++		ila = kzalloc(sizeof(struct nf_sess_ref_count),GFP_ATOMIC);
+ 		if(!ila){
+ 			printk(KERN_ERR "Unable to create nf_sess_ref_count \n");
+ 			goto keepgoing; // ignore the error and keep going?

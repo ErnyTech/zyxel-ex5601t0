@@ -1,0 +1,74 @@
+Index: busybox-1.31.1/networking/wget.c
+===================================================================
+--- busybox-1.31.1.orig/networking/wget.c	2021-04-13 20:51:15.497884221 +0800
++++ busybox-1.31.1/networking/wget.c	2021-04-13 20:52:18.637882400 +0800
+@@ -280,6 +280,7 @@
+ static char EOMTime[64] = DEFAULT_DATETIME;
+ static char TCPOpenRequestTime[64] = DEFAULT_DATETIME;
+ static char TCPOpenResponseTime[64] = DEFAULT_DATETIME;
++//static char DownloadURL[260] = {0};
+ static unsigned long TotalBytesReceived = 0;
+ static unsigned long TotalBytesSent = 0;
+ static unsigned long TestBytesReceived = 0;
+@@ -419,6 +420,7 @@
+ 
+ 	json_object_object_add(diag_result, "TCPOpenRequestTime", json_object_new_string(TCPOpenRequestTime));
+ 	json_object_object_add(diag_result, "TCPOpenResponseTime", json_object_new_string(TCPOpenResponseTime));
++	//json_object_object_add(diag_result, "DownloadURL", json_object_new_string(DownloadURL));
+ 
+ 	payload = json_object_to_json_string(diag_result);
+ 	payloadLen = strlen(payload) + 1;
+@@ -1114,7 +1116,7 @@
+ 
+ 		getDateTime(TCPOpenRequestTime);
+ 		sfp = open_socket(lsa, &sk);
+-		if((sk>0) && strcmp(G.ifName, "")) {
++		if((sk>0) && G.ifName && strcmp(G.ifName, "")) {
+ 			setsockopt_bindtodevice(sk, (const char *)G.ifName);
+ 		}
+ 		if((sk>0) && ipDscp) {
+@@ -1223,7 +1225,7 @@
+ 			outputDiagDlData();
+ 		}
+ 
+-		if((sk>0) && strcmp(G.ifName, "")) {
++		if((sk>0) && G.ifName && strcmp(G.ifName, "")) {
+ 			setsockopt_bindtodevice(sk, (const char *)G.ifName);
+ 		}
+ 		if((sk>0) && ipDscp) {
+@@ -1602,7 +1604,7 @@
+ 
+ 				getDateTime(TCPOpenRequestTime);
+ 				sfp = open_socket(lsa, &sk);
+-				if((sk>0) && strcmp(G.ifName, "")) {
++				if((sk>0) && G.ifName && strcmp(G.ifName, "")) {
+ 					setsockopt_bindtodevice(sk, (const char *)G.ifName);
+ 				}
+ 				if((sk>0) && ipDscp) {
+@@ -1635,7 +1637,7 @@
+ 
+ 			getDateTime(TCPOpenRequestTime);
+ 			sfp = open_socket(lsa, &sk);
+-			if((sk>0) && strcmp(G.ifName, "")) {
++			if((sk>0) && G.ifName && strcmp(G.ifName, "")) {
+ 				setsockopt_bindtodevice(sk, (const char *)G.ifName);
+ 			}
+ 			if((sk>0) && ipDscp) {
+@@ -1661,7 +1663,7 @@
+ 
+ 			getDateTime(TCPOpenRequestTime);
+ 			sfp = open_socket(lsa, &sk);
+-			if((sk>0) && strcmp(G.ifName, "")) {
++			if((sk>0) && G.ifName && strcmp(G.ifName, "")) {
+ 				setsockopt_bindtodevice(sk, (const char *)G.ifName);
+ 			}
+ 			if((sk>0) && ipDscp) {
+@@ -1688,7 +1690,7 @@
+ 
+ 			getDateTime(TCPOpenRequestTime);
+ 			sfp = open_socket(lsa, &sk);
+-			if((sk>0) && strcmp(G.ifName, "")) {
++			if((sk>0) && G.ifName && strcmp(G.ifName, "")) {
+ 				setsockopt_bindtodevice(sk, (const char *)G.ifName);
+ 			}
+ 			if((sk>0) && ipDscp) {

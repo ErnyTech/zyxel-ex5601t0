@@ -1,0 +1,14 @@
+Index: iptables-1.8.7/include/linux/netfilter/xt_mark.h
+===================================================================
+--- iptables-1.8.7.orig/include/linux/netfilter/xt_mark.h
++++ iptables-1.8.7/include/linux/netfilter/xt_mark.h
+@@ -5,6 +5,9 @@
+ 
+ struct xt_mark_tginfo2 {
+ 	__u32 mark, mask;
++#if 1 /* ZyXEL QoS, John */
++        __u8 mode;
++#endif
+ };
+ 
+ struct xt_mark_mtinfo1 {

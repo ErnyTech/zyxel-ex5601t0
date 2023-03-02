@@ -1,0 +1,490 @@
+Index: omcproxy-2018-12-14-722151f0/src/groups.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/groups.c
++++ omcproxy-2018-12-14-722151f0/src/groups.c
+@@ -30,6 +30,14 @@ static int compare_groups(const void *k1
+ 	return memcmp(k1, k2, sizeof(struct in6_addr));
+ }
+ 
++static void group_host_lh_entry_free(struct lh_entry *entry)
++{
++	if(entry) {
++		free((void *)entry->k);
++		free((void *)entry->v);
++	}
++}
++
+ // Remove a source-definition for a group
+ static void querier_remove_source(struct group *group, struct group_source *source)
+ {
+@@ -53,6 +61,11 @@ static void querier_remove_group(struct
+ 	group->exclude_until = 0;
+ 
+ 	avl_delete(&groups->groups, &group->node);
++	if(group->hosts)
++		lh_table_free(group->hosts);
++
++	if(group->sshosts)
++		lh_table_free(group->sshosts);
+ 
+ 	if (groups->cb_update)
+ #ifdef ZYXEL_OMCPROXY
+@@ -171,13 +184,14 @@ static omgp_time_t expire_group(struct g
+ #ifdef ZYXEL_OMCPROXY
+ 	if(group_sleave_n)
+ 		groups->cb_update(groups, group, &group_sleave, group_sleave_n, now, SYNC_MRTS_SEE_U);
+-#endif
++
+ 	if (group->exclude_until == 0 && group->source_count == 0)
+ 		querier_remove_group(groups, group, now);
+-#ifdef ZYXEL_OMCPROXY
+ 	else if (changed && groups->cb_update)
+ 		groups->cb_update(groups, group, NULL, 0, now, 0);
+ #else
++	if (group->exclude_until == 0 && group->source_count == 0)
++		querier_remove_group(groups, group, now);
+ 	else if (changed && groups->cb_update)
+ 		groups->cb_update(groups, group, now);
+ #endif
+@@ -267,6 +281,11 @@ static struct group* groups_get_group(st
+ 		avl_insert(&groups->groups, &group->node);
+ 
+ 		INIT_LIST_HEAD(&group->sources);
++#ifdef ZYXEL_OMCPROXY
++		group->hosts = lh_kchar_table_new(OMCPROXY_DEFAULT_GROUP_HOSTS, &group_host_lh_entry_free);
++		group->sshosts = lh_kchar_table_new(OMCPROXY_DEFAULT_GROUP_HOSTS, &group_host_lh_entry_free);
++#endif
++
+ 		*created = true;
+ 	} else if (created) {
+ 		*created = false;
+@@ -296,6 +315,58 @@ static struct group_source* groups_get_s
+ 	return source;
+ }
+ 
++#ifdef ZYXEL_OMCPROXY
++struct group_host *group_retrieve_host(struct lh_table *hosts, const struct in6_addr *group, const struct in6_addr *hostaddr, bool *creat)
++{
++	struct group_host *host = NULL;
++	char groupbuf[INET6_ADDRSTRLEN] = {0}, hostaddrbuf[INET6_ADDRSTRLEN] = {0};
++
++	if(!group || !hosts)
++		return NULL;
++
++	inet_ntop(AF_INET6, group, groupbuf, INET6_ADDRSTRLEN);
++	inet_ntop(AF_INET6, hostaddr, hostaddrbuf, INET6_ADDRSTRLEN);
++
++	struct lh_entry *entry = lh_table_lookup_entry(hosts, hostaddrbuf);
++	if(!entry) {
++		if(creat) {
++			char *addr = calloc(1, INET6_ADDRSTRLEN);
++			memcpy(addr, hostaddrbuf, INET6_ADDRSTRLEN);
++
++			host = calloc(1, sizeof(struct group_host));
++			memcpy(&host->addr, hostaddr, sizeof(struct in6_addr));
++			lh_table_insert(hosts, addr, (const void *)host);
++			L_DEBUG("%s: add group: %s host: %s, hosts n=%d", __FUNCTION__, groupbuf, addr, hosts->count);
++			*creat = true;
++		}
++	}else{
++		host = (struct group_host *)entry->v;
++	}
++
++	return host;
++}
++
++int group_host_abandon(struct lh_table *hosts, const struct in6_addr *group, const struct in6_addr *hostaddr)
++{
++	char groupbuf[INET6_ADDRSTRLEN], addr[INET6_ADDRSTRLEN];
++	int rst = -1;
++
++	if(!group || !hosts)
++		return rst;
++
++	inet_ntop(AF_INET6, group, groupbuf, sizeof(groupbuf));
++	inet_ntop(AF_INET6, hostaddr, addr, sizeof(addr));
++
++	struct lh_entry *entry = lh_table_lookup_entry(hosts, addr);
++	if(entry) {
++		rst = lh_table_delete_entry(hosts, entry);
++		L_DEBUG("%s: group: %s host: %s, rst=%d, hosts n=%d", __FUNCTION__, groupbuf, addr, rst, hosts->count);
++	}
++
++	return rst;
++}
++#endif
++
+ // Update the IGMP/MLD timers of a group-state
+ void groups_update_config(struct groups *groups, bool v6,
+ 		omgp_time_t query_response_interval, omgp_time_t query_interval, int robustness)
+@@ -357,10 +428,18 @@ void groups_update_timers(struct groups
+ }
+ 
+ // Update state of a given group (on reception of node's IGMP/MLD packets)
++#ifdef ZYXEL_OMCPROXY
++void groups_update_state(struct groups *groups,
++		const struct in6_addr *groupaddr,
++		const struct in6_addr *addrs, size_t len,
++		const struct in6_addr *host,
++		enum groups_update update)
++#else
+ void groups_update_state(struct groups *groups,
+ 		const struct in6_addr *groupaddr,
+ 		const struct in6_addr *addrs, size_t len,
+ 		enum groups_update update)
++#endif
+ {
+ 	bool created = false, changed = false;
+ 	char addrbuf[INET6_ADDRSTRLEN];
+@@ -376,6 +455,11 @@ void groups_update_state(struct groups *
+ 	if (created)
+ 		changed = true;
+ 
++	if(len) {
++		bool creat;
++		group_retrieve_host(group->sshosts, &group->addr, host, &creat);
++	}
++
+ 	omgp_time_t now = omgp_time();
+ 	omgp_time_t next_event = OMGP_TIME_MAX;
+ 	struct groups_config *cfg = IN6_IS_ADDR_V4MAPPED(&group->addr) ? &groups->cfg_v4 : &groups->cfg_v6;
+@@ -420,12 +504,28 @@ void groups_update_state(struct groups *
+ 		struct group_source *source = groups_get_source(groups, group, &addrs[i], create);
+ 
+ 		if (include && update == UPDATE_BLOCK) {
++#ifdef ZYXEL_OMCPROXY
++			if(!source)
++				; // possible dos
++			else if(!omcpzcfg_fl())
++				list_move_tail(&source->head, &queried);
++			else if(omcpzcfg_fl() == 1)
++				list_move_tail(&source->head, &queried);
++			else if(omcpzcfg_fl() > 1) {
++
++			}
++#else
+ 			if (source)
+ 				list_move_tail(&source->head, &queried);
++#endif
+ 		} else {
+ 			bool query = false;
+ 			if (!source) {
++#ifdef ZYXEL_OMCPROXY
++				groups_update_state(groups, groupaddr, NULL, 0, NULL, false);
++#else
+ 				groups_update_state(groups, groupaddr, NULL, 0, false);
++#endif
+ 				L_WARN("querier: failed to allocate source for %s, fallback to ASM", addrbuf);
+ 				return;
+ 			}
+@@ -483,7 +583,6 @@ void groups_update_state(struct groups *
+ 			changed = true;
+ 			next_event = now;
+ 		}
+-
+ 		querier_clear_sources(group);
+ 		list_splice(&saved, &group->sources);
+ 		group->exclude_until = now;
+@@ -526,6 +625,33 @@ void groups_update_state(struct groups *
+ 		next_event = now;
+ 	}
+ 
++#ifdef ZYXEL_OMCPROXY
++	if(update == UPDATE_TO_EX && !len && omcpzcfg_fl()) {
++		bool creat = false;
++		group_retrieve_host(group->hosts, &group->addr, host, &creat);
++		if(creat)
++			L_DEBUG("%s: step exclude and add a record", __FUNCTION__);
++	}
++	else if(!len && update == UPDATE_TO_IN && omcpzcfg_fl()) {
++		int rst = group_host_abandon(group->hosts, &group->addr, host);
++		if(rst == 0) {
++			L_DEBUG("%s: !include && step in, abandon a record", __FUNCTION__);
++		}
++		group_host_abandon(group->sshosts, &group->addr, host);
++		// don't ask
++		if(group->hosts->count == 0){
++			group->retransmit = (group->source_count == 0 && !group->sshosts->count) ? 0 : group->retransmit;
++			group->next_generic_transmit = (group->source_count == 0 && !group->sshosts->count) ? 0 : group->next_generic_transmit;
++			group->exclude_until = (group->source_count == 0 && !group->sshosts->count) ? 0 : group->exclude_until;
++			next_event = (group->source_count == 0 && !group->sshosts->count) ? now : next_event;
++		}else if(!group->source_count || !include){
++			group->exclude_until = mali;
++			next_event = now;
++		}
++	}else if(len && (update == UPDATE_TO_IN || update == UPDATE_TO_EX || update == UPDATE_IS_EXCLUDE || update == UPDATE_IS_INCLUDE || update == UPDATE_ALLOW)) {
++
++	}
++#endif
+ 	if (changed && groups->cb_update)
+ #ifndef ZYXEL_OMCPROXY
+ 		groups->cb_update(groups, group, now);
+Index: omcproxy-2018-12-14-722151f0/src/groups.h
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/groups.h
++++ omcproxy-2018-12-14-722151f0/src/groups.h
+@@ -23,13 +23,22 @@
+ #include <libubox/avl.h>
+ #include <libubox/uloop.h>
+ #include <arpa/inet.h>
++
+ #include "omcproxy.h"
+ 
++#ifdef ZYXEL_OMCPROXY
++#include <json/linkhash.h>
++#define OMCPROXY_DEFAULT_GROUP_HOSTS	20
++#endif
++
+ struct group {
+ 	struct avl_node node;
+ 	struct in6_addr addr;
+ 	struct list_head sources;
+ 	size_t source_count;
++#ifdef ZYXEL_OMCPROXY
++	struct lh_table *hosts, *sshosts;
++#endif
+ 	omgp_time_t exclude_until;
+ 	omgp_time_t compat_v2_until;
+ 	omgp_time_t compat_v1_until;
+@@ -45,6 +54,12 @@ struct group_source {
+ 	int retransmit;
+ };
+ 
++#ifdef ZYXEL_OMCPROXY
++struct group_host {
++	struct in6_addr addr;
++};
++#endif
++
+ struct groups_config {
+ 	omgp_time_t query_response_interval;
+ 	omgp_time_t query_interval;
+@@ -63,7 +78,7 @@ struct groups {
+ 	void (*cb_query)(struct groups *g, const struct in6_addr *addr,
+ 			const struct list_head *sources, bool suppress);
+ #ifdef ZYXEL_OMCPROXY
+-	void (*cb_update)(struct groups *g, struct group *group, const struct list_head *s, size_t len, omgp_time_t now, int sync_mrt);
++	void (*cb_update)(struct groups *g, struct group *group, struct list_head *s, size_t len, omgp_time_t now, int sync_mrt);
+ #else
+ 	void (*cb_update)(struct groups *g, struct group *group, omgp_time_t now);
+ #endif
+@@ -95,11 +110,18 @@ void groups_update_config(struct groups
+ void groups_update_timers(struct groups *groups,
+ 		const struct in6_addr *groupaddr,
+ 		const struct in6_addr *addrs, size_t len);
+-
++#ifdef ZYXEL_OMCPROXY
+ void groups_update_state(struct groups *groups,
+ 		const struct in6_addr *groupaddr,
+ 		const struct in6_addr *addrs, size_t len,
++		const struct in6_addr *,
+ 		enum groups_update update);
++#else
++void groups_update_state(struct groups *groups,
++		const struct in6_addr *groupaddr,
++		const struct in6_addr *addrs, size_t len,
++		enum groups_update update);
++#endif
+ 
+ void groups_synthesize_events(struct groups *groups);
+ 
+Index: omcproxy-2018-12-14-722151f0/src/igmp.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/igmp.c
++++ omcproxy-2018-12-14-722151f0/src/igmp.c
+@@ -35,7 +35,7 @@ static inline bool igmp_is_valid_group(i
+ }
+ 
+ // Handle an IGMP-record from an IGMP-packet (called by igmp_receive)
+-static ssize_t igmp_handle_record(struct groups *groups, const uint8_t *data, size_t len)
++static ssize_t igmp_handle_record(struct groups *groups, const uint8_t *data, size_t len, struct in6_addr *host)
+ {
+ 	struct igmpv3_grec *r = (struct igmpv3_grec*)data;
+ 
+@@ -55,8 +55,11 @@ static ssize_t igmp_handle_record(struct
+ 
+ 		for (size_t i = 0; i < nsrc; ++i)
+ 			querier_map(&sources[i], r->grec_src[i]);
+-
++#ifdef ZYXEL_OMCPROXY
++		groups_update_state(groups, &addr, sources, nsrc, host, r->grec_type);
++#else
+ 		groups_update_state(groups, &addr, sources, nsrc, r->grec_type);
++#endif
+ 	}
+ 
+ 	return read;
+@@ -69,7 +72,7 @@ void igmp_handle(struct mrib_querier *mr
+ 	struct querier_iface *q = container_of(mrib, struct querier_iface, mrib);
+ 	omgp_time_t now = omgp_time();
+ 	char addrbuf[INET_ADDRSTRLEN];
+-	struct in6_addr group;
++	struct in6_addr group, host;
+ 
+ 	querier_map(&group, igmp->group);
+ 	inet_ntop(AF_INET, &from->sin_addr, addrbuf, sizeof(addrbuf));
+@@ -138,13 +141,15 @@ void igmp_handle(struct mrib_querier *mr
+ 
+ 		if ((size_t)len <= sizeof(*report))
+ 			return;
+-
++#ifdef ZYXEL_OMCPROXY
++		querier_map(&host, from->sin_addr.s_addr);
++#endif
+ 		uint8_t *ibuf = (uint8_t*)igmp;
+ 		size_t count = ntohs(report->ngrec);
+ 		size_t offset = sizeof(*report);
+ 
+ 		while (count > 0 && offset < len) {
+-			ssize_t read = igmp_handle_record(&q->groups, &ibuf[offset], len - offset);
++			ssize_t read = igmp_handle_record(&q->groups, &ibuf[offset], len - offset, &host);
+ 			if (read < 0)
+ 				break;
+ 
+@@ -157,10 +162,17 @@ void igmp_handle(struct mrib_querier *mr
+ 
+ 		if (len != sizeof(*igmp) || !igmp_is_valid_group(igmp->group))
+ 			return;
++#ifdef ZYXEL_OMCPROXY
++		querier_map(&host, from->sin_addr.s_addr);
+ 
++		groups_update_state(&q->groups, &group, NULL, 0, &host,
++				(igmp->type == IGMPV2_HOST_MEMBERSHIP_REPORT) ? UPDATE_REPORT :
++				(igmp->type == IGMP_HOST_MEMBERSHIP_REPORT) ? UPDATE_REPORT_V1 : UPDATE_DONE);
++#else
+ 		groups_update_state(&q->groups, &group, NULL, 0,
+ 				(igmp->type == IGMPV2_HOST_MEMBERSHIP_REPORT) ? UPDATE_REPORT :
+ 				(igmp->type == IGMP_HOST_MEMBERSHIP_REPORT) ? UPDATE_REPORT_V1 : UPDATE_DONE);
++#endif
+ 	}
+ 
+ 	uloop_timeout_set(&q->timeout, 0);
+Index: omcproxy-2018-12-14-722151f0/src/mld.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/mld.c
++++ omcproxy-2018-12-14-722151f0/src/mld.c
+@@ -49,7 +49,11 @@ static inline bool mld_is_valid_group(co
+ }
+ 
+ // Handle Multicast Address Record from MLD-Packets (called by mld_receive)
++#ifdef ZYXEL_OMCPROXY
++static ssize_t mld_handle_record(struct groups *groups, const uint8_t *data, size_t len, const struct in6_addr *host)
++#else
+ static ssize_t mld_handle_record(struct groups *groups, const uint8_t *data, size_t len)
++#endif
+ {
+ 	struct mld_record {
+ 		uint8_t type;
+@@ -68,7 +72,7 @@ static ssize_t mld_handle_record(struct
+ 		return -1;
+ 
+ 	if (r->type >= UPDATE_IS_INCLUDE && r->type <= UPDATE_BLOCK && mld_is_valid_group(&r->addr))
+-		groups_update_state(groups, &r->addr, r->sources, nsrc, r->type);
++		groups_update_state(groups, &r->addr, r->sources, nsrc, host, r->type);
+ 
+ 	return read;
+ }
+@@ -142,7 +146,11 @@ void mld_handle(struct mrib_querier *mri
+ 		ssize_t offset = sizeof(*mld_report);
+ 
+ 		while (count > 0 && offset < (ssize_t)len) {
++#ifdef ZYXEL_OMCPROXY
++			ssize_t read = mld_handle_record(&q->groups, &buf[offset], len - offset, &from->sin6_addr);
++#else
+ 			ssize_t read = mld_handle_record(&q->groups, &buf[offset], len - offset);
++#endif
+ 			if (read < 0)
+ 				break;
+ 
+@@ -153,9 +161,13 @@ void mld_handle(struct mrib_querier *mri
+ 			hdr->mld_icmp6_hdr.icmp6_type == MLD_LISTENER_REDUCTION) {
+ 		if (len != 24 || !mld_is_valid_group(&hdr->mld_addr))
+ 			return;
+-
++#ifdef ZYXEL_OMCPROXY
++		groups_update_state(&q->groups, &hdr->mld_addr, NULL, 0, &from->sin6_addr,
++				(hdr->mld_icmp6_hdr.icmp6_type == MLD_LISTENER_REPORT) ? UPDATE_REPORT : UPDATE_DONE);
++#else
+ 		groups_update_state(&q->groups, &hdr->mld_addr, NULL, 0,
+ 				(hdr->mld_icmp6_hdr.icmp6_type == MLD_LISTENER_REPORT) ? UPDATE_REPORT : UPDATE_DONE);
++#endif
+ 	}
+ 	uloop_timeout_set(&q->timeout, 0);
+ }
+Index: omcproxy-2018-12-14-722151f0/src/omcpzcfg.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/omcpzcfg.c
++++ omcproxy-2018-12-14-722151f0/src/omcpzcfg.c
+@@ -12,6 +12,7 @@
+ #define ZCFG_OMCP_MLD_CONFIG "/tmp/omcproxy_mld.json"
+ 
+ bool omcp_app_igmp = true, omcp_app_mld = true;
++int fl = 0; // 1: igmpv2/mldv1, 2: igmpv2v3/mldv1v2
+ 
+ #ifdef ZYXEL_OMCPROXY
+ static struct json_object *zcfg_omcp_obj = NULL;
+@@ -20,6 +21,7 @@ static struct json_object *zcfg_omcp_obj
+ // app = igmp, mld
+ void omcpzcfg_init(char *app)
+ {
++	int val = 0;
+ 	if(!strncmp(app, "igmp", 4)){
+ 		zcfg_omcp_obj = json_object_from_file(ZCFG_OMCP_IGMP_CONFIG);
+ 		omcp_app_igmp = true;
+@@ -30,6 +32,7 @@ void omcpzcfg_init(char *app)
+ 		omcp_app_mld = true;
+ 	}
+ 
++	fl = (val = (omcpzcfg_param_value((const char *)"FastLeave")) >= 0) ? val : fl;
+ }
+ 
+ // 'QueryResponseInterval', unit in s precision
+@@ -49,6 +52,11 @@ int omcpzcfg_param_value(const char *par
+ 	return value;
+ }
+ 
++int omcpzcfg_fl()
++{
++	return fl;
++}
++
+ int omcpzcfg_ifname(char *ifname, int len)
+ {
+ 	struct json_object *paramObj = NULL;
+Index: omcproxy-2018-12-14-722151f0/src/omcpzcfg.h
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/omcpzcfg.h
++++ omcproxy-2018-12-14-722151f0/src/omcpzcfg.h
+@@ -34,4 +34,6 @@ void omcpzcfg_init(char *app);
+ int omcpzcfg_param_value(const char *parm_name);
+ int omcpzcfg_ifname(char *ifname, int len);
+ 
++int omcpzcfg_fl();
++
+ #endif
+Index: omcproxy-2018-12-14-722151f0/src/querier.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/querier.c
++++ omcproxy-2018-12-14-722151f0/src/querier.c
+@@ -74,7 +74,7 @@ static void querier_announce_iface(struc
+ 
+ // Handle changes from a querier for a given group (called by a group-state as callback)
+ #ifdef ZYXEL_OMCPROXY
+-static void querier_announce_change(struct groups *groups, struct group *group, const struct list_head *s, size_t len, omgp_time_t now, int sync_mrt)
++static void querier_announce_change(struct groups *groups, struct group *group, struct list_head *s, size_t len, omgp_time_t now, int sync_mrt)
+ {
+ 	if(sync_mrt == SYNC_MRTS_SEE_U)
+ 		querier_group_source_remove_and_sync(groups, group, s, len);
+Index: omcproxy-2018-12-14-722151f0/src/proxy.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/proxy.c
++++ omcproxy-2018-12-14-722151f0/src/proxy.c
+@@ -154,7 +154,7 @@ static void proxy_mrts_sync_sleave(struc
+ 
+ 		mrib_filter mrts = 0;
+ 		bool groupok = false;
+-		struct mrib_user *user, *ur;
++		struct mrib_user *user;
+ 		list_for_each_entry(user, &iface->users, head) {
+ 			if(user->cb_newsource)
+ 				groupok = user->cb_newsource(user, group, &sources[n].addr, &mrts) ? true : groupok;

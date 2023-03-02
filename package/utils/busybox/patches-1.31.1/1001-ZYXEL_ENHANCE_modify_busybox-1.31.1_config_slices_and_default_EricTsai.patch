@@ -1,0 +1,82 @@
+Index: busybox-1.31.1/networking/Config.src
+===================================================================
+--- busybox-1.31.1.orig/networking/Config.src	2019-06-10 18:50:53.000000000 +0800
++++ busybox-1.31.1/networking/Config.src	2021-03-19 20:14:34.199129391 +0800
+@@ -23,6 +23,12 @@
+ 	This extension is almost never used in real world usage.
+ 	You most likely want to say N.
+ 
++
++config FEATURE_NSLOOKUP_BIG
++        bool "Use internal resolver code instead of libc"
++        depends on NSLOOKUP
++        default n
++
+ config FEATURE_PREFER_IPV4_ADDRESS
+ 	bool "Prefer IPv4 addresses from DNS queries"
+ 	default y
+Index: busybox-1.31.1/applets/usage_pod.c
+===================================================================
+--- busybox-1.31.1.orig/applets/usage_pod.c	2019-06-10 18:50:53.000000000 +0800
++++ busybox-1.31.1/applets/usage_pod.c	2021-03-19 20:14:34.199129391 +0800
+@@ -71,7 +71,7 @@
+ 		} else {
+ 			printf(", ");
+ 		}
+-		printf(usage_array[i].aname);
++		printf("%s", usage_array[i].aname);
+ 		col += len2;
+ 	}
+ 	printf("\n\n");
+Index: busybox-1.31.1/networking/tc.c
+===================================================================
+--- busybox-1.31.1.orig/networking/tc.c	2019-06-10 18:50:53.000000000 +0800
++++ busybox-1.31.1/networking/tc.c	2021-03-19 20:14:34.199129391 +0800
+@@ -568,7 +568,7 @@
+ 				filter_parent = TC_H_ROOT;
+ 		} else
+ 		if (arg == ARG_parent) {
+-			uint32_t handle;
++			uint32_t handle = 0;
+ 			if (msg.tcm_parent)
+ 				duparg(*argv, "parent");
+ 			if (get_tc_classid(&handle, *argv))
+Index: busybox-1.31.1/applets/usage.c
+===================================================================
+--- busybox-1.31.1.orig/applets/usage.c	2019-06-10 18:50:53.000000000 +0800
++++ busybox-1.31.1/applets/usage.c	2021-03-19 20:14:34.199129391 +0800
+@@ -41,6 +41,7 @@
+ {
+ 	int i;
+ 	int num_messages = sizeof(usage_array) / sizeof(usage_array[0]);
++	int haserr = 0;
+ 
+ 	if (num_messages == 0)
+ 		return 0;
+@@ -48,8 +49,11 @@
+ 	qsort(usage_array,
+ 		num_messages, sizeof(usage_array[0]),
+ 		compare_func);
+-	for (i = 0; i < num_messages; i++)
+-		write(STDOUT_FILENO, usage_array[i].usage, strlen(usage_array[i].usage) + 1);
++	for (i = 0; i < num_messages; i++){
++		int n = write(STDOUT_FILENO, usage_array[i].usage, strlen(usage_array[i].usage) + 1);
++		haserr = (n == -1) ? 1 : haserr;
++	}
+ 
++	//printf("applets usage: %s", haserr ? "haserr" : "ok");
+ 	return 0;
+ }
+Index: busybox-1.31.1/shell/Config.src
+===================================================================
+--- busybox-1.31.1.orig/shell/Config.src	2021-03-19 20:15:43.763129727 +0800
++++ busybox-1.31.1/shell/Config.src	2021-03-19 20:15:59.671129804 +0800
+@@ -38,7 +38,7 @@
+ 
+ choice
+ 	prompt "Choose which shell is aliased to 'bash' name"
+-	default BASH_IS_NONE
++	default BASH_IS_ASH
+ 	help
+ 	Choose which shell you want to be executed by 'bash' alias.
+ 	The ash shell is the most bash compatible and full featured one,

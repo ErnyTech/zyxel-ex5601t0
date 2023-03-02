@@ -1,0 +1,13 @@
+Index: libmnl-1.0.4/include/linux/netfilter/nfnetlink_conntrack.h
+===================================================================
+--- libmnl-1.0.4.orig/include/linux/netfilter/nfnetlink_conntrack.h
++++ libmnl-1.0.4/include/linux/netfilter/nfnetlink_conntrack.h
+@@ -49,6 +49,8 @@ enum ctattr_type {
+ 	CTA_SECCTX,
+ 	CTA_TIMESTAMP,
+ 	CTA_MARK_MASK,
++	CTA_ZEXTMARK,  // zyxel jessy 20180621
++	CTA_ZEXTMARK_MASK,  // zyxel jessy 20180621
+ 	CTA_LABELS,
+ 	CTA_LABELS_MASK,
+ 	__CTA_MAX

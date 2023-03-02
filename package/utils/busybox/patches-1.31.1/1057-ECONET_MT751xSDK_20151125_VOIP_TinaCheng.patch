@@ -1,0 +1,41 @@
+Index: busybox-1.31.1/init/init.c
+===================================================================
+--- busybox-1.31.1.orig/init/init.c	2021-04-12 11:37:17.997335660 +0800
++++ busybox-1.31.1/init/init.c	2021-04-12 11:13:17.357712100 +0800
+@@ -1266,6 +1266,12 @@
+ int init_main(int argc, char **argv) MAIN_EXTERNALLY_VISIBLE;
+ int init_main(int argc UNUSED_PARAM, char **argv)
+ {
++#ifdef PLATFORM_ECONET
++	unsigned i = 0;
++	unsigned long aff = 0x2;
++	cpu_set_t new_mask;
++#endif
++
+ 	INIT_G();
+ 
+ 	if (argv[1] && strcmp(argv[1], "-q") == 0) {
+@@ -1314,6 +1320,23 @@
+ 	 */
+ 	die_func = sleep_much;
+ 
++#ifdef PLATFORM_ECONET
++	/*20100921_serena_modify*/
++	/* to_cpuset(bb_xgetularg_bnd(aff, 16, 1, ULONG_MAX),* &new_mask); */
++	printf("busybox init and set aff\n");
++	//only use TC1 to application. shnwind 20110318.
++
++
++	CPU_ZERO(&new_mask);
++	while (i < CPU_SETSIZE && aff >= (1<<i)) {
++		if ((1<<i) & aff)
++			CPU_SET(i, &new_mask);
++		++i;
++	}
++	sched_setaffinity(1, sizeof (new_mask), &new_mask);
++	/*20100921_end_serena_modify*/
++#endif
++
+ 	/* Figure out where the default console should be */
+ 	console_init();
+ 	set_sane_term();

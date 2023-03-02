@@ -1,0 +1,66 @@
+Index: json-c-0.15/json_object.h
+===================================================================
+--- json-c-0.15.orig/json_object.h
++++ json-c-0.15/json_object.h
+@@ -120,6 +120,10 @@ extern "C" {
+  */
+ #define JSON_C_OPTION_THREAD (1)
+ 
++#ifndef boolean
++typedef int boolean;
++#endif
++
+ /* reference counting functions */
+ 
+ /**
+Index: json-c-0.15/json_tokener.c
+===================================================================
+--- json-c-0.15.orig/json_tokener.c
++++ json-c-0.15/json_tokener.c
+@@ -71,7 +71,7 @@ static const char json_false_str[] = "fa
+ static const int json_false_str_len = sizeof(json_false_str) - 1;
+ 
+ /* clang-format off */
+-static const char *json_tokener_errors[] = {
++const char *json_tokener_errors[] = {
+ 	"success",
+ 	"continue",
+ 	"nesting too deep",
+Index: json-c-0.15/json_util.h
+===================================================================
+--- json-c-0.15.orig/json_util.h
++++ json-c-0.15/json_util.h
+@@ -26,6 +26,8 @@
+ #define json_max(a, b) ((a) > (b) ? (a) : (b))
+ #endif
+ 
++#define is_error(p) (p == NULL)
++
+ #ifdef __cplusplus
+ extern "C" {
+ #endif
+Index: json-c-0.15/json_tokener.h
+===================================================================
+--- json-c-0.15.orig/json_tokener.h
++++ json-c-0.15/json_tokener.h
+@@ -23,6 +23,8 @@
+ extern "C" {
+ #endif
+ 
++extern const char *json_tokener_errors[];
++
+ enum json_tokener_error
+ {
+ 	json_tokener_success,
+Index: json-c-0.15/json-c.sym
+===================================================================
+--- json-c-0.15.orig/json-c.sym
++++ json-c-0.15/json-c.sym
+@@ -133,6 +133,7 @@ JSONC_0.14 {
+     json_pointer_getf;
+     json_pointer_set;
+     json_pointer_setf;
++    json_tokener_errors;
+     json_tokener_error_desc;
+     json_tokener_free;
+     json_tokener_get_error;

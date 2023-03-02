@@ -1,0 +1,26 @@
+Index: ppp-2.4.3/pppd/plugins/winbind.c
+===================================================================
+--- ppp-2.4.3.orig/pppd/plugins/winbind.c	2004-11-05 17:42:31.000000000 +0800
++++ ppp-2.4.3/pppd/plugins/winbind.c	2021-10-05 14:31:24.616947512 +0800
+@@ -305,15 +305,18 @@
+ 
+ 	if (forkret == 0) {
+ 		/* child process */
++		uid_t uid;
++
+ 		close(child_out[0]);
+ 		close(child_in[1]);
+ 
+ 		/* run winbind as the user that invoked pppd */
+ 		setgid(getgid());
+-		setuid(getuid());
++		uid = getuid();
++		if (setuid(uid) == -1 || getuid() != uid)
++			fatal("pppd/winbind: could not setuid to %d: %m", uid);
+ 		execl("/bin/sh", "sh", "-c", ntlm_auth, NULL);  
+-		perror("pppd/winbind: could not exec /bin/sh");
+-		exit(1);
++		fatal("pppd/winbind: could not exec /bin/sh: %m");
+ 	}
+ 
+         /* parent */

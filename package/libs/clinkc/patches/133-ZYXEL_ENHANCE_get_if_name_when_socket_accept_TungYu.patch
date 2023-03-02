@@ -1,0 +1,75 @@
+Index: clinkc/src/cybergarage/net/csocket.c
+===================================================================
+--- clinkc.orig/src/cybergarage/net/csocket.c	2020-04-27 12:12:26.243534822 +0000
++++ clinkc/src/cybergarage/net/csocket.c	2020-04-28 08:17:37.315744039 +0000
+@@ -118,6 +118,9 @@
+ #define NONBLOCK_CONNECT_TIMEOUT_S 10 //sec
+ 
+ #endif
++#if 1 // TungYu, get interface name by IP
++#include <ifaddrs.h>
++#endif
+ /*
+ #define SOCKET_DEBUG
+ */
+@@ -840,6 +843,11 @@
+ 	char *tmp_addr;
+ 	char ipAddrBuf[INET6_ADDRSTRLEN];
+ #endif	
++#if 1 // TungYu, get interface name by IP
++	struct ifaddrs *ifaddr, *ifEntry;
++	void *addPtr = NULL;
++	char addressBuffer[INET6_ADDRSTRLEN];
++#endif
+ 	socklen_t socklen;
+ #if 1 //__ZYXEL__, Mark
+ 	char localAddr[INET6_ADDRSTRLEN];
+@@ -941,6 +949,48 @@
+ 		/* Set address for the sockaddr to real addr */	
+ 		cg_socket_setaddress(clientSock, localAddr);
+ 	}
++#if 1 // TungYu, get interface name by IP
++	if (getifaddrs(&ifaddr) == 0) {
++		for (ifEntry = ifaddr; ifEntry != NULL; ifEntry = ifEntry->ifa_next) {
++			if(ifEntry->ifa_addr == NULL || ifEntry->ifa_netmask == NULL)
++				continue;
++			if (!(ifEntry->ifa_flags & IFF_UP))
++				continue;
++			if (ifEntry->ifa_flags & IFF_LOOPBACK)
++				continue;
++
++			//printf("AF_INET %d. %s\n", ifEntry->ifa_addr->sa_family, ifEntry->ifa_name);
++			if(ifEntry->ifa_addr->sa_family == AF_INET) {
++				addPtr = &((struct sockaddr_in *)ifEntry->ifa_addr)->sin_addr;
++			} else if (ifEntry->ifa_addr->sa_family == AF_INET6) {
++				addPtr = &((struct sockaddr_in6 *)ifEntry->ifa_addr)->sin6_addr;
++			} else {
++				//It isn't IPv4 or IPv6
++				continue;
++			}
++
++			const char *a = inet_ntop(ifEntry->ifa_addr->sa_family,
++								addPtr,
++								addressBuffer,
++								sizeof(addressBuffer));
++			if(a != NULL) {
++				// Find the ifname with localAddr
++				if (!strncmp(addressBuffer, localAddr, sizeof(localAddr))) {
++					cg_socket_setifname(clientSock, ifEntry->ifa_name);
++					//printf("AF_INET %d. %s : %s\n", ifEntry->ifa_addr->sa_family, ifEntry->ifa_name, addressBuffer);
++					/*
++					* IPv6 link local address appear not only on bridge interface but also on eth1.X.
++   					* Thus, bridge interface must be checked and set to ifname. Otherwise, the checking loop should not stop.
++					*/
++					if (!strncmp(ifEntry->ifa_name, "br", 2))
++						break;
++				}
++				memset(addressBuffer, 0, sizeof(addressBuffer));
++			}
++		}
++	}
++	freeifaddrs(ifaddr);
++#endif // TungYu, get interface name by IP End
+ #else
+ 	socklen = sizeof(struct sockaddr_in);
+ 	

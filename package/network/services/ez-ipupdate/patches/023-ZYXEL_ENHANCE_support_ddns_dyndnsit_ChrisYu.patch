@@ -1,0 +1,257 @@
+Index: ez-ipupdate-3.0.11b8/ez-ipupdate.c
+===================================================================
+--- ez-ipupdate-3.0.11b8.orig/ez-ipupdate.c	2021-03-04 17:19:43.254610628 +0800
++++ ez-ipupdate-3.0.11b8/ez-ipupdate.c	2021-03-04 17:20:23.453108419 +0800
+@@ -468,6 +468,11 @@
+ int DYNU_check_info(void);
+ static char *DYNU_fields_used[] = { "server", "address", "user", "host", NULL};
+ 
++//Support dyndns.it
++int Dyndnsit_HTTPS_update_entry(void);
++int Dyndnsit_check_info(void);
++
++
+ //support User-defined
+ int UserDefined_update_entry(void);
+ int UserDefined_HTTPS_update_entry(void);
+@@ -743,7 +748,7 @@
+     DNSOMATIC_REQUEST
+   },
+ 
+-//Support Dynu
++  //Support Dynu
+   { "dynu",
+     { "dynu", "dynu.net", 0, },
+     NULL,
+@@ -755,8 +760,20 @@
+     DYNU_REQUEST
+   },
+ 
+- 	//Support User-defined
+-	{ "userdefined",
++  //dyndns.it
++  { "dyndnsit",
++	  { "dyndnsit", "unknow", 0, },
++	  NULL,
++	  Dyndnsit_HTTPS_update_entry,
++	  Dyndnsit_check_info,
++	  NULL,
++	  "dyndnsit",
++	  DEFAULT_HTTPS_PORT,
++	  "dyndnsit"
++  },
++
++  //Support User-defined
++  { "userdefined",
+   	{ "userdefined", "unknow", 0, },
+   	NULL,
+   	UserDefined_update_entry,
+@@ -775,7 +792,7 @@
+   	"userdefined_HTTPS",
+   	DEFAULT_HTTPS_PORT,
+   	"userdefined_HTTPS"
+-  	},
++  },
+ };
+ 
+ static struct service_t *service = NULL;
+@@ -7242,6 +7259,157 @@
+   return(UPDATERES_ERROR);
+ }
+ 
++// Support dyndns.it
++int Dyndnsit_HTTPS_update_entry(void){
++  char buf[BUFFER_SIZE+1]={0};
++  char buf_str[BUFFER_SIZE+1]={0};
++  char *bp = buf;
++  int bytes;
++  int btot;
++  int ret;
++  char updateInfo[256] = {0};
++  char DNSserver[64] = {0};
++  buf[BUFFER_SIZE] = '\0';
++  buf_str[BUFFER_SIZE] = '\0';
++  SSL_CTX *ctx;
++  SSL *ssl;
++  int len;
++
++  sscanf(url,  "%[^/]%s", DNSserver, updateInfo);
++  strcpy(type,"ipv4");
++
++  if(do_connect_SSL((int*)&client_sockfd, DNSserver, port, (SSL_CTX **)&ctx, (SSL **)&ssl) != 0)
++  {
++    if(!(options & OPT_QUIET))
++    {
++	show_message("error connecting to %s:%s\n", DNSserver, port);
++    }
++    return(UPDATERES_ERROR);
++  }
++
++  if(strstr(updateInfo,"?")){
++	snprintf(buf, BUFFER_SIZE, "GET %s&", updateInfo);
++  }else{
++   snprintf(buf, BUFFER_SIZE, "GET %s?", updateInfo);
++  }
++
++  snprintf(buf_str, BUFFER_SIZE, "hostname=%s&",host);
++  strcat(buf, buf_str);
++
++  snprintf(buf_str, BUFFER_SIZE, " HTTP/1.1\015\012");
++  strcat(buf, buf_str);
++
++  snprintf(buf_str, BUFFER_SIZE, "Host: %s\015\012", DNSserver);
++  strcat(buf, buf_str);
++
++  snprintf(buf_str, BUFFER_SIZE, "Authorization: Basic %s\015\012", auth);
++  strcat(buf, buf_str);
++
++  snprintf(buf_str, BUFFER_SIZE, "User-Agent: %s-%s %s [%s] (%s)\015\012",
++  	"ez-update", VERSION, OS, (options & OPT_DAEMON) ? "daemon" : "", "by Angus Mackay");
++  strcat(buf, buf_str);
++
++  snprintf(buf_str, BUFFER_SIZE, "\015\012");
++  strcat(buf, buf_str);
++
++   output_SSL(buf, (SSL **)&ssl) ;
++
++  memset(buf,0,sizeof(buf));
++  if((bytes=read_input_SSL(buf, BUFFER_SIZE, (SSL **)&ssl)) <= 0){
++	SSL_shutdown(ssl);
++	SSL_free(ssl);
++	SSL_CTX_free(ctx);
++	return(UPDATERES_ERROR);
++    }
++
++  SSL_shutdown(ssl);
++  SSL_free(ssl);
++  SSL_CTX_free(ctx);
++
++  buf[bytes] = '\0';
++  dprintf((stderr, "server output: %s\n", buf));
++
++  if(sscanf(buf, " HTTP/1.%*c %3d", &ret) != 1)
++  {
++    ret = -1;
++  }
++
++  switch(ret)
++  {
++    case -1:
++      if(!(options & OPT_QUIET))
++      {
++        show_message("strange server response, are you connecting to the right server?\n");
++      }
++      break;
++
++    case 200:
++
++      if(strstr(buf, "status=3") != NULL)
++      {
++        if(!(options & OPT_QUIET))
++        {
++          printf("Unable to locate this record");
++        }
++      }
++	  else if(strstr(buf, "status=2") != NULL)
++      {
++        if(!(options & OPT_QUIET))
++        {
++          printf("status=2");
++        }
++      }
++
++	  else if(strstr(buf, "status=9") != NULL)
++      {
++        if(!(options & OPT_QUIET))
++        {
++          printf("No hostname\n");
++        }
++      }
++
++      else
++      {
++        success[0]='0';
++
++        innerText(address_log, buf, "to ", NULL, "in");
++        address_log[64]='\0';
++
++        DDNS_StatusLog();
++//        show_message("Success!!\n");
++//        if(!(options & OPT_QUIET))
++//        {
++//          fprintf(stderr, "server output: %s\n", buf);
++//        }
++	return(UPDATERES_OK);
++      }
++      break;
++
++    case 401:
++      if(!(options & OPT_QUIET))
++      {
++        show_message("authentication failure\n");
++      }
++      success[0] = '1';
++      DDNS_StatusLog();
++      return(UPDATERES_SHUTDOWN);
++      break;
++
++    default:
++      if(!(options & OPT_QUIET))
++      {
++        *auth = '\0';
++        sscanf(buf, " HTTP/1.%*c %*3d %255[^\r\n]", auth);
++        show_message("unknown return code: %d\n", ret);
++        show_message("server response: %s\n", auth);
++      }
++      break;
++  }
++  success[0] = '1';
++  DDNS_StatusLog();
++  return(UPDATERES_ERROR);
++}
++
+ int UserDefined_HTTPS_update_entry(void){
+   char buf[BUFFER_SIZE+1]={0};
+   char buf_str[BUFFER_SIZE+1]={0};
+@@ -7392,6 +7560,41 @@
+   return(UPDATERES_ERROR);
+ }
+ 
++// Support dyndns.it
++int Dyndnsit_check_info(void){
++  char buf[BUFFER_SIZE+1]={0};
++
++  if((host == NULL) || (*host == '\0'))
++  {
++    if(options & OPT_DAEMON)
++    {
++      return(-1);
++    }
++    if(host) { free(host); }
++    *buf = '\0';
++    fgets(buf, BUFSIZ, stdin);
++    host = strdup(buf);
++    chomp(host);
++  }
++
++  if(interface == NULL && address == NULL)
++  {
++    if(options & OPT_DAEMON)
++    {
++      fprintf(stderr, "you must provide either an interface or an address\n");
++      return(-1);
++    }
++    if(interface) { free(interface); }
++    printf("interface: ");
++    *buf = '\0';
++    fgets(buf, BUFSIZ, stdin);
++    chomp(buf);
++    option_handler(CMD_interface, buf);
++  }
++
++  return 0;
++}
++
+ int UserDefined_check_info(void){
+   char buf[BUFFER_SIZE+1]={0};
+ 

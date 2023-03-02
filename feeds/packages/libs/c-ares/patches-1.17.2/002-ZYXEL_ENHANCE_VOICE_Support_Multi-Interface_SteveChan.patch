@@ -1,0 +1,46 @@
+Index: c-ares-1.17.2/src/lib/ares_private.h
+===================================================================
+--- c-ares-1.17.2.orig/src/lib/ares_private.h	2021-08-09 06:40:00.000000000 +0800 (Michael Lin Edited)
++++ c-ares-1.17.2/src/lib/ares_private.h	2022-02-04 03:45:00.000000000 +0800 (Michael Lin Edited)
+@@ -349,6 +349,9 @@ struct ares_channeldata {
+ 
+   /* Path for resolv.conf file, configurable via ares_options */
+   char *resolvconf_path;
++
++  /*ZyXEL To support Multi-interface*/
++  unsigned int ifMark; //interface Mark
+ };
+ 
+ /* Does the domain end in ".onion" or ".onion."? Case-insensitive. */
+Index: c-ares-1.17.2/src/lib/ares_process.c
+===================================================================
+--- c-ares-1.17.2.orig/src/lib/ares_process.c	2021-08-09 06:40:00.000000000 +0800 (Michael Lin Edited)
++++ c-ares-1.17.2/src/lib/ares_process.c	2022-02-04 03:45:00.000000000 +0800 (Michael Lin Edited)
+@@ -1117,6 +1117,13 @@ static int open_tcp_socket(ares_channel
+         }
+     }
+ 
++  /*ZyXEL Multi-interface*/
++  //printf("%s(): Ares IfMark:0x%08X.\n", __FUNCTION__, channel->ifMark);
++  if (setsockopt(s, SOL_SOCKET, SO_MARK, &channel->ifMark, sizeof(channel->ifMark)) == -1)
++    {
++      printf("%s(): <<Error>> Ares 'setsockopt()' Failed for the IfMark:0x%08X !!!\n", __FUNCTION__, channel->ifMark);
++    }
++
+   /* Connect to the server. */
+   if (ares__connect_socket(channel, s, sa, salen) == -1)
+     {
+@@ -1212,6 +1219,13 @@ static int open_udp_socket(ares_channel
+         }
+     }
+ 
++  /*ZyXEL Multi-interface*/
++  //printf("%s(): Ares IfMark:0x%08X.\n", __FUNCTION__, channel->ifMark);
++  if (setsockopt(s, SOL_SOCKET, SO_MARK, &channel->ifMark, sizeof(channel->ifMark)) == -1)
++    {
++      printf("%s(): <<Error>> Ares 'setsockopt()' Failed for the IfMark:0x%08X !!!\n", __FUNCTION__, channel->ifMark);
++    }
++
+   /* Connect to the server. */
+   if (ares__connect_socket(channel, s, sa, salen) == -1)
+     {

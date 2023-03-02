@@ -1,0 +1,78 @@
+Index: udhcp-0.9.8/Makefile
+===================================================================
+--- udhcp-0.9.8.orig/Makefile
++++ udhcp-0.9.8/Makefile
+@@ -110,6 +110,10 @@ ifneq ($(strip $(CONFIG_ZYXEL_OPAL_EXTEN
+ CFLAGS += -DZYXEL_OPAL_EXTENDER
+ endif
+ 
++ifneq ($(strip $(LIBC_USE_MUSL)),)
++CFLAGS += -D_GNU_SOURCE
++endif
++
+ all: clean $(EXEC1) $(EXEC2) $(EXEC3)
+ 	$(STRIP) --remove-section=.note --remove-section=.comment $(EXEC1) $(EXEC2) $(EXEC3)
+ 
+Index: udhcp-0.9.8/leases.h
+===================================================================
+--- udhcp-0.9.8.orig/leases.h
++++ udhcp-0.9.8/leases.h
+@@ -2,6 +2,7 @@
+ #ifndef _LEASES_H
+ #define _LEASES_H
+ 
++#include <sys/types.h>
+ 
+ struct dhcpOfferedAddr {
+ 	u_int8_t chaddr[16];
+Index: udhcp-0.9.8/packet.h
+===================================================================
+--- udhcp-0.9.8.orig/packet.h
++++ udhcp-0.9.8/packet.h
+@@ -1,6 +1,7 @@
+ #ifndef _PACKET_H
+ #define _PACKET_H
+ 
++#include <sys/types.h>
+ #include <netinet/udp.h>
+ #include <netinet/ip.h>
+ 
+Index: udhcp-0.9.8/clientpacket.c
+===================================================================
+--- udhcp-0.9.8.orig/clientpacket.c
++++ udhcp-0.9.8/clientpacket.c
+@@ -25,6 +25,10 @@
+ #if __GLIBC__ >=2 && __GLIBC_MINOR >= 1
+ #include <netpacket/packet.h>
+ #include <net/ethernet.h>
++#elif defined(_GNU_SOURCE)
++// LIBC_USE_MUSL ?
++#include <netpacket/packet.h>
++#include <net/ethernet.h>
+ #else
+ #include <asm/types.h>
+ #include <linux/if_packet.h>
+@@ -192,7 +196,10 @@ int send_release(unsigned long server, u
+ }
+ 
+ #if defined(ECONET_PLATFORM) && !defined(SUPPORT_XPON) //only for en7512 projects
++#ifndef _GNU_SOURCE
+ #include <netinet/ether.h>
++#endif
++
+ /* return -1 on errors that are fatal for the socket, -2 for those that aren't */
+ int get_raw_packet(struct dhcpMessage *payload, int fd)
+ {
+Index: udhcp-0.9.8/dhcpc.c
+===================================================================
+--- udhcp-0.9.8.orig/dhcpc.c
++++ udhcp-0.9.8/dhcpc.c
+@@ -36,6 +36,8 @@
+ #include <net/if.h>
+ #include <errno.h>
+ 
++#include <fcntl.h>
++
+ #include "dhcpd.h"
+ #include "dhcpc.h"
+ #include "options.h"

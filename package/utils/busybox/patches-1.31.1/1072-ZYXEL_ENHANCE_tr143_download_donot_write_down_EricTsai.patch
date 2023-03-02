@@ -1,0 +1,55 @@
+Index: busybox-1.31.1/networking/wget.c
+===================================================================
+--- busybox-1.31.1.orig/networking/wget.c	2021-04-13 20:52:18.637882400 +0800
++++ busybox-1.31.1/networking/wget.c	2021-04-13 20:56:08.913875756 +0800
+@@ -176,6 +176,12 @@
+ 
+ #define SSL_SUPPORTED (ENABLE_FEATURE_WGET_OPENSSL || ENABLE_FEATURE_WGET_HTTPS)
+ 
++#if defined(ZCFG_SUPPORT)
++enum {
++	TR143OPTIONS_DOWNLOAD_NOWRITEDOWN = 1
++};
++#endif
++
+ struct host_info {
+ 	char *allocated;
+ 	const char *path;
+@@ -296,6 +302,8 @@
+ 
+ static char ipDscp = 0;
+ 
++static uint32_t tr143options = 0;
++
+ int priorityMark=0;
+ char dstIP[32]={0};
+ 
+@@ -1348,10 +1356,12 @@
+ 
+ 			if (n > 0) {
+ #if defined(ZCFG_SUPPORT) //TR143
+-				if (safe_fwrite(G.wget_buf, 1, n, (FILE *)G.output_fd) != n)
+-				{
+-					strcpy(DiagnosticsState, "Error_TransferFailed");
+-					outputDiagDlData();
++				if (!(tr143options & TR143OPTIONS_DOWNLOAD_NOWRITEDOWN)){
++					if (safe_fwrite(G.wget_buf, 1, n, (FILE *)G.output_fd) != n)
++					{
++						strcpy(DiagnosticsState, "Error_TransferFailed");
++						outputDiagDlData();
++					}
+ 				}
+ #else
+ 				xwrite(G.output_fd, G.wget_buf, n);
+@@ -2215,6 +2225,11 @@
+ 	}
+ #endif
+ #if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++	if(strstr(G.dir_prefix, "TR143Download")){
++		printf("output dir: %s\n", G.dir_prefix);
++		tr143options |= TR143OPTIONS_DOWNLOAD_NOWRITEDOWN;
++	}
++
+ 	if (option_mask32 & WGET_OPT_ETNERPRIORITY)
+ 		priorityMark = atoi(G.ethernetPriority)<<13 | 0x1000;
+ #endif

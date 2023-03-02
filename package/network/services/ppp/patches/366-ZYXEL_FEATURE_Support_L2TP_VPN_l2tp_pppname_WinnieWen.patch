@@ -1,0 +1,18 @@
+Index: ppp-2.4.3/pppd/sys-linux.c
+===================================================================
+--- ppp-2.4.3.orig/pppd/sys-linux.c	2019-11-20 06:08:55.105494916 +0000
++++ ppp-2.4.3/pppd/sys-linux.c	2019-11-20 06:13:29.582021543 +0000
+@@ -668,6 +668,13 @@
+ 			num[1] = 4;
+ 		}
+ #endif
++#ifdef CONFIG_ZYXEL_VPN_CLIENT
++		else if ((p = strstr(req_name, "l2tp")) != NULL)
++		{
++			num[0] = req_unit;
++			num[1] = 5;
++		}
++#endif
+ 		else {
+ 			/* default mode */
+ 			num[0] = atoi(&req_name[3]);

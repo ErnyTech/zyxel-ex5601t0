@@ -1,0 +1,17 @@
+Index: dnsmasq-2.85/src/rfc2131.c
+===================================================================
+--- dnsmasq-2.85.orig/src/rfc2131.c	2021-04-20 15:55:44.651171000 +0800
++++ dnsmasq-2.85/src/rfc2131.c	2021-04-20 16:22:15.536784500 +0800
+@@ -1052,8 +1052,12 @@
+       my_syslog (MS_DHCP | LOG_WARNING,
+                  _("disabling DHCP static address %s for %s"),
+                  inet_ntoa (config->addr), daemon->dhcp_buff);
++
++#ifndef ZYXEL_PATCH   /* when static addr is declined by host, do not disable static address lease, just let host keep on trying, ZyXEL, John */
+       config->flags |= CONFIG_DECLINED;
+       config->decline_time = now;
++#endif
++
+     }
+     else
+       /* make sure this host gets a different address next time. */

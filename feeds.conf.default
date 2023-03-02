@@ -1,0 +1,6 @@
+src-git packages https://git.openwrt.org/feed/packages.git^d3e6dc5
+src-git luci https://git.openwrt.org/project/luci.git^dd9390c
+src-git routing https://git.openwrt.org/feed/routing.git^61cd00c
+#src-git telephony https://git.openwrt.org/feed/telephony.git^ec88aa7
+#src-link custom /usr/src/openwrt/custom-feed
+src-git mtk_openwrt_feed https://git01.mediatek.com/openwrt/feeds/mtk-openwrt-feeds^94da18a

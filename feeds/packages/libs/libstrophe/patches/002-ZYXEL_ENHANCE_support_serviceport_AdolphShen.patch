@@ -1,0 +1,25 @@
+Index: libstrophe-0.10.0/src/conn.c
+===================================================================
+--- libstrophe-0.10.0.orig/src/conn.c	2021-07-06 14:27:28.579453884 +0800
++++ libstrophe-0.10.0/src/conn.c	2021-07-06 14:28:08.643535842 +0800
+@@ -483,7 +483,7 @@
+     if (altdomain != NULL) {
+         xmpp_debug(conn->ctx, "xmpp", "Connecting via altdomain.");
+         host = altdomain;
+-        port = altport ? altport : _conn_default_port(conn, XMPP_CLIENT);
++		port = altport ? altport : _conn_default_port(conn, XMPP_CLIENT);
+         found = XMPP_DOMAIN_ALTDOMAIN;
+ 
+         /* SSL tunneled connection on 5223 port is legacy and doesn't
+@@ -512,7 +512,10 @@
+     else if(strcmp(xmppcData->ServerConnectAlgorithm, "ServerTable")==0) {
+         printf("[%s](%d) ServerConnectAlgorithm = %s\n",__func__,__LINE__,xmppcData->ServerConnectAlgorithm);
+         host = xmppcData->serverAddress;
+-        port = altport ? altport : _conn_default_port(conn, XMPP_CLIENT);
++        //port = altport ? altport : _conn_default_port(conn, XMPP_CLIENT);
++		printf("ServerConnectAlgorithm is ServerTable,Port setting sucess!\n");
++		port = xmppcData->serverPort;
++		//printf("%d %s\n", __LINE__, __func__);
+         found = XMPP_DOMAIN_ALTDOMAIN;
+     }
+ #endif

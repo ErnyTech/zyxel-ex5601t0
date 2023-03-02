@@ -1,0 +1,15 @@
+Index: busybox-1.31.1/loginutils/login.c
+===================================================================
+--- busybox-1.31.1.orig/loginutils/login.c
++++ busybox-1.31.1/loginutils/login.c
+@@ -1271,7 +1271,10 @@ int login_main(int argc UNUSED_PARAM, ch
+ 						goto auth_failed;
+ 					}
+ #endif
++					if (accountObj)
+ 					zcfgFeObjStructFree(accountObj);
++
++					if (logGpObj)
+ 					free(logGpObj);
+ 				}
+ #ifdef ZYXEL_REMOMGMT_ONLY_HTTPS_ALLOWS_FOR_WLAN_CONNECT

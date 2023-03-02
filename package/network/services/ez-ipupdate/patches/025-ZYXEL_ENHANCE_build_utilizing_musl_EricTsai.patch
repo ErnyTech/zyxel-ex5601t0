@@ -1,0 +1,14 @@
+Index: ez-ipupdate-3.0.11b8/ez-ipupdate.c
+===================================================================
+--- ez-ipupdate-3.0.11b8.orig/ez-ipupdate.c
++++ ez-ipupdate-3.0.11b8/ez-ipupdate.c
+@@ -237,8 +237,7 @@ char address_log[65]="0.0.0.0";
+ #  define MD5_DIGEST_BYTES (16)
+ #endif
+ 
+-
+-#if __GLIBC__ || __SVR4 || __OpenBSD__ || __FreeBSD__ || __NetBSD__
++#if __GLIBC__ || __SVR4 || __OpenBSD__ || __FreeBSD__ || __NetBSD__ || __LIBC_USE_MUSL__
+ #  define IF_LOOKUP 1
+ #  include <sys/ioctl.h>
+ #  include <net/if.h>

@@ -1,0 +1,20 @@
+Index: dnsmasq-2.78/src/cache.c
+===================================================================
+--- dnsmasq-2.78.orig/src/cache.c
++++ dnsmasq-2.78/src/cache.c
+@@ -640,13 +640,13 @@ void add_dns_traffic_route(uint32_t s_ad
+ 
+       /* add */
+       sprintf(sysCmd,
+-              "iptables -t mangle -D DNSRT_RULE_%d -d %s/%d -j MARK --or-mark 0x%x 2> /dev/null",
++              "iptables -t mangle -D DNSRT_RULE_%d -d %s/%d -j MARK --or-mark 0x%lx 2> /dev/null",
+               serv->rule_no, inet_ntoa(srcIP), serv->subnet_mask,
+               serv->sock_mark);
+       system(sysCmd);
+ 
+       sprintf(sysCmd,
+-              "iptables -t mangle -A DNSRT_RULE_%d -d %s/%d -j MARK --or-mark 0x%x",
++              "iptables -t mangle -A DNSRT_RULE_%d -d %s/%d -j MARK --or-mark 0x%lx",
+               serv->rule_no, inet_ntoa(srcIP), serv->subnet_mask,
+               serv->sock_mark);
+       system(sysCmd);

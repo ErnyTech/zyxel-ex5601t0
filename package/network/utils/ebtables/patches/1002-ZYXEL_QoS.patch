@@ -1,0 +1,148 @@
+Index: ebtables-2018-06-27-48cff25d/extensions/Makefile
+===================================================================
+--- ebtables-2018-06-27-48cff25d.orig/extensions/Makefile
++++ ebtables-2018-06-27-48cff25d/extensions/Makefile
+@@ -3,7 +3,7 @@
+ EXT_FUNC+=802_3 nat arp arpreply ip ip6 standard log redirect vlan mark_m mark \
+           pkttype stp among limit ulog nflog string
+ 
+-EXT_FUNC+=AUTOMAP ftos policer tc
++EXT_FUNC+=AUTOMAP ftos policer zextmark_m zextmark
+ ifneq ($(CONFIG_KERNEL_BRIDGE_EBT_NFQUEUE),)
+ EXT_FUNC+=nfqueue
+ endif
+Index: ebtables-2018-06-27-48cff25d/extensions/ebt_skiplog.c
+===================================================================
+--- /dev/null
++++ ebtables-2018-06-27-48cff25d/extensions/ebt_skiplog.c
+@@ -0,0 +1,62 @@
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <getopt.h>
++#include "../include/ebtables_u.h"
++
++static struct option opts[] =
++{
++	{ 0 }
++};
++
++static void print_help()
++{
++	printf(
++	"skiplog target takes no options:\n");
++}
++
++static void init(struct ebt_entry_target *target)
++{
++}
++
++static int parse(int c, char **argv, int argc,
++   const struct ebt_u_entry *entry, unsigned int *flags,
++   struct ebt_entry_target **target)
++{
++	return 1;
++}
++
++static void final_check(const struct ebt_u_entry *entry,
++   const struct ebt_entry_target *target, const char *name,
++   unsigned int hookmask, unsigned int time)
++{
++}
++
++static void print(const struct ebt_u_entry *entry,
++   const struct ebt_entry_target *target)
++{
++}
++
++static int compare(const struct ebt_entry_target *t1,
++   const struct ebt_entry_target *t2)
++{
++	return 1;
++}
++
++static struct ebt_u_target skiplog_target =
++{
++    "SKIPLOG",
++    0,
++    print_help,
++    init,
++    parse,
++    final_check,
++    print,
++    compare,
++    opts
++};
++
++void _init(void)
++{
++	ebt_register_target(&skiplog_target);
++}
+Index: ebtables-2018-06-27-48cff25d/extensions/ebt_zextmark.c
+===================================================================
+--- ebtables-2018-06-27-48cff25d.orig/extensions/ebt_zextmark.c
++++ ebtables-2018-06-27-48cff25d/extensions/ebt_zextmark.c
+@@ -183,7 +183,7 @@ static struct ebt_u_target mark_target =
+ 	.extra_ops	= opts,
+ };
+ 
+-void _init(void)
++__attribute__((constructor)) static void extension_init(void)
+ {
+ 	ebt_register_target(&mark_target);
+ }
+Index: ebtables-2018-06-27-48cff25d/extensions/ebt_zextmark_m.c
+===================================================================
+--- ebtables-2018-06-27-48cff25d.orig/extensions/ebt_zextmark_m.c
++++ ebtables-2018-06-27-48cff25d/extensions/ebt_zextmark_m.c
+@@ -121,7 +121,7 @@ static struct ebt_u_match mark_match =
+ 	.extra_ops	= opts,
+ };
+ 
+-void _init(void)
++__attribute__((constructor)) static void extension_init(void)
+ {
+ 	ebt_register_match(&mark_match);
+ }
+Index: ebtables-2018-06-27-48cff25d/include/linux/netfilter_bridge/ebt_ip.h
+===================================================================
+--- ebtables-2018-06-27-48cff25d.orig/include/linux/netfilter_bridge/ebt_ip.h
++++ ebtables-2018-06-27-48cff25d/include/linux/netfilter_bridge/ebt_ip.h
+@@ -128,10 +128,12 @@ struct ebt_ip_info
+ #if 1 //defined(X_CONFIG_BCM_KF_NETFILTER) || !defined(X_CONFIG_BCM_IN_KERNEL)
+ 	__u8  dscp; /* brcm */
+ #endif
+-	__u8  protocol;
+-	__u16  bitmask;
+-	__u16  invflags;
+-	union {
++    __u8  protocol;
++    __u16  bitmask;
++    __u16  invflags;
++    __u8  tcp_flg_mask;
++    __u8  tcp_flg_cmp;
++    union {
+ 		__u16 sport[2];
+ 		__u8 icmp_type[2];
+ 		__u8 igmp_type[2];
+@@ -140,8 +142,6 @@ struct ebt_ip_info
+ 		__u16 dport[2];
+ 		__u8 icmp_code[2];
+ 	};
+-	__u8  tcp_flg_mask;
+-	__u8  tcp_flg_cmp;
+ 	__u16 length[2];
+ 	struct cfgopt cfg60; //option 60
+     struct cfgopt cfg61; //option 61
+Index: ebtables-2018-06-27-48cff25d/include/linux/netfilter_bridge/ebt_mark_t.h
+===================================================================
+--- ebtables-2018-06-27-48cff25d.orig/include/linux/netfilter_bridge/ebt_mark_t.h
++++ ebtables-2018-06-27-48cff25d/include/linux/netfilter_bridge/ebt_mark_t.h
+@@ -12,6 +12,7 @@
+ #define MARK_OR_VALUE  (0xffffffe0)
+ #define MARK_AND_VALUE (0xffffffd0)
+ #define MARK_XOR_VALUE (0xffffffc0)
++#define VTAG_SET_VALUE (0xffffffb0)
+ 
+ struct ebt_mark_t_info {
+ 	unsigned long mark;

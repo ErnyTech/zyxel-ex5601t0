@@ -1,0 +1,11 @@
+diff -uri xl2tpd-1.3.14.orig/Makefile xl2tpd-1.3.14/Makefile
+--- xl2tpd-1.3.14.orig/Makefile	2021-09-29 15:42:43.792987734 +0800
++++ xl2tpd-1.3.14/Makefile	2021-09-29 15:44:52.804174053 +0800
+@@ -115,6 +115,7 @@
+ MANDIR?=$(DESTDIR)${PREFIX}/share/man
+ 
+ LDLIBS ?= -ljson -lzcfg_msg
++LDLIBS+=-Wl,-rpath-link,$(STAGING_DIR)/usr/lib
+ 
+ all: $(EXEC) pfc $(CONTROL_EXEC)
+ 

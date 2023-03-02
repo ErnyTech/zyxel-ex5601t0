@@ -1,0 +1,131 @@
+Index: ppp-2.4.3/pppd/ipcp.c
+===================================================================
+--- ppp-2.4.3.orig/pppd/ipcp.c
++++ ppp-2.4.3/pppd/ipcp.c
+@@ -55,6 +55,7 @@
+ #include <sys/socket.h>
+ #include <netinet/in.h>
+ #include <arpa/inet.h>
++#include <time.h>
+ 
+ #include "pppd.h"
+ #include "fsm.h"
+@@ -71,6 +72,10 @@
+ #endif
+ static const char rcsid[] = RCSID;
+ 
++#ifdef CONFIG_ZYXEL_VPN_CLIENT
++#define ZYXEL_L2TP_INFO_FILE "/tmp/xl2tpd_info.txt"
++#endif
++
+ /* global vars */
+ ipcp_options ipcp_wantoptions[NUM_PPP];	/* Options that we want to request */
+ ipcp_options ipcp_gotoptions[NUM_PPP];	/* Options that peer ack'd */
+@@ -1783,6 +1788,12 @@ ipcp_up(f)
+     char dnsList[IPADDR_LENGTH*2 + 8] = {0};
+     const char *payload = NULL;
+     int payloadLen = 0;
++#ifdef CONFIG_ZYXEL_VPN_CLIENT
++    FILE *fp = NULL;
++    char buf[256] = {0};
++    char local_session_id[128] = {0}, remote_session_id[128] = {0}, l2tp_profile[128] = {0};
++    time_t p_time;
++#endif
+ #endif
+     IPCPDEBUG(("ipcp: up"));
+ 
+@@ -1982,8 +1993,41 @@ ipcp_up(f)
+ 	#endif
+ 	}
+ 
+-	notice("local  IP address %I", go->ouraddr);
+-	notice("remote IP address %I", ho->hisaddr);
++#ifdef CONFIG_ZYXEL_VPN_CLIENT
++    if(strstr(ifname, "l2tp"))
++    {
++        fp = fopen(ZYXEL_L2TP_INFO_FILE, "r");
++        if(fp != NULL)
++        {
++            while(fgets(buf, sizeof(buf), fp) != NULL)
++            {
++                if(strstr(buf, "Local") != NULL)
++                {
++                    strncpy(local_session_id, buf, strlen(buf)-1);
++                }
++                if(strstr(buf, "Remote") != NULL)
++                {
++                    strncpy(remote_session_id, buf, strlen(buf)-1);
++                }
++                if(strstr(buf, "Name") != NULL)
++                {
++                    strncpy(l2tp_profile, buf, strlen(buf)-1);
++                }
++            }
++            fclose(fp);
++        }
++
++        time(&p_time);
++
++        notice("Start Time:%s, %s, %s, %s, Type:L2TP, Interface:%s, IP address from %I, IP address to %I, Reason:New connection",ctime(&p_time), l2tp_profile, local_session_id, remote_session_id, ifname, go->ouraddr, ho->hisaddr);
++    }
++    else
++#endif
++    {
++        notice("local  IP address %I", go->ouraddr);
++        notice("remote IP address %I", ho->hisaddr);
++    }
++
+ 	if (go->dnsaddr[0]) {
+ #if 0 /* ZyXEL */
+             strcpy(dnsList, ip_ntoa(go->dnsaddr[0]));
+@@ -2054,6 +2098,13 @@ static void
+ ipcp_down(f)
+     fsm *f;
+ {
++#ifdef CONFIG_ZYXEL_VPN_CLIENT
++    char buf[256] = {0};
++    char local_session_id[128] = {0}, remote_session_id[128] = {0}, l2tp_profile[128] = {0};
++    FILE *fp = NULL;
++    time_t p_time;
++#endif
++
+     IPCPDEBUG(("ipcp: down"));
+     /* XXX a bit IPv4-centric here, we only need to get the stats
+      * before the interface is marked down. */
+@@ -2073,6 +2124,36 @@ ipcp_down(f)
+ 			 * because print_link_stats() sets link_stats_valid
+ 			 * to 0 (zero) */
+ 
++#ifdef CONFIG_ZYXEL_VPN_CLIENT
++    if(strstr(ifname, "l2tp"))
++    {
++        fp = fopen(ZYXEL_L2TP_INFO_FILE, "r");
++        if(fp != NULL)
++        {
++            while(fgets(buf, sizeof(buf), fp) != NULL)
++            {
++                if(strstr(buf, "Local") != NULL)
++                {
++                    strncpy(local_session_id, buf, strlen(buf)-1);
++                }
++                if(strstr(buf, "Remote") != NULL)
++                {
++                    strncpy(remote_session_id, buf, strlen(buf)-1);
++                }
++                if(strstr(buf, "Name") != NULL)
++                {
++                    strncpy(l2tp_profile, buf, strlen(buf)-1);
++                }
++            }
++            fclose(fp);
++            unlink(ZYXEL_L2TP_INFO_FILE);
++        }
++
++        time(&p_time);
++
++        notice("End Time:%s, %s, %s, %s, Type:L2TP, Reason:Connection down",ctime(&p_time), l2tp_profile, local_session_id, remote_session_id);
++    }
++#endif
+     /*
+      * If we are doing dial-on-demand, set the interface
+      * to queue up outgoing packets (for now).=

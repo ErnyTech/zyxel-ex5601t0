@@ -1,0 +1,129 @@
+Index: clinkc/include/cybergarage/http/chttp.h
+===================================================================
+--- clinkc.orig/include/cybergarage/http/chttp.h	2020-10-12 16:30:59.573313512 +0800
++++ clinkc/include/cybergarage/http/chttp.h	2020-10-12 16:36:20.285982014 +0800
+@@ -882,11 +882,12 @@
+ 
+ #endif
+ 
+-//#if defined(ZyXEL_Online_Firmware_Upgrade) || defined(ZYXEL_FWUPGRADE_DHCP_SUB_OPTION43) || defined (ZYXEL_WEB_GUI_SHOW_ENABLE_ONLINE_FW_UPGRADE)
++//#if defined(ZyXEL_Online_Firmware_Upgrade) || defined(ZYXEL_FWUPGRADE_DHCP_SUB_OPTION43) || defined (ZYXEL_WEB_GUI_SHOW_ENABLE_ONLINE_FW_UPGRADE) 
+ /*******************************************
+ * cg_http_customrequest_post
+ ********************************************/
+ CgHttpResponse *cg_http_customrequest_post(CgHttpRequest *httpReq, char *ipaddr, int port, char *savedFile);
++CgHttpResponse *cg_https_customrequest_post(CgHttpRequest *httpReq, char *ipaddr, int port, char *savedFile);
+ //#endif
+ 
+ #ifdef  __cplusplus
+Index: clinkc/src/cybergarage/http/chttp_request.c
+===================================================================
+--- clinkc.orig/src/cybergarage/http/chttp_request.c	2020-10-12 16:30:59.485313514 +0800
++++ clinkc/src/cybergarage/http/chttp_request.c	2020-10-12 16:38:36.136042564 +0800
+@@ -1225,7 +1225,7 @@
+ 	}
+ 
+ 	if (bFail == TRUE){ //return bFail;
+-		//printf("http_request_parse_uri >>>>¡@Invalid uri -1!!! \n");
++		//printf("http_request_parse_uri >>>>ï¿½@Invalid uri -1!!! \n");
+ 		return TRUE;
+ 	}
+ 
+@@ -1241,7 +1241,7 @@
+ 		}
+ 	}
+ 	if (bFail == TRUE){ //return bFail;
+-		//printf("http_request_parse_uri >>>>¡@Invalid uri -2!!! \n");
++		//printf("http_request_parse_uri >>>>ï¿½@Invalid uri -2!!! \n");
+ 		return TRUE;
+ 	}
+ 
+@@ -1291,8 +1291,75 @@
+ }
+ 
+ #endif
++CgHttpResponse *cg_https_customrequest_post(CgHttpRequest *httpReq, char *ipaddr, int port, char *savedFile)
++{
++
++	CgSocket *sock = NULL;
++	char *method, *uri, *version;
++	CgString *firstLine;
++	
++	cg_log_debug_l4("Entering...\n");	
++	
++	cg_http_response_clear(httpReq->httpRes);
++
++	cg_log_debug_s("(HTTP) Posting:\n");
++	cg_http_request_print(httpReq);
++
++	
++	//sock = cg_socket_stream_new();
++	sock = cg_socket_ssl_new();
++	cg_socket_setctx(sock, httpReq->ctxdata);
+ 
+ 
++	if (cg_socket_connect(sock, ipaddr, port, NULL) == FALSE) {
++		cg_socket_delete(sock);
++		return httpReq->httpRes;		
++	}
++/*
++for ABUU
++host need be domain name or be redirect.
++*/
++	if (cg_http_request_gethost(httpReq) == NULL)
++	cg_http_request_sethost(httpReq, ipaddr, port);
++	cg_http_packet_setheadervalue((CgHttpPacket*)httpReq, CG_HTTP_USERAGENT, cg_http_request_getuseragent(httpReq));
++	
++	method = cg_http_request_getmethod(httpReq);
++	uri = cg_http_request_geturi(httpReq);
++	version = cg_http_request_getversion(httpReq);
++	
++	if (method == NULL || uri == NULL || version == NULL) {
++		cg_socket_close(sock);
++		cg_socket_delete(sock);
++		return httpReq->httpRes;		
++	}	
++	
++	/**** send first line ****/
++	firstLine = cg_string_new();
++	cg_string_addvalue(firstLine, method);
++	cg_string_addvalue(firstLine, CG_HTTP_SP);
++	cg_string_addvalue(firstLine, uri);
++	cg_string_addvalue(firstLine, CG_HTTP_SP);
++	cg_string_addvalue(firstLine, version);
++	cg_string_addvalue(firstLine, CG_HTTP_CRLF);
++	cg_socket_write(sock, cg_string_getvalue(firstLine), cg_string_length(firstLine));
++	cg_string_delete(firstLine);
++	/**** send header and content ****/
++	cg_http_packet_post((CgHttpPacket *)httpReq, sock);
++	/**** read response ****/
++	cg_http_response_read(httpReq->httpRes, sock, cg_http_request_isheadrequest(httpReq), savedFile);
++	
++	
++	cg_socket_close(sock);
++	cg_socket_delete(sock);	
++	
++	cg_http_response_print(httpReq->httpRes);
++
++	cg_log_debug_l4("Leaving...\n");
++
++	return httpReq->httpRes;
++	
++}
++
+ //#if defined(ZyXEL_Online_Firmware_Upgrade) || defined(ZYXEL_FWUPGRADE_DHCP_SUB_OPTION43) || defined (ZYXEL_WEB_GUI_SHOW_ENABLE_ONLINE_FW_UPGRADE)
+ /*******************************************
+ * cg_http_customrequest_post
+@@ -1319,7 +1386,11 @@
+ 		cg_socket_delete(sock);
+ 		return httpReq->httpRes;		
+ 	}
+-	
++/*
++for ABUU
++host need be domain name or be redirect.
++*/
++	if (cg_http_request_gethost(httpReq) == NULL)
+ 	cg_http_request_sethost(httpReq, ipaddr, port);
+ 	cg_http_packet_setheadervalue((CgHttpPacket*)httpReq, CG_HTTP_USERAGENT, cg_http_request_getuseragent(httpReq));
+ 	

@@ -1,0 +1,20 @@
+Index: ppp-2.4.3/pppd/sys-linux.c
+===================================================================
+--- ppp-2.4.3.orig/pppd/sys-linux.c	2019-11-08 06:00:05.502828344 +0000
++++ ppp-2.4.3/pppd/sys-linux.c	2019-11-11 01:03:43.345195504 +0000
+@@ -698,6 +698,7 @@
+ 	if (x < 0) {
+ 		error("Couldn't create new ppp unit: %m");
+ 	}
++#ifndef CONFIG_ZYXEL_VPN_CLIENT
+ #ifdef BROADCOM_PLATFORM /* ZyXEL */
+ 	else {
+ #if 1 /* tty device, ZyXEL */
+@@ -713,6 +714,7 @@
+ #endif
+ 	}
+ #endif
++#endif
+ 	return x;
+ }
+ 

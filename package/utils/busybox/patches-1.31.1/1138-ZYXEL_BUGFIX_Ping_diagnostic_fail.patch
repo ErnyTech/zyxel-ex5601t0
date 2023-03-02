@@ -1,0 +1,19 @@
+diff -ruN a/networking/ping.c b/networking/ping.c
+--- a/networking/ping.c	2022-06-08 22:57:30.053852000 +0800
++++ b/networking/ping.c	2022-06-08 23:11:18.971761409 +0800
+@@ -681,6 +681,15 @@
+ 	else if(jsonfilename != NULL){
+ 		json_object_to_file(jsonfilename, ping_stat);
+ 	}
++	else
++	{
++		if(pings){
++			pingMsgSend(ZCFG_MSG_PINGSVRS_RST, payloadLen, payload);
++		}else if(pingsvrs && !strcmp(pingsdiagstat, "pings_complete")){
++			pingMsgSend(ZCFG_MSG_PINGSVRS_RST, payloadLen, payload);
++		}else
++			pingMsgSend(ZCFG_MSG_PING_MSG, payloadLen, payload);
++	}
+ 
+ 	json_object_put(ping_stat);
+ 

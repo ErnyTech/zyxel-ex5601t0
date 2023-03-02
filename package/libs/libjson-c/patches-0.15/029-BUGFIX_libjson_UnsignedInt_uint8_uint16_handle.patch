@@ -1,0 +1,116 @@
+diff -ruN a/json_object.c b/json_object.c
+--- a/json_object.c	2022-04-26 23:18:06.732464000 +0800
++++ b/json_object.c	2022-04-27 00:03:54.959424248 +0800
+@@ -843,7 +843,13 @@
+ 	return printbuf_memappend(pb, sbuf, strlen(sbuf));
+ }
+ 
+-struct json_object *json_object_new_int(int32_t i)
++struct json_object *json_object_new_int(
++#if 0 /*ZyXEL to using 64bit int to handle RDM*/
++	int32_t i
++#else
++	int64_t i
++#endif
++	)
+ {
+ 	return json_object_new_int64(i);
+ }
+@@ -867,6 +873,7 @@
+ }
+ #endif
+ 
++#if 0 /*ZyXEL to using 64bit int to handle RDM*/
+ int32_t json_object_get_int(const struct json_object *jso)
+ {
+ 	int64_t cint64=0;
+@@ -923,6 +930,60 @@
+ 	default: return 0;
+ 	}
+ }
++#else
++int64_t json_object_get_int(const struct json_object *jso)
++{
++	int64_t cint64=0;
++	double cdouble;
++	enum json_type o_type;
++
++	if (!jso)
++		return 0;
++
++	o_type = jso->o_type;
++	if (o_type == json_type_int)
++	{
++		const struct json_object_int *jsoint = JC_INT_C(jso);
++		if (jsoint->cint_type == json_object_int_type_int64)
++		{
++			cint64 = jsoint->cint.c_int64;
++		}
++		else
++		{
++			if (jsoint->cint.c_uint64 >= INT64_MAX)
++				cint64 = INT64_MAX;
++			else
++				cint64 = (int64_t)jsoint->cint.c_uint64;
++		}
++	}
++	else if (o_type == json_type_string)
++	{
++		/*
++		 * Parse strings into 64-bit numbers, then use the
++		 * 64-to-32-bit number handling below.
++		 */
++		if (json_parse_int64(get_string_component(jso), &cint64) != 0)
++			return 0; /* whoops, it didn't work. */
++		o_type = json_type_int;
++	}
++
++	switch (o_type)
++	{
++	case json_type_int:
++		return (int64_t)cint64;
++	case json_type_double:
++		cdouble = JC_DOUBLE_C(jso)->c_double;
++		if (cdouble <= INT32_MIN)
++			return INT32_MIN;
++		if (cdouble >= INT32_MAX)
++			return INT32_MAX;
++		return (int32_t)cdouble;
++	case json_type_boolean: return JC_BOOL_C(jso)->c_boolean;
++	default: return 0;
++	}
++}
++
++#endif
+ 
+ int json_object_set_int(struct json_object *jso, int new_value)
+ {
+diff -ruN a/json_object.h b/json_object.h
+--- a/json_object.h	2022-04-26 23:18:06.728464000 +0800
++++ b/json_object.h	2022-04-26 23:31:52.246504192 +0800
+@@ -716,7 +716,12 @@
+  * @param i the integer
+  * @returns a json_object of type json_type_int
+  */
+-JSON_EXPORT struct json_object *json_object_new_int(int32_t i);
++#if 0 /*ZyXEL to using 64bit int to handle RDM*/
++JSON_EXPORT struct json_object* json_object_new_int(int32_t i);
++#else
++JSON_EXPORT struct json_object* json_object_new_int(int64_t i);
++#endif
++
+ 
+ /** Create a new empty json_object of type json_type_int
+  * @param i the integer
+@@ -744,7 +749,11 @@
+  * @param obj the json_object instance
+  * @returns an int
+  */
++#if 0
+ JSON_EXPORT int32_t json_object_get_int(const struct json_object *obj);
++#else
++JSON_EXPORT int64_t json_object_get_int(const struct json_object *obj);
++#endif
+ 
+ /** Set the int value of a json_object
+  *

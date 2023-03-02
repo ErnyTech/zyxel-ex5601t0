@@ -1,0 +1,14 @@
+diff -ruN a/drivers/net/ethernet/mediatek/mtk_hnat/hnat_nf_hook.c b/drivers/net/ethernet/mediatek/mtk_hnat/hnat_nf_hook.c
+--- a/drivers/net/ethernet/mediatek/mtk_hnat/hnat_nf_hook.c	2022-07-07 12:07:08.476307029 +0800
++++ b/drivers/net/ethernet/mediatek/mtk_hnat/hnat_nf_hook.c	2022-07-07 12:09:40.991248588 +0800
+@@ -959,8 +959,10 @@
+ 	nexthop = (__force u32)rt_nexthop(rt, ip_hdr(skb)->daddr);
+ 	neigh = __ipv4_neigh_lookup_noref(dev, nexthop);
+ 	if (unlikely(!neigh)) {
++	/*
+ 		dev_notice(hnat_priv->dev, "%s:No neigh (daddr=%pI4)\n", __func__,
+ 			   &ip_hdr(skb)->daddr);
++	*/
+ 		rcu_read_unlock_bh();
+ 		return -1;
+ 	}

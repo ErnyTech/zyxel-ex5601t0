@@ -1,0 +1,66 @@
+From c4f5049289bf5ce13ca0f10fedb6c0255c95d183 Mon Sep 17 00:00:00 2001
+From: "howard.hsu" <howard-yh.hsu@mediatek.com>
+Date: Mon, 25 Oct 2021 11:27:23 +0800
+Subject: [PATCH] Add support to configure BSS Termination TSF by using
+ hostapd_cli cmd
+
+---
+ hostapd/ctrl_iface.c | 9 +++++++++
+ src/ap/ap_config.c   | 1 +
+ src/ap/ap_config.h   | 1 +
+ 3 files changed, 11 insertions(+)
+
+diff --git a/hostapd/ctrl_iface.c b/hostapd/ctrl_iface.c
+index 5b7f075..87f219d 100644
+--- a/hostapd/ctrl_iface.c
++++ b/hostapd/ctrl_iface.c
+@@ -946,6 +946,10 @@ static int hostapd_ctrl_iface_bss_tm_req(struct hostapd_data *hapd,
+ 			wpa_printf(MSG_DEBUG, "Invalid bss_term data");
+ 			return -1;
+ 		}
++		if (hapd->conf->bss_termination_tsf) {
++			WPA_PUT_LE64(&bss_term_dur[2], hapd->conf->bss_termination_tsf);
++		}
++
+ 		end++;
+ 		WPA_PUT_LE16(&bss_term_dur[10], atoi(end));
+ 	}
+@@ -1515,6 +1519,11 @@ static int hostapd_ctrl_iface_set(struct hostapd_data *hapd, char *cmd)
+ #endif /* CONFIG_DPP */
+ 	} else if (os_strcasecmp(cmd, "setband") == 0) {
+ 		ret = hostapd_ctrl_iface_set_band(hapd, value);
++	} else if (os_strcasecmp(cmd, "bss_termination_tsf") == 0) {
++		int termination_sec = atoi(value);
++		hapd->conf->bss_termination_tsf = termination_sec;
++		wpa_printf(MSG_DEBUG, "BSS Termination TSF: value = %d",
++                termination_sec);
+ 	} else {
+ 		ret = hostapd_set_iface(hapd->iconf, hapd->conf, cmd, value);
+ 		if (ret)
+diff --git a/src/ap/ap_config.c b/src/ap/ap_config.c
+index 91ceb9c..262f8e7 100644
+--- a/src/ap/ap_config.c
++++ b/src/ap/ap_config.c
+@@ -164,6 +164,7 @@ void hostapd_config_defaults_bss(struct hostapd_bss_config *bss)
+ #ifdef CONFIG_TESTING_OPTIONS
+ 	bss->sae_commit_status = -1;
+ #endif /* CONFIG_TESTING_OPTIONS */
++	bss->bss_termination_tsf = 0;
+ }
+ 
+ 
+diff --git a/src/ap/ap_config.h b/src/ap/ap_config.h
+index 09823bf..f0825f2 100644
+--- a/src/ap/ap_config.h
++++ b/src/ap/ap_config.h
+@@ -551,6 +551,7 @@ struct hostapd_bss_config {
+ 	int wnm_sleep_mode;
+ 	int wnm_sleep_mode_no_keys;
+ 	int bss_transition;
++	unsigned int bss_termination_tsf;
+ 
+ 	/* IEEE 802.11u - Interworking */
+ 	int interworking;
+-- 
+2.18.0
+

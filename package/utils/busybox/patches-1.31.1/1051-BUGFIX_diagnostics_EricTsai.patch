@@ -1,0 +1,135 @@
+Index: busybox-1.31.1/networking/nslookup.c
+===================================================================
+--- busybox-1.31.1.orig/networking/nslookup.c	2021-03-16 20:14:44.633876678 +0800
++++ busybox-1.31.1/networking/nslookup.c	2021-03-16 20:02:08.577514400 +0800
+@@ -103,6 +103,9 @@
+  * ns3.kernel.org  internet address = 204.152.191.36
+  */
+ #ifdef ZCFG_SUPPORT
++
++#define MAX_IPADDR_LEN    1601
++
+ void usage()
+ {
+ 	fprintf(stderr, "\nUsage: nslookup -h [HOST] <-s [DNS server]>\n");
+@@ -175,6 +178,9 @@
+ 			revhost = xmalloc_sockaddr2hostonly_noport(cur->ai_addr);
+ #ifdef ZCFG_SUPPORT
+ 			if(iplist!=NULL){
++				if((strlen(iplist) + strlen(dotted) + 2) > MAX_IPADDR_LEN)
++					return 0;
++
+ 				if(strlen(iplist)>0) strcat(iplist, ",");
+ 				strcat(iplist, dotted);
+ 			}
+@@ -189,6 +195,10 @@
+ 				free(dotted);
+ 			cur = cur->ai_next;
+ 		}
++		#ifdef ZCFG_SUPPORT
++		if((strlen(iplist) > 1) && iplist[strlen(iplist)-1] == ',')
++			iplist[strlen(iplist)-1] = '\0';
++		#endif
+ 	} else {
+ #if ENABLE_VERBOSE_RESOLUTION_ERRORS
+ 		bb_error_msg("can't resolve '%s': %s", hostname, gai_strerror(rc));
+@@ -278,7 +288,7 @@
+ 	const char *payload = NULL;
+ 	int payloadLen = 0;
+ 	unsigned long timevals, timevale, timeintv;
+-	char iplist[46] = {0}, srvip[46] = {0};
++	char iplist[MAX_IPADDR_LEN] = {0}, srvip[46] = {0};
+ 	int c = 0, successc = 0;
+ 	char cStr[4] = {0};
+ 	char syscmd[128] = {0};
+@@ -293,7 +303,7 @@
+ #ifdef ZCFG_SUPPORT
+ 	if(argc <=2){
+ 		usage();
+-		return;
++		return EXIT_FAILURE;
+ 	}
+ 
+ 	while((opt = getopt(argc, argv, "h:s:c:w:I:")) != -1)
+@@ -322,7 +332,7 @@
+ 	if(nscount<=0) nscount = 1; /*at least one time*/
+ 	if(!hostname){
+ 		usage();
+-		return;
++		return EXIT_FAILURE;
+ 	}
+ #else
+ 	if (!argv[1] || argv[1][0] == '-' || argc > 3)
+@@ -357,7 +367,7 @@
+ 		nslookupMsgSend(ZCFG_MSG_NSLOOKUP_MSG, payloadLen, payload);
+ 		json_object_put(lookup_stat);
+ 
+-		return;
++		return EXIT_SUCCESS;
+ 	}
+ 
+ 
+@@ -367,8 +377,10 @@
+ 		timevals = monotonic_ms();
+ 		ret = print_host(hostname, "Name:", iplist);
+ 		timevale = monotonic_ms();
+-		if(!ret) successc++;
++		if(!ret)
++			successc++;
+ 
++		printf("iplist: %s\n", iplist);
+ 		lookup_result = json_object_new_object();
+ 		json_object_object_add(lookup_result, "HostNameReturned", json_object_new_string(hostname));
+ 		json_object_object_add(lookup_result, "DNSServerIP", json_object_new_string(srvip));
+@@ -409,7 +421,7 @@
+ 	nslookupMsgSend(ZCFG_MSG_NSLOOKUP_MSG, payloadLen, payload);
+ 	json_object_put(lookup_stat);
+ 
+-	return ret;
++	return EXIT_SUCCESS;
+ #else
+ 	set_default_dns(argv[2]);
+ 
+Index: busybox-1.31.1/networking/ping.c
+===================================================================
+--- busybox-1.31.1.orig/networking/ping.c	2021-03-16 20:14:44.633876678 +0800
++++ busybox-1.31.1/networking/ping.c	2021-03-16 20:01:01.734514400 +0800
+@@ -567,7 +567,14 @@
+ 	 * it doesn't matter */
+ 	sz = xsendto(pingsock, G.snd_packet, size_pkt, &pingaddr.sa, sizeof(pingaddr));
+ 	if (sz != size_pkt)
++#ifdef ZCFG_SUPPORT
++	{
++		printf("%s\n", bb_msg_write_error);
++		print_stats_and_exit(EXIT_FAILURE);
++	}
++#else
+ 		bb_error_msg_and_die(bb_msg_write_error);
++#endif
+ 
+ 
+ 	if (pingcount == 0 || ntransmitted < pingcount) {
+@@ -874,12 +881,20 @@
+ 		if (!(option_mask32 & OPT_VERBOSE)) {
+ 			ICMP6_FILTER_SETBLOCKALL(&filt);
+ 			ICMP6_FILTER_SETPASS(ICMP6_ECHO_REPLY, &filt);
+-		} else {
++		}
++		else {
+ 			ICMP6_FILTER_SETPASSALL(&filt);
+ 		}
+-		if (setsockopt(pingsock, IPPROTO_ICMPV6, ICMP6_FILTER, &filt,
+-					sizeof(filt)) < 0)
++		if (setsockopt(pingsock, IPPROTO_ICMPV6, ICMP6_FILTER, &filt, sizeof(filt)) < 0)
++
++#ifdef ZCFG_SUPPORT
++		{
++			printf("setsockopt(ICMP6_FILTER)\n");
++			print_stats_and_exit(EXIT_FAILURE);
++		}
++#else
+ 			bb_error_msg_and_die("setsockopt(%s)", "ICMP6_FILTER");
++#endif
+ 	}
+ #endif /*ICMP6_FILTER*/
+ 

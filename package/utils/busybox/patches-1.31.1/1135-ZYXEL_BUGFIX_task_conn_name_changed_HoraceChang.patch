@@ -1,0 +1,15 @@
+Index: busybox-1.31.1/libbb/appletlib.c
+===================================================================
+--- busybox-1.31.1.orig/libbb/appletlib.c
++++ busybox-1.31.1/libbb/appletlib.c
+@@ -1115,8 +1115,10 @@ int main(int argc UNUSED_PARAM, char **a
+ 	 || ENABLE_FEATURE_PREFER_APPLETS
+ 	 || !BB_MMU
+ 	) {
++#if 0 // Zyxel fix killall shell script process name  always show sh issue.
+ 		if (NUM_APPLETS > 1)
+ 			set_task_comm(applet_name);
++#endif
+ 	}
+ 
+ 	parse_config_file(); /* ...maybe, if FEATURE_SUID_CONFIG */

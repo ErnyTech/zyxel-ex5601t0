@@ -1,0 +1,91 @@
+Index: libstrophe-0.10.0/src/common.h
+===================================================================
+--- libstrophe-0.10.0.orig/src/common.h	2020-03-04 15:09:41.000000000 +0800
++++ libstrophe-0.10.0/src/common.h	2021-04-29 15:47:35.525259244 +0800
+@@ -18,7 +18,7 @@
+ 
+ #include <stdio.h>
+ #include <stdarg.h>
+-
++#include <time.h>
+ #include "strophe.h"
+ #include "ostypes.h"
+ #include "sock.h"
+@@ -30,6 +30,22 @@
+ #include "snprintf.h"
+ 
+ /** run-time context **/
++#if 1//ZYXEL
++typedef struct XMPPC_DATA
++{
++    char jabberID[1024];
++    char password[256];
++    char serverAddress[256];
++    int serverPort;
++    uint8_t enableTLS;
++    int64_t keepAlive;
++    void *conn;
++    void *context;
++    int isDisconnected;
++    time_t backoffTime;
++    char ServerConnectAlgorithm[17];
++} XMPPC_DATA, *PXMPPC_DATA;
++#endif
+ 
+ typedef enum {
+     XMPP_LOOP_NOTSTARTED,
+Index: libstrophe-0.10.0/src/conn.c
+===================================================================
+--- libstrophe-0.10.0.orig/src/conn.c	2020-03-04 15:09:41.000000000 +0800
++++ libstrophe-0.10.0/src/conn.c	2021-05-04 16:35:38.632047591 +0800
+@@ -469,11 +469,17 @@
+     unsigned short port = 0;
+     int found = XMPP_DOMAIN_NOT_FOUND;
+     int rc;
+-
++#if 1//ZYXEL
++    PXMPPC_DATA xmppcData = (PXMPPC_DATA) userdata;
++#endif
+     domain = xmpp_jid_domain(conn->ctx, conn->jid);
+     if (!domain)
+         return XMPP_EMEM;
+ 
++#if 1//ZYXEL
++    if(strcmp(xmppcData->ServerConnectAlgorithm, "DNS-SRV")==0) {
++        printf("[%s](%d) ServerConnectAlgorithm = %s\n",__func__,__LINE__,xmppcData->ServerConnectAlgorithm);
++#endif
+     if (altdomain != NULL) {
+         xmpp_debug(conn->ctx, "xmpp", "Connecting via altdomain.");
+         host = altdomain;
+@@ -486,15 +492,30 @@
+         found = resolver_srv_lookup(conn->ctx, "xmpp-client", "tcp", domain,
+                                     &srv_rr_list);
+     }
+-
++#if 1//ZYXEL
++    }
++#endif
++#if 1//ZYXEL
++    else if(strcmp(xmppcData->ServerConnectAlgorithm, "DNS")==0) {
++        printf("[%s](%d) ServerConnectAlgorithm = %s\n",__func__,__LINE__,xmppcData->ServerConnectAlgorithm);
++#else
+     if (XMPP_DOMAIN_NOT_FOUND == found) {
+         xmpp_debug(conn->ctx, "xmpp",
+                    "SRV lookup failed, "
+                    "connecting via domain.");
++#endif
+         host = domain;
+         port = altport ? altport : _conn_default_port(conn, XMPP_CLIENT);
+         found = XMPP_DOMAIN_ALTDOMAIN;
+     }
++#if 1//ZYXEL
++    else if(strcmp(xmppcData->ServerConnectAlgorithm, "ServerTable")==0) {
++        printf("[%s](%d) ServerConnectAlgorithm = %s\n",__func__,__LINE__,xmppcData->ServerConnectAlgorithm);
++        host = xmppcData->serverAddress;
++        port = altport ? altport : _conn_default_port(conn, XMPP_CLIENT);
++        found = XMPP_DOMAIN_ALTDOMAIN;
++    }
++#endif
+ 
+     rr = srv_rr_list;
+     do {

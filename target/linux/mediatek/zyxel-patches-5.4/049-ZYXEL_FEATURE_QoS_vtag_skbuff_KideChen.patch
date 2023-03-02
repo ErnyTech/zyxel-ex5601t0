@@ -1,0 +1,56 @@
+Index: linux-5.4.171/include/linux/skbuff.h
+===================================================================
+--- linux-5.4.171.orig/include/linux/skbuff.h
++++ linux-5.4.171/include/linux/skbuff.h
+@@ -859,6 +859,13 @@ struct sk_buff {
+ 		__u32		reserved_tailroom;
+ 	};
+ 
++#if 1 /* Kide@zyxel: Zyxel QoS vtag */
++    union {
++        unsigned int    vtag_word;
++        struct          { unsigned short vtag, vtag_save; };
++    };
++#endif
++
+ 	__u32 zextmark;
+ 	union {
+ 		__be16		inner_protocol;
+@@ -886,13 +893,6 @@ struct sk_buff {
+ 	unsigned int		truesize;
+ 	refcount_t		users;
+ 
+-#if 1 /* Zyxel QoS vtag */
+-    union {
+-        unsigned int    vtag_word;
+-        struct          { unsigned short vtag, vtag_save; };
+-    };
+-#endif
+-
+ #ifdef CONFIG_SKB_EXTENSIONS
+ 	/* only useable after checking ->active_extensions != 0 */
+ 	struct skb_ext		*extensions;
+Index: linux-5.4.171/net/core/skbuff.c
+===================================================================
+--- linux-5.4.171.orig/net/core/skbuff.c
++++ linux-5.4.171/net/core/skbuff.c
+@@ -998,6 +998,9 @@ static void __copy_skb_header(struct sk_
+ #ifdef CONFIG_NET_SCHED
+ 	CHECK_SKB_FIELD(tc_index);
+ #endif
++#if 1 /* Kide@zyxel: Zyxel QoS */
++    CHECK_SKB_FIELD(vtag_word);
++#endif
+ 
+ }
+ 
+@@ -5178,6 +5181,9 @@ void skb_scrub_packet(struct sk_buff *sk
+ 	skb->offload_fwd_mark = 0;
+ 	skb->offload_l3_fwd_mark = 0;
+ #endif
++#if 1 /* Kide@zyxel: Zyxel QoS vtag */
++    skb->vtag_word = 0;
++#endif
+ 
+ 	if (!xnet)
+ 		return;

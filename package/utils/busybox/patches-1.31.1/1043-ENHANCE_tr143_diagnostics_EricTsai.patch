@@ -1,0 +1,1196 @@
+Index: busybox-1.31.1/networking/ftpgetput.c
+===================================================================
+--- busybox-1.31.1.orig/networking/ftpgetput.c	2019-06-10 18:50:53.000000000 +0800
++++ busybox-1.31.1/networking/ftpgetput.c	2021-04-13 20:45:51.945893555 +0800
+@@ -57,6 +57,30 @@
+ #include "libbb.h"
+ #include "common_bufsiz.h"
+ 
++
++#ifdef ZCFG_SUPPORT
++#include <time.h>
++#include "zcfg_common.h"
++#include "zcfg_net.h"
++#include "zcfg_msg.h"
++#include "zcfg_rdm_oid.h"
++#include "zcfg_rdm_obj.h"
++#include "zcfg_fe_rdm_struct.h"
++
++enum {
++	STATUS_ERR_INIT_CONN_FAILED = 1,
++	STATUS_ERR_NO_RESP,
++	STATUS_ERR_PASSWD_REQ_FAILED,
++	STATUS_ERR_LOGIN_FAILED,
++	STATUS_ERR_NO_TRANS_MODE,
++	STATUS_ERR_NO_PASV,
++	STATUS_ERR_NO_CWD,
++	STATUS_ERR_NO_STOR,
++	STATUS_ERR_NO_TRANS_COMPLETE
++};
++
++#endif
++
+ struct globals {
+ 	const char *user;
+ 	const char *password;
+@@ -64,6 +88,13 @@
+ 	FILE *control_stream;
+ 	int verbose_flag;
+ 	int do_continue;
++#ifdef ZCFG_SUPPORT
++	const char *intf;
++	const char *url;
++	const char *dscp;
++	const char *ethpriority;
++	const char *dummy_size;
++#endif
+ 	char buf[4]; /* actually [BUFSZ] */
+ } FIX_ALIASING;
+ #define G (*(struct globals*)bb_common_bufsiz1)
+@@ -75,10 +106,25 @@
+ #define verbose_flag   (G.verbose_flag  )
+ #define do_continue    (G.do_continue   )
+ #define buf            (G.buf           )
++#ifdef ZCFG_SUPPORT
++#define intf           (G.intf          )
++#define url            (G.url           )
++#define dscp           (G.dscp          )
++#define ethpriority    (G.ethpriority   )
++#define dummy_size     (G.dummy_size    )
++#endif
+ #define INIT_G() do { \
+ 	setup_common_bufsiz(); \
+ 	BUILD_BUG_ON(sizeof(G) > COMMON_BUFSIZE); \
+ } while (0)
++#ifdef ZCFG_SUPPORT
++static rdm_IpDiagUlDiag_t *ipDiagUlObj = NULL;
++static unsigned int testSendLength = 0;
++static char ipDscp = 0, ePriority = 0;
++static int diagStateErrCode = 0;
++
++static void outputDiagUlData(int);
++#endif
+ 
+ 
+ static void ftp_die(const char *msg) NORETURN;
+@@ -90,8 +136,14 @@
+ 	while (*cp >= ' ' && *cp < '\x7f')
+ 		cp++;
+ 	*cp = '\0';
++#ifdef ZCFG_SUPPORT
++	printf("unexpected server response%s%s: %s\n", (msg ? " to " : ""), (msg ? msg : ""), buf);
++	outputDiagUlData(EXIT_FAILURE);
++	exit(0);
++#else
+ 	bb_error_msg_and_die("unexpected server response%s%s: %s",
+ 			(msg ? " to " : ""), (msg ? msg : ""), buf);
++#endif
+ }
+ 
+ static int ftpcmd(const char *s1, const char *s2)
+@@ -121,13 +173,32 @@
+ 	return n;
+ }
+ 
++#ifdef ZCFG_SUPPORT
++
++static int connect_stream(const struct len_and_sockaddr *slasa)
++{
++	int fd = socket(slasa->u.sa.sa_family, SOCK_STREAM, 0);
++	if(connect(fd, &slasa->u.sa, slasa->len) < 0) return 0;
++	else return fd;
++}
++#endif
++
+ static void ftp_login(void)
+ {
+ 	/* Connect to the command socket */
++#ifdef ZCFG_SUPPORT
++	control_stream = fdopen(connect_stream(lsa), "r+");
++	if (control_stream == NULL) {
++		/* fdopen failed - extremely unlikely */
++		diagStateErrCode = STATUS_ERR_INIT_CONN_FAILED;
++		outputDiagUlData(EXIT_FAILURE);
++		exit(0);
++#else
+ 	control_stream = fdopen(xconnect_stream(lsa), "r+");
+ 	if (control_stream == NULL) {
+ 		/* fdopen failed - extremely unlikely */
+ 		bb_perror_nomsg_and_die();
++#endif
+ 	}
+ 
+ 	if (ftpcmd(NULL, NULL) != 220) {
+@@ -140,10 +211,16 @@
+ 		break;
+ 	case 331:
+ 		if (ftpcmd("PASS", password) != 230) {
++#ifdef ZCFG_SUPPORT
++			diagStateErrCode = STATUS_ERR_PASSWD_REQ_FAILED;
++#endif
+ 			ftp_die("PASS");
+ 		}
+ 		break;
+ 	default:
++#ifdef ZCFG_SUPPORT
++		diagStateErrCode = STATUS_ERR_LOGIN_FAILED;
++#endif
+ 		ftp_die("USER");
+ 	}
+ 
+@@ -157,6 +234,9 @@
+ 	if (ENABLE_FEATURE_IPV6 && ftpcmd("EPSV", NULL) == 229) {
+ 		/* good */
+ 	} else if (ftpcmd("PASV", NULL) != 227) {
++#ifdef ZCFG_SUPPORT
++		diagStateErrCode = STATUS_ERR_NO_PASV;
++#endif
+ 		ftp_die("PASV");
+ 	}
+ 	port_num = parse_pasv_epsv(buf);
+@@ -167,6 +247,200 @@
+ 	return xconnect_stream(lsa);
+ }
+ 
++#ifdef ZCFG_SUPPORT
++#define DUMMY_DATA_UNIT_SIZE  5120
++#define TIME_STAMP_DATA_SIZE 32
++
++static void makeTimeStamp(char *timeStamp, unsigned int timeStampSz)
++{
++	struct tm *gmtm = NULL;
++	struct timeval tv;
++	unsigned int outputTmSpLen = 0;
++	char tmsp[TIME_STAMP_DATA_SIZE+10] = {0};
++
++	if(!timeStamp) return;
++
++	if(!timeStampSz) return;
++
++	gettimeofday(&tv, NULL);
++	gmtm = gmtime((const time_t *)&tv.tv_sec);
++	sprintf(tmsp, "%d-%02d-%02dT%02d:%02d:%02d.%ld", (gmtm->tm_year+1900), (gmtm->tm_mon+1),
++       gmtm->tm_mday, gmtm->tm_hour, gmtm->tm_min, gmtm->tm_sec, (long)tv.tv_usec);
++	outputTmSpLen = ((timeStampSz-1) < strlen(tmsp)) ? (timeStampSz-1) : strlen(tmsp);
++	strncpy(timeStamp, tmsp, outputTmSpLen);
++	timeStamp[outputTmSpLen] = '\0';
++}
++
++static int sendEsmdMsg(const char *data, unsigned int dataLen)
++{
++   char *recvBuf = NULL;
++   zcfgMsg_t *sendMsgHdr = NULL;
++
++
++   if(!dataLen) {
++      return ZCFG_INTERNAL_ERROR;
++   }
++
++   sendMsgHdr = (zcfgMsg_t *)malloc(sizeof(zcfgMsg_t) + dataLen);
++   sendMsgHdr->type = ZCFG_MSG_UPLOAD_DIAG_COMPLETE_EVENT;
++   sendMsgHdr->length = dataLen;
++   sendMsgHdr->srcEid = ZCFG_EID_FTPGP;
++   sendMsgHdr->dstEid = ZCFG_EID_ESMD;
++
++   memcpy((char *)(sendMsgHdr + 1), data, dataLen);
++
++   return zcfgMsgSendAndGetReply(sendMsgHdr, (zcfgMsg_t **)&recvBuf, 0);
++}
++
++static void outputDiagUlData(int rt)
++{
++#ifdef SET_TEST_DATA_RDM
++	objIndex_t objIid;
++    rdm_IpDiagUlDiag_t *data;
++#endif
++	zcfgRet_t rst;
++
++	if(rt == EXIT_SUCCESS) {
++		strcpy(ipDiagUlObj->DiagnosticsState, "Completed");
++	}else {
++		switch(diagStateErrCode) {
++		case STATUS_ERR_INIT_CONN_FAILED:
++			strcpy(ipDiagUlObj->DiagnosticsState, "Error_InitConnectionFailed");
++			break;
++		case STATUS_ERR_NO_RESP:
++			strcpy(ipDiagUlObj->DiagnosticsState, "Error_NoResponse");
++			break;
++		case STATUS_ERR_PASSWD_REQ_FAILED:
++			strcpy(ipDiagUlObj->DiagnosticsState, "Error_PasswordRequestFailed");
++			break;
++		case STATUS_ERR_LOGIN_FAILED:
++			strcpy(ipDiagUlObj->DiagnosticsState, "Error_LoginFailed");
++			break;
++		case STATUS_ERR_NO_TRANS_MODE:
++			strcpy(ipDiagUlObj->DiagnosticsState, "Error_NoTransferMode");
++			break;
++		case STATUS_ERR_NO_PASV:
++			strcpy(ipDiagUlObj->DiagnosticsState, "Error_NoPASV");
++			break;
++		case STATUS_ERR_NO_CWD:
++			strcpy(ipDiagUlObj->DiagnosticsState, "Error_NoCWD");
++			break;
++		case STATUS_ERR_NO_STOR:
++			strcpy(ipDiagUlObj->DiagnosticsState, "Error_NoSTOR");
++			break;
++		case STATUS_ERR_NO_TRANS_COMPLETE:
++			strcpy(ipDiagUlObj->DiagnosticsState, "Error_NoTransferComplete");
++			break;
++		default:
++			strcpy(ipDiagUlObj->DiagnosticsState, "None");
++			break;
++		}
++	}
++
++	printf("DiagnosticsState: %s\n", ipDiagUlObj->DiagnosticsState);
++	printf("Interface: %s\n", ipDiagUlObj->Interface);
++	printf("UploadURL: %s\n", ipDiagUlObj->UploadURL);
++	printf("UploadTransports: %s\n", ipDiagUlObj->UploadTransports);
++	printf("DSCP: %d\n", ipDiagUlObj->DSCP);
++	printf("EthernetPriority: %d\n", ipDiagUlObj->EthernetPriority);
++	printf("TestFileLength: %u\n", ipDiagUlObj->TestFileLength);
++	printf("ROMTime: %s\n", ipDiagUlObj->ROMTime);
++	printf("BOMTime: %s\n", ipDiagUlObj->BOMTime);
++	printf("EOMTime: %s\n", ipDiagUlObj->EOMTime);
++	printf("TotalBytesSent: %u\n", ipDiagUlObj->TotalBytesSent);
++	printf("TCPOpenRequestTime: %s\n", ipDiagUlObj->TCPOpenRequestTime);
++	printf("TCPOpenResponseTime: %s\n", ipDiagUlObj->TCPOpenResponseTime);
++
++	rst = sendEsmdMsg((const char *)ipDiagUlObj, sizeof(rdm_IpDiagUlDiag_t));
++	if((rst != ZCFG_SUCCESS) && (rst != ZCFG_SUCCESS_AND_NO_REPLY)) {
++		printf("'ftpput' sending Esmd message failed!\n");
++	}
++
++	free(ipDiagUlObj);
++
++#ifdef SET_TEST_DATA_RDM
++	IID_INIT(objIid);
++
++	if(zcfgFeObjStructGet(RDM_OID_IP_DIAG_UL_DIAG, &objIid, (void *)&data) != ZCFG_SUCCESS) {
++		printf("'ftpput' get UploadDiagnostics test data to rdm fail\n");
++		return;
++	}
++
++	data->TestFileLength = ipDiagUlObj->TestFileLength;
++	strcpy(data->DiagnosticsState, ipDiagUlObj->DiagnosticsState);
++	strcpy(data->Interface, ipDiagUlObj->Interface);
++	strcpy(data->UploadURL, ipDiagUlObj->UploadURL);
++/*
++	strcpy(data->ROMTime, ipDiagUlObj->ROMTime);
++	strcpy(data->BOMTime, ipDiagUlObj->BOMTime);
++	strcpy(data->EOMTime, ipDiagUlObj->EOMTime);
++	strcpy(data->TCPOpenRequestTime, ipDiagUlObj->TCPOpenRequestTime);
++	strcpy(data->TCPOpenResponseTime, ipDiagUlObj->TCPOpenResponseTime);
++	data->DSCP = ipDiagUlObj->DSCP;
++	data->EthernetPriority = ipDiagUlObj->EthernetPriority;
++	data->TotalBytesSent = ipDiagUlObj->TotalBytesSent;
++	strcpy(data->UploadTransports, ipDiagUlObj->UploadTransports);
++*/
++
++	if(zcfgFeObjStructSetWithoutApply(RDM_OID_IP_DIAG_UL_DIAG, &objIid, (void *)data, NULL) != ZCFG_SUCCESS) {
++		printf("'ftpput' set UploadDiagnostics test data to rdm fail\n");
++	}
++	free(data);
++#endif
++}
++
++static int send_dummy_data_and_QUIT(const unsigned int data_size, int to)
++{
++	int rt = EXIT_SUCCESS;
++	char *dummy_data = NULL;
++	unsigned int send_data_size = 0, sent_data_size = 0;
++
++	if(!data_size || !to) {
++		rt = EXIT_FAILURE;
++		goto complete;
++	}
++
++	dummy_data = xmalloc(DUMMY_DATA_UNIT_SIZE);
++	if(!dummy_data) {
++		rt = EXIT_FAILURE;
++		goto complete;
++	}
++
++	send_data_size = (data_size > DUMMY_DATA_UNIT_SIZE) ? DUMMY_DATA_UNIT_SIZE : data_size;
++	while(sent_data_size < data_size) {
++		unsigned int this_sent_data_size = 0;
++
++		this_sent_data_size = safe_write(to, (const void *)dummy_data, send_data_size);
++		if(this_sent_data_size != send_data_size) {
++			break;
++		}
++
++		sent_data_size += this_sent_data_size;
++
++		send_data_size = (sent_data_size == data_size) ? 0 : (
++			((sent_data_size + DUMMY_DATA_UNIT_SIZE) > data_size) ? (data_size-sent_data_size) : DUMMY_DATA_UNIT_SIZE);
++	}
++
++	ipDiagUlObj->TotalBytesSent = sent_data_size;
++
++complete:
++	/* close data connection */
++	close(to);
++
++	/* does server confirm that transfer is finished? */
++	if (ftpcmd(NULL, NULL) != 226) {
++		ftp_die(NULL);
++	}else {
++		makeTimeStamp(ipDiagUlObj->EOMTime, sizeof(ipDiagUlObj->EOMTime));
++	}
++	ftpcmd("QUIT", NULL);
++
++	if(dummy_data) free(dummy_data);
++
++	return rt;
++}
++#endif
++
+ static int pump_data_and_QUIT(int from, int to)
+ {
+ 	/* copy the file */
+@@ -214,7 +488,12 @@
+ 		struct stat sbuf;
+ 		/* lstat would be wrong here! */
+ 		if (stat(local_path, &sbuf) < 0) {
++#ifdef ZCFG_SUPPORT
++			outputDiagUlData(EXIT_FAILURE);
++			exit(0);
++#else
+ 			bb_perror_msg_and_die("stat");
++#endif
+ 		}
+ 		if (sbuf.st_size > 0) {
+ 			beg_range = sbuf.st_size;
+@@ -255,14 +534,30 @@
+ 	int fd_data;
+ 	int fd_local;
+ 	int response;
++#ifdef ZCFG_SUPPORT
++	int rt;
++
++	makeTimeStamp(ipDiagUlObj->TCPOpenRequestTime, sizeof(ipDiagUlObj->TCPOpenRequestTime));
++#endif
++
+ 
+ 	/* connect to the data socket */
+ 	fd_data = xconnect_ftpdata();
+ 
++
++#ifdef ZCFG_SUPPORT
++	makeTimeStamp(ipDiagUlObj->TCPOpenResponseTime, sizeof(ipDiagUlObj->TCPOpenResponseTime));
++#endif
++
+ 	/* get the local file */
+ 	fd_local = STDIN_FILENO;
+ 	if (NOT_LONE_DASH(local_path))
+ 		fd_local = xopen(local_path, O_RDONLY);
++#ifdef ZCFG_SUPPORT
++	else {
++		fd_local = -1;
++	}
++#endif
+ 
+ 	response = ftpcmd("STOR", server_path);
+ 	switch (response) {
+@@ -270,20 +565,45 @@
+ 	case 150:
+ 		break;
+ 	default:
++#ifdef ZCFG_SUPPORT
++		diagStateErrCode = STATUS_ERR_NO_STOR;
++#endif
+ 		ftp_die("STOR");
+ 	}
+ 
++#ifdef ZCFG_SUPPORT
++	if(testSendLength) {
++		makeTimeStamp(ipDiagUlObj->ROMTime, sizeof(ipDiagUlObj->ROMTime));
++
++		if(setsockopt(fd_data, IPPROTO_IP, IP_TOS, &ipDscp, sizeof(ipDscp)) != 0) {
++			printf("Set ftp ip dscp failed!\n");
++		}
++
++		makeTimeStamp(ipDiagUlObj->BOMTime, sizeof(ipDiagUlObj->BOMTime));
++		rt = send_dummy_data_and_QUIT((const unsigned int)testSendLength, fd_data);
++
++		return rt;
++	}else return pump_data_and_QUIT(fd_local, fd_data);
++#else
+ 	return pump_data_and_QUIT(fd_local, fd_data);
++#endif
+ }
+ #endif
+ 
+ #if ENABLE_FEATURE_FTPGETPUT_LONG_OPTIONS
+ static const char ftpgetput_longopts[] ALIGN1 =
+-	"continue\0" Required_argument "c"
+-	"verbose\0"  No_argument       "v"
+-	"username\0" Required_argument "u"
+-	"password\0" Required_argument "p"
+-	"port\0"     Required_argument "P"
++	"continue\0"    Required_argument "c"
++	"verbose\0"     No_argument       "v"
++	"username\0"    Required_argument "u"
++	"password\0"    Required_argument "p"
++	"port\0"        Required_argument "P"
++#ifdef ZCFG_SUPPORT
++	"intf\0"        Required_argument "n"
++	"url\0"         Required_argument "l"
++	"dscp\0"        Required_argument "d"
++	"ethpriority\0" Required_argument "r"
++	"dummy_size\0"  Required_argument "m"
++#endif
+ 	;
+ #endif
+ 
+@@ -315,25 +635,101 @@
+ 	 * Decipher the command line
+ 	 */
+ 	/* must have 2 to 3 params; -v and -c count */
++#ifdef ZCFG_SUPPORT
++#define OPTSTRING "^cvu:p:P:n:l:d:r:m:" "\0" "-2:?3:vv:cc"
++#else
+ #define OPTSTRING "^cvu:p:P:" "\0" "-2:?3:vv:cc"
++#endif
++
+ #if ENABLE_FEATURE_FTPGETPUT_LONG_OPTIONS
+ 	getopt32long(argv, OPTSTRING, ftpgetput_longopts,
+ #else
+ 	getopt32(argv, OPTSTRING,
+ #endif
++#ifdef ZCFG_SUPPORT
++			&user, &password, &port, &intf, &url, &dscp, &ethpriority, &dummy_size, &verbose_flag, &do_continue
++#else
+ 			&user, &password, &port, &verbose_flag, &do_continue
++#endif
+ 	);
+ 	argv += optind;
+ 
++#ifdef ZCFG_SUPPORT
++	printf("Interface: %s\n", intf);
++
++	printf("URL: %s\n", url);
++
++	ipDscp = (dscp) ? xatou_range(dscp, 0, 255) : 0;
++	printf("ipDscp: %u\n", ipDscp);
++
++	ePriority = (ethpriority) ? xatou_range(ethpriority, 0, 255) : 0;
++	printf("ePriority: %u\n", ePriority);
++
++	testSendLength = (dummy_size) ? xatou32(dummy_size) : 0;
++	printf("testSendLength: %u\n", testSendLength);
++
++	ipDiagUlObj = (rdm_IpDiagUlDiag_t *)xmalloc(sizeof(rdm_IpDiagUlDiag_t));
++	if(!ipDiagUlObj) {
++		printf("ftpput: Memory alloca fail\n");
++		return EXIT_FAILURE;
++	}
++	memset(ipDiagUlObj, 0, sizeof(rdm_IpDiagUlDiag_t));
++
++	if(intf) {
++		strncpy(ipDiagUlObj->Interface, intf, (strlen(intf) > sizeof(ipDiagUlObj->Interface)) ?
++				sizeof(ipDiagUlObj->Interface) : strlen(intf));
++	}
++
++	if(url) {
++		strncpy(ipDiagUlObj->UploadURL, url, (strlen(url) > sizeof(ipDiagUlObj->UploadURL)) ?
++				sizeof(ipDiagUlObj->UploadURL) : strlen(url));
++	}
++
++	ipDiagUlObj->DSCP = ipDscp;
++	ipDiagUlObj->TestFileLength = testSendLength;
++	ipDiagUlObj->EthernetPriority = ePriority;
++
++	zcfgEidInit(ZCFG_EID_FTPGP, (char *)"ftpgp");
++	if(zcfgMsgServerInit() != ZCFG_SUCCESS){
++		printf("'ftpput' msg server init fail\n");
++		outputDiagUlData(EXIT_FAILURE);
++		return EXIT_FAILURE;
++	}
++#endif
+ 	/* We want to do exactly _one_ DNS lookup, since some
+ 	 * sites (i.e. ftp.us.debian.org) use round-robin DNS
+ 	 * and we want to connect to only one IP... */
+ 	lsa = xhost2sockaddr(argv[0], bb_lookup_port(port, "tcp", 21));
++#ifdef ZCFG_SUPPORT
++	if(!lsa) {
++		diagStateErrCode = STATUS_ERR_INIT_CONN_FAILED;
++		outputDiagUlData(EXIT_FAILURE);
++		return EXIT_FAILURE;
++	}
++#endif
+ 	if (verbose_flag) {
+ 		printf("Connecting to %s (%s)\n", argv[0],
+ 			xmalloc_sockaddr2dotted(&lsa->u.sa));
+ 	}
+ 
+ 	ftp_login();
++#ifdef ZCFG_SUPPORT
++	if(testSendLength) {
++		int rt;
++
++		if(!diagStateErrCode) {
++			rt = ftp_action(argv[1], argv[2] ? argv[2] : argv[1]);
++		}else rt = EXIT_FAILURE;
++
++		//output test data
++		outputDiagUlData(rt);
++
++		return rt;
++	}else {
++		outputDiagUlData(EXIT_FAILURE);
++		return EXIT_FAILURE;
++	}
++#else
+ 	return ftp_action(argv[1], argv[2] ? argv[2] : argv[1]);
++#endif
+ }
+Index: busybox-1.31.1/networking/wget.c
+===================================================================
+--- busybox-1.31.1.orig/networking/wget.c	2021-04-13 20:14:38.177691800 +0800
++++ busybox-1.31.1/networking/wget.c	2021-04-13 20:45:51.949893555 +0800
+@@ -274,16 +274,19 @@
+ #if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
+ #define DEFAULT_DATETIME "0001-01-01T00:00:00Z"
+ 
+-static char DiagnosticsState[64] = "";
++static char DiagnosticsState[64] = "Requested";
+ static char ROMTime[64] = DEFAULT_DATETIME;
+ static char BOMTime[64] = DEFAULT_DATETIME;
+ static char EOMTime[64] = DEFAULT_DATETIME;
+ static char TCPOpenRequestTime[64] = DEFAULT_DATETIME;
+ static char TCPOpenResponseTime[64] = DEFAULT_DATETIME;
+ static unsigned long TotalBytesReceived = 0;
++static unsigned long TestBytesReceived = 0;
+ static unsigned long ifBytesReceivedStart = 0;
+ static unsigned long ifBytesReceivedEnd = 0;
+ 
++static char ipDscp = 0;
++
+ int priorityMark=0;
+ char dstIP[32]={0};
+ 
+@@ -335,6 +338,38 @@
+ 
+ 
+ 
++static void outputDiagDlData(void)
++{
++	struct json_object *diag_result = NULL;
++	const char *payload = NULL;
++	int payloadLen = 0;
++
++	if(!strcmp(DiagnosticsState, "Requested")) {
++		strcpy(DiagnosticsState, "Completed");
++	}else if(strstr(DiagnosticsState, "None")) {
++		DiagnosticsState[strlen("None")] = '\0';
++	}
++
++	diag_result = json_object_new_object();
++	json_object_object_add(diag_result, "DiagnosticsState", json_object_new_string(DiagnosticsState));
++	json_object_object_add(diag_result, "ROMTime", json_object_new_string(ROMTime));
++	json_object_object_add(diag_result, "BOMTime", json_object_new_string(BOMTime));
++	json_object_object_add(diag_result, "EOMTime", json_object_new_string(EOMTime));
++	json_object_object_add(diag_result, "TotalBytesReceived", json_object_new_int(TotalBytesReceived));
++	json_object_object_add(diag_result, "TestBytesReceived", json_object_new_int(TestBytesReceived));
++	json_object_object_add(diag_result, "TCPOpenRequestTime", json_object_new_string(TCPOpenRequestTime));
++	json_object_object_add(diag_result, "TCPOpenResponseTime", json_object_new_string(TCPOpenResponseTime));
++
++	payload = json_object_to_json_string(diag_result);
++	payloadLen = strlen(payload) + 1;
++	ResultMsgSend(ZCFG_MSG_DOWNLOAD_DIAG_COMPLETE_EVENT, payloadLen, payload);
++
++	json_object_put(diag_result);
++	set_priorityMark(0);
++
++	exit(0);
++}
++
+ zcfgRet_t ResultMsgSend(int msg_type, int payloadLen, const char *payload)
+ {
+ 	zcfgRet_t ret = 0;
+@@ -566,21 +601,42 @@
+ }
+ #endif
+ 
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++
++static int connect_stream(const len_and_sockaddr *lsa)
++{
++	int fd = socket(lsa->u.sa.sa_family, SOCK_STREAM, 0);
++	if(connect(fd, &lsa->u.sa, lsa->len) < 0) return 0;
++	else return fd;
++}
++
++static FILE *open_socket(len_and_sockaddr *lsa, int *sk)
++#else
+ static FILE *open_socket(len_and_sockaddr *lsa)
++#endif
+ {
+ 	int fd;
+ 	FILE *fp;
+ 
++	/* glibc 2.4 seems to try seeking on it - ??! */
++	/* hopefully it understands what ESPIPE means... */
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++	fd = connect_stream(lsa);
++	if(!fd) return NULL;
++	if(sk) *sk = fd;
++
++	fp = fdopen(fd, "r+");
++	if (fp == NULL)
++		printf("%s\n", bb_msg_memory_exhausted);
++#else
+ 	set_alarm();
+ 	fd = xconnect_stream(lsa);
+ 	clear_alarm();
+ 
+-	/* glibc 2.4 seems to try seeking on it - ??! */
+-	/* hopefully it understands what ESPIPE means... */
+ 	fp = fdopen(fd, "r+");
+ 	if (!fp)
+ 		bb_die_memory_exhausted();
+-
++#endif
+ 	return fp;
+ }
+ 
+@@ -617,6 +673,8 @@
+ 	{
+ #if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
+ 		strcpy(DiagnosticsState, "Error_NoResponse");
++		printf("error getting response\n");
++		outputDiagDlData();
+ #endif
+ 		bb_perror_msg_and_die("error getting response");
+ 	}
+@@ -783,7 +841,15 @@
+ 
+ 	/* verify we are at the end of the header name */
+ 	if (*s != ':')
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++	{
++		strcpy(DiagnosticsState, "None");
++		printf("bad header line: %s\n", G.wget_buf);
++		outputDiagDlData();
++	}
++#else
+ 		bb_error_msg_and_die("bad header line: %s", G.wget_buf);
++#endif
+ 
+ 	/* locate the start of the header value */
+ 	*s++ = '\0';
+@@ -945,16 +1011,45 @@
+ 	char *pass;
+ 	int port;
+ 
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++	{
++		int sk = 0;
++
++		getDateTime(TCPOpenRequestTime);
++		sfp = open_socket(lsa, &sk);
++		if((sk>0) && strcmp(G.ifName, "")) {
++			setsockopt_bindtodevice(sk, (const char *)G.ifName);
++		}
++		if((sk>0) && ipDscp) {
++			if(setsockopt(sk, IPPROTO_IP, IP_TOS, &ipDscp, sizeof(ipDscp)) != 0)
++				printf("Set ip dscp failed!\n");
++		}
++		if (sfp == NULL)
++		{
++			strcpy(DiagnosticsState, "Error_InitConnectionFailed");
++			outputDiagDlData();
++		}
++		getDateTime(TCPOpenResponseTime);
++	}
++#else
+ 	sfp = open_socket(lsa);
++#endif
+ #if ENABLE_FEATURE_WGET_HTTPS
+ 	if (target->protocol == P_FTPS)
+ 		spawn_ssl_client(target->host, fileno(sfp), TLSLOOP_EXIT_ON_LOCAL_EOF);
+ #endif
+ 
+ 	if (ftpcmd(NULL, NULL, sfp) != 220)
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++	{
++		printf("%s\n", G.wget_buf);
++		strcpy(DiagnosticsState, "Error_TransferFailed");
++		outputDiagDlData();
++	}
++#else
+ 		bb_error_msg_and_die("%s", G.wget_buf);
+ 		/* note: ftpcmd() sanitizes G.wget_buf, ok to print */
+-
++#endif
+ 	/* Split username:password pair */
+ 	pass = (char*)"busybox"; /* password for "anonymous" */
+ 	if (target->user) {
+@@ -972,7 +1067,15 @@
+ 			break;
+ 		/* fall through (failed login) */
+ 	default:
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++	{
++		strcpy(DiagnosticsState, "Error_LoginFailed");
++		printf("ftp login: %s\n", G.wget_buf);
++		outputDiagDlData();
++	}
++#else
+ 		bb_error_msg_and_die("ftp login: %s", G.wget_buf);
++#endif
+ 	}
+ 
+ 	ftpcmd("TYPE I", NULL, sfp);
+@@ -981,7 +1084,13 @@
+ 	if (ftpcmd("SIZE ", target->path, sfp) == 213) {
+ 		G.content_len = BB_STRTOOFF(G.wget_buf + 4, NULL, 10);
+ 		if (G.content_len < 0 || errno) {
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++			strcpy(DiagnosticsState, "Error_IncorrectSize");
++			printf("bad SIZE value '%s'\n", G.wget_buf + 4);
++			outputDiagDlData();
++#else
+ 			bb_error_msg_and_die("bad SIZE value '%s'", G.wget_buf + 4);
++#endif
+ 		}
+ 		G.got_clen = 1;
+ 	}
+@@ -992,15 +1101,43 @@
+ 	} else
+ 	if (ftpcmd("PASV", NULL, sfp) != 227) {
+  pasv_error:
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++		strcpy(DiagnosticsState, "Error_NoPASV");
++		printf("bad response to %s: %s", "PASV\n", G.wget_buf);
++		outputDiagDlData();
++#else
+ 		bb_error_msg_and_die("bad response to %s: %s", "PASV", G.wget_buf);
++#endif
+ 	}
+ 	port = parse_pasv_epsv(G.wget_buf);
+ 	if (port < 0)
+ 		goto pasv_error;
+ 
+ 	set_nport(&lsa->u.sa, htons(port));
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++	{
++		int sk = 0;
++
++		*dfpp = open_socket(lsa, &sk);
+ 
++		if(*dfpp == NULL) {
++			strcpy(DiagnosticsState, "Error_NoPASV");
++			printf("Failed to build PASV connection\n");
++			outputDiagDlData();
++		}
++
++		if((sk>0) && strcmp(G.ifName, "")) {
++			setsockopt_bindtodevice(sk, (const char *)G.ifName);
++		}
++		if((sk>0) && ipDscp) {
++			if(setsockopt(sk, IPPROTO_IP, IP_TOS, &ipDscp, sizeof(ipDscp)) != 0)
++				printf("Set ip dscp failed!\n");
++		}
++
++	}
++#else
+ 	*dfpp = open_socket(lsa);
++#endif
+ 
+ #if ENABLE_FEATURE_WGET_HTTPS
+ 	if (target->protocol == P_FTPS) {
+@@ -1020,12 +1157,29 @@
+ 			reset_beg_range_to_zero();
+ 	}
+ 
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++	// retrieve receive information here with system's proc update timing
++	if (option_mask32 & WGET_OPT_INTERFACE) {
++		ifBytesReceivedStart = getReceiveByte(G.ifName);
++		printf("Receive data start: %ld\n", ifBytesReceivedStart);
++	}
++
++	getDateTime(ROMTime);
++#endif
++
+ //TODO: needs ftp-escaping 0xff and '\n' bytes here.
+ //Or disallow '\n' altogether via sanitize_string() in parse_url().
+ //But 0xff's are possible in valid utf8 filenames.
+ 	if (ftpcmd("RETR ", target->path, sfp) > 150)
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++	{
++		strcpy(DiagnosticsState, "None");
++		printf("bad response to %s: %s\n", "RETR", G.wget_buf);
++		outputDiagDlData();
++	}
++#else
+ 		bb_error_msg_and_die("bad response to %s: %s", "RETR", G.wget_buf);
+-
++#endif
+ 	return sfp;
+ }
+ 
+@@ -1094,13 +1248,16 @@
+ #if defined(ZCFG_SUPPORT) //TR143
+ 				if (safe_fwrite(G.wget_buf, 1, n, (FILE *)G.output_fd) != n)
+ 				{
+-					set_priorityMark(0);
+ 					strcpy(DiagnosticsState, "Error_TransferFailed");
++					outputDiagDlData();
+ 				}
+ #else
+ 				xwrite(G.output_fd, G.wget_buf, n);
+ #endif
+ #if ENABLE_FEATURE_WGET_STATUSBAR
++				#if defined(ZCFG_SUPPORT) //TR143
++				TestBytesReceived += n;
++				#endif
+ 				G.transferred += n;
+ #endif
+ 				if (G.got_clen) {
+@@ -1124,9 +1281,12 @@
+ 				if (ferror(dfp)) {
+ 					progress_meter(PROGRESS_END);
+ #if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
+-					set_priorityMark(0);
+-#endif
++					strcpy(DiagnosticsState, "None");
++					printf("%s\n", bb_msg_read_error);
++					outputDiagDlData();
++#else
+ 					bb_perror_msg_and_die(bb_msg_read_error);
++#endif
+ 				}
+ 				break; /* EOF, not error */
+ 			}
+@@ -1139,7 +1299,13 @@
+ # if ENABLE_FEATURE_WGET_TIMEOUT
+ 				if (second_cnt != 0 && --second_cnt == 0) {
+ 					progress_meter(PROGRESS_END);
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++					strcpy(DiagnosticsState, "Error_Timeout");
++					printf("download timed out\n");
++					outputDiagDlData();
++#else
+ 					bb_error_msg_and_die("download timed out");
++#endif
+ 				}
+ # endif
+ 				/* We used to loop back to poll here,
+@@ -1155,10 +1321,7 @@
+ 			progress_meter(PROGRESS_BUMP);
+ 		} /* while (reading data) */
+ 
+-#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
+-		TotalBytesReceived = ifBytesReceivedStart - ifBytesReceivedEnd;
+-		getDateTime(EOMTime);
+-#endif
++
+ #if ENABLE_FEATURE_WGET_STATUSBAR || ENABLE_FEATURE_WGET_TIMEOUT
+ 		clearerr(dfp);
+ 		ndelay_off(polldata.fd); /* else fgets can get very unhappy */
+@@ -1230,12 +1393,7 @@
+ 	char *redirected_path = NULL;
+ 	struct host_info server;
+ 	struct host_info target;
+-#if defined(ZCFG_SUPPORT) //tr143
+-	//char cmd[128];
+-	struct json_object *diag_result = NULL;
+-	const char *payload = NULL;
+-	int payloadLen = 0;
+-#endif
++
+ 	server.allocated = NULL;
+ 	target.allocated = NULL;
+ 	server.user = NULL;
+@@ -1299,6 +1457,12 @@
+ 	redir_limit = 16;
+  resolve_lsa:
+ 	lsa = xhost2sockaddr(server.host, server.port);
++#if defined(ZCFG_SUPPORT) //TR143
++	if(!lsa) {
++		strcpy(DiagnosticsState, "Error_InitConnectionFailed");
++		outputDiagDlData();
++	}
++#endif
+ 	if (!(option_mask32 & WGET_OPT_QUIET)) {
+ 		char *s = xmalloc_sockaddr2dotted(&lsa->u.sa);
+ 		fprintf(stderr, "Connecting to %s (%s)\n", server.host, s);
+@@ -1319,9 +1483,6 @@
+ 		char *str;
+ 		int status;
+ 
+-#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
+-		getDateTime(TCPOpenRequestTime);
+-#endif
+ 		/* Open socket to http(s) server */
+ #if ENABLE_FEATURE_WGET_OPENSSL
+ 		/* openssl (and maybe internal TLS) support is configured */
+@@ -1332,13 +1493,26 @@
+ 			int fd = spawn_https_helper_openssl(server.host, server.port);
+ # if ENABLE_FEATURE_WGET_HTTPS
+ 			if (fd < 0) { /* no openssl? try internal */
+-				sfp = open_socket(lsa);
+ #if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++				int sk = 0;
++
++				getDateTime(TCPOpenRequestTime);
++				sfp = open_socket(lsa, &sk);
++				if((sk>0) && strcmp(G.ifName, "")) {
++					setsockopt_bindtodevice(sk, (const char *)G.ifName);
++				}
++				if((sk>0) && ipDscp) {
++					if(setsockopt(sk, IPPROTO_IP, IP_TOS, &ipDscp, sizeof(ipDscp)) != 0)
++						printf("Set ip dscp failed!\n");
++				}
+ 				if (sfp == NULL)
+ 				{
+ 					strcpy(DiagnosticsState, "Error_InitConnectionFailed");
++					outputDiagDlData();
+ 				}
+ 				getDateTime(TCPOpenResponseTime);
++#else
++				sfp = open_socket(lsa);
+ #endif
+ 				spawn_ssl_client(server.host, fileno(sfp), /*flags*/ 0);
+ 				goto socket_opened;
+@@ -1351,24 +1525,83 @@
+ 				bb_die_memory_exhausted();
+ 			goto socket_opened;
+ 		}
+-		sfp = open_socket(lsa);
+ #if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
+-		if (sfp == NULL)
+ 		{
+-			strcpy(DiagnosticsState, "Error_InitConnectionFailed");
++			int sk = 0;
++
++			getDateTime(TCPOpenRequestTime);
++			sfp = open_socket(lsa, &sk);
++			if((sk>0) && strcmp(G.ifName, "")) {
++				setsockopt_bindtodevice(sk, (const char *)G.ifName);
++			}
++			if((sk>0) && ipDscp) {
++				if(setsockopt(sk, IPPROTO_IP, IP_TOS, &ipDscp, sizeof(ipDscp)) != 0)
++					printf("Set ip dscp failed!\n");
++			}
++			if (sfp == NULL)
++			{
++				strcpy(DiagnosticsState, "Error_InitConnectionFailed");
++				outputDiagDlData();
++			}
++			getDateTime(TCPOpenResponseTime);
+ 		}
+-		getDateTime(TCPOpenResponseTime);
++#else
++		sfp = open_socket(lsa);
+ #endif
+  socket_opened:
+ #elif ENABLE_FEATURE_WGET_HTTPS
+ 		/* Only internal TLS support is configured */
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++		{
++			int sk = 0;
++
++			getDateTime(TCPOpenRequestTime);
++			sfp = open_socket(lsa, &sk);
++			if((sk>0) && strcmp(G.ifName, "")) {
++				setsockopt_bindtodevice(sk, (const char *)G.ifName);
++			}
++			if((sk>0) && ipDscp) {
++				if(setsockopt(sk, IPPROTO_IP, IP_TOS, &ipDscp, sizeof(ipDscp)) != 0)
++					printf("Set ip dscp failed!\n");
++			}
++			if (sfp == NULL)
++			{
++				strcpy(DiagnosticsState, "Error_InitConnectionFailed");
++				outputDiagDlData();
++			}
++			getDateTime(TCPOpenResponseTime);
++		}
++#else
+ 		sfp = open_socket(lsa);
++#endif
+ 		if (server.protocol == P_HTTPS)
+ 			spawn_ssl_client(server.host, fileno(sfp), /*flags*/ 0);
+-#else
++#else  // !ENABLE_FEATURE_WGET_OPENSSL and !ENABLE_FEATURE_WGET_HTTPS
+ 		/* ssl (https) support is not configured */
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++		{
++			int sk = 0;
++
++			getDateTime(TCPOpenRequestTime);
++			sfp = open_socket(lsa, &sk);
++			if((sk>0) && strcmp(G.ifName, "")) {
++				setsockopt_bindtodevice(sk, (const char *)G.ifName);
++			}
++			if((sk>0) && ipDscp) {
++				if(setsockopt(sk, IPPROTO_IP, IP_TOS, &ipDscp, sizeof(ipDscp)) != 0)
++					printf("Set ip dscp failed!\n");
++			}
++			if (sfp == NULL)
++			{
++				strcpy(DiagnosticsState, "Error_InitConnectionFailed");
++				outputDiagDlData();
++			}
++			getDateTime(TCPOpenResponseTime);
++		}
++#else
+ 		sfp = open_socket(lsa);
+ #endif
++#endif  // ENABLE_FEATURE_WGET_OPENSSL, ENABLE_FEATURE_WGET_HTTPS
+ 		/* Send HTTP request */
+ 		if (use_proxy) {
+ 			SENDFMT(sfp, "GET %s://%s/%s HTTP/1.1\r\n",
+@@ -1405,9 +1638,10 @@
+ 
+ #if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
+ 		getDateTime(ROMTime);
+-
++		//http
+ 		if (option_mask32 & WGET_OPT_INTERFACE){
+ 			ifBytesReceivedStart = getReceiveByte(G.ifName);
++			printf("Receive data start: %ld\n", ifBytesReceivedStart);
+ 		}
+ #endif
+ 
+@@ -1529,7 +1763,15 @@
+ 			/* Partial Content even though we did not ask for it??? */
+ 			/* fall through */
+ 		default:
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++			{
++				strcpy(DiagnosticsState, "None");
++				printf("server returned error: %s\n", G.wget_buf);
++				outputDiagDlData();
++			}
++#else
+ 			bb_error_msg_and_die("server returned error: %s", G.wget_buf);
++#endif
+ 		}
+ 
+ 		/*
+@@ -1555,19 +1797,41 @@
+ 			if (key == KEY_content_length) {
+ 				G.content_len = BB_STRTOOFF(str, NULL, 10);
+ 				if (G.content_len < 0 || errno) {
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++					strcpy(DiagnosticsState, "Error_IncorrectSize");
++					printf("content-length %s is garbage\n", str);
++					outputDiagDlData();
++#else
+ 					bb_error_msg_and_die("content-length %s is garbage", str);
++#endif
+ 				}
+ 				G.got_clen = 1;
+ 				continue;
+ 			}
+ 			if (key == KEY_transfer_encoding) {
+ 				if (strcmp(str_tolower(str), "chunked") != 0)
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++				{
++					strcpy(DiagnosticsState, "None");
++					printf("transfer encoding '%s' is not supported\n", str);
++					outputDiagDlData();
++				}
++#else
+ 					bb_error_msg_and_die("transfer encoding '%s' is not supported", str);
++#endif
+ 				G.chunked = 1;
+ 			}
+ 			if (key == KEY_location && status >= 300) {
+ 				if (--redir_limit == 0)
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++				{
++					strcpy(DiagnosticsState, "None");
++					printf("too many redirections\n");
++					outputDiagDlData();
++				}
++#else
+ 					bb_error_msg_and_die("too many redirections");
++#endif
+ 				fclose(sfp);
+ 				if (str[0] == '/') {
+ 					free(redirected_path);
+@@ -1601,6 +1865,9 @@
+ 		 *  FTP session
+ 		 */
+ 		sfp = prepare_ftp_session(&dfp, &target, lsa);
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++		getDateTime(BOMTime);
++#endif
+ 	}
+ 
+ 	free(lsa);
+@@ -1614,10 +1881,6 @@
+ #endif
+ 		}
+ 		retrieve_file_data(dfp);
+-#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
+-		if (option_mask32 & WGET_OPT_INTERFACE)
+-			ifBytesReceivedEnd = getReceiveByte(G.ifName);
+-#endif
+ 		if (!(option_mask32 & WGET_OPT_OUTNAME)) {
+ #if defined(ZCFG_SUPPORT) //TR143
+ 			fclose((FILE *)(G.output_fd));
+@@ -1635,29 +1898,29 @@
+ 		/* It's ftp. Close data connection properly */
+ 		fclose(dfp);
+ 		if (ftpcmd(NULL, NULL, sfp) != 226)
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++		{
++			strcpy(DiagnosticsState, "None");
++			printf("ftp error: %s\n", G.wget_buf);
++			outputDiagDlData();
++		}
++#else
+ 			bb_error_msg_and_die("ftp error: %s", G.wget_buf);
++#endif
+ 		/* ftpcmd("QUIT", NULL, sfp); - why bother? */
+ 	}
+ 	fclose(sfp);
+ 
+ #if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
+-	strcpy(DiagnosticsState, "Completed");
+-
+-	diag_result = json_object_new_object();
+-	json_object_object_add(diag_result, "DiagnosticsState", json_object_new_string(DiagnosticsState));
+-	json_object_object_add(diag_result, "ROMTime", json_object_new_string(ROMTime));
+-	json_object_object_add(diag_result, "BOMTime", json_object_new_string(BOMTime));
+-	json_object_object_add(diag_result, "EOMTime", json_object_new_string(EOMTime));
+-	json_object_object_add(diag_result, "TotalBytesReceived", json_object_new_int(TotalBytesReceived));
+-	json_object_object_add(diag_result, "TCPOpenRequestTime", json_object_new_string(TCPOpenRequestTime));
+-	json_object_object_add(diag_result, "TCPOpenResponseTime", json_object_new_string(TCPOpenResponseTime));
+-
+-	payload = json_object_to_json_string(diag_result);
+-	payloadLen = strlen(payload) + 1;
+-	ResultMsgSend(ZCFG_MSG_DOWNLOAD_DIAG_COMPLETE_EVENT, payloadLen, payload);
++	if (option_mask32 & WGET_OPT_INTERFACE) {
++		ifBytesReceivedEnd = getReceiveByte(G.ifName);
++		TotalBytesReceived = (ifBytesReceivedEnd > ifBytesReceivedStart) ?
++			(ifBytesReceivedEnd - ifBytesReceivedStart) : 0;
++		printf("Receive data end: %ld\n", ifBytesReceivedEnd);
++	}
++	getDateTime(EOMTime);
+ 
+-	json_object_put(diag_result);
+-	set_priorityMark(0);
++	outputDiagDlData();
+ #endif
+ 
+ 	free(server.allocated);
+@@ -1753,6 +2016,10 @@
+ 		IF_FEATURE_WGET_LONG_OPTIONS(, &headers_llist)
+ 		IF_FEATURE_WGET_LONG_OPTIONS(, &G.post_data)
+ 	);
++
++	ipDscp = (G.dscp) ? xatou_range(G.dscp, 0, 255) : 0;
++	printf("Dscp: %u\n", ipDscp);
++
+ #else
+ 	GETOPT32(argv, "^"
+ 		"cqSO:o:P:Y:U:T:+"

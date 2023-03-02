@@ -1,0 +1,150 @@
+Index: iproute2-2.6.33/include/iptables.h
+===================================================================
+--- iproute2-2.6.33.orig/include/iptables.h
++++ iproute2-2.6.33/include/iptables.h
+@@ -1,6 +1,10 @@
+ #ifndef _IPTABLES_USER_H
+ #define _IPTABLES_USER_H
+ 
++#ifdef LIBC_USE_MUSL
++#include <sys/types.h>
++#endif
++
+ #include "iptables_common.h"
+ #include "libiptc/libiptc.h"
+ 
+Index: iproute2-2.6.33/include/libnetlink.h
+===================================================================
+--- iproute2-2.6.33.orig/include/libnetlink.h
++++ iproute2-2.6.33/include/libnetlink.h
+@@ -1,6 +1,10 @@
+ #ifndef __LIBNETLINK_H__
+ #define __LIBNETLINK_H__ 1
+ 
++#ifdef LIBC_USE_MUSL
++#include <stdio.h>
++#endif
++
+ #include <asm/types.h>
+ #include <linux/netlink.h>
+ #include <linux/rtnetlink.h>
+Index: iproute2-2.6.33/include/utils.h
+===================================================================
+--- iproute2-2.6.33.orig/include/utils.h
++++ iproute2-2.6.33/include/utils.h
+@@ -5,6 +5,10 @@
+ #include <resolv.h>
+ #include <stdlib.h>
+ 
++#ifdef LIBC_USE_MUSL
++#include <sys/types.h>
++#endif
++
+ #include "libnetlink.h"
+ #include "ll_map.h"
+ #include "rtm_map.h"
+Index: iproute2-2.6.33/lib/utils.c
+===================================================================
+--- iproute2-2.6.33.orig/lib/utils.c
++++ iproute2-2.6.33/lib/utils.c
+@@ -26,6 +26,12 @@
+ #include <time.h>
+ #include <sys/time.h>
+ 
++#ifdef LIBC_USE_MUSL
++#include <limits.h>
++#include <sys/types.h>
++#include <asm/param.h>
++#endif
++
+ 
+ #include "utils.h"
+ 
+Index: iproute2-2.6.33/misc/lnstat.h
+===================================================================
+--- iproute2-2.6.33.orig/misc/lnstat.h
++++ iproute2-2.6.33/misc/lnstat.h
+@@ -3,6 +3,10 @@
+ 
+ #include <limits.h>
+ 
++#ifdef LIBC_USE_MUSL
++#include <time.h>
++#include <sys/time.h>
++#endif
+ #define LNSTAT_VERSION "0.02 041002"
+ 
+ #define PROC_NET_STAT	"/proc/net/stat"
+Index: iproute2-2.6.33/tc/m_ematch.h
+===================================================================
+--- iproute2-2.6.33.orig/tc/m_ematch.h
++++ iproute2-2.6.33/tc/m_ematch.h
+@@ -5,6 +5,10 @@
+ #include <stdlib.h>
+ #include <string.h>
+ 
++#ifdef LIBC_USE_MUSL
++#include <limits.h>
++#endif
++
+ #include "utils.h"
+ #include "tc_util.h"
+ 
+Index: iproute2-2.6.33/Makefile
+===================================================================
+--- iproute2-2.6.33.orig/Makefile
++++ iproute2-2.6.33/Makefile
+@@ -40,6 +40,10 @@ endif
+ #CC = gcc
+ CCOPTS = -D_GNU_SOURCE -s -Os -Wstrict-prototypes -Wall -g
+ 
++ifeq ($(strip $(LIBC_USE_MUSL)),y)
++CCOPTS += -D__USE_MISC -DLIBC_USE_MUSL
++endif
++
+ ifeq ($(strip $(DESKTOP_LINUX)),y)
+ # some apps, such as iptables and iproute2, include MIPS kernel header files
+ # which need to know what endieness we are.  Fake the settings here.  We will
+Index: iproute2-2.6.33/tc/tc_stab.c
+===================================================================
+--- iproute2-2.6.33.orig/tc/tc_stab.c
++++ iproute2-2.6.33/tc/tc_stab.c
+@@ -22,6 +22,10 @@
+ #include <string.h>
+ #include <malloc.h>
+ 
++#ifdef LIBC_USE_MUSL
++#include <sys/param.h>
++#endif
++
+ #include "utils.h"
+ #include "tc_util.h"
+ #include "tc_core.h"
+Index: iproute2-2.6.33/tc/tc_util.c
+===================================================================
+--- iproute2-2.6.33.orig/tc/tc_util.c
++++ iproute2-2.6.33/tc/tc_util.c
+@@ -21,6 +21,10 @@
+ #include <string.h>
+ #include <math.h>
+ 
++
++#ifdef LIBC_USE_MUSL
++#include <sys/param.h>
++#endif
+ #include "utils.h"
+ #include "tc_util.h"
+ 
+Index: iproute2-2.6.33/misc/lnstat.c
+===================================================================
+--- iproute2-2.6.33.orig/misc/lnstat.c
++++ iproute2-2.6.33/misc/lnstat.c
+@@ -166,7 +166,7 @@ static struct table_hdr *build_hdr_strin
+ 
+ 	for (i = 0; i < HDR_LINES; i++) {
+ 		th.hdr[i] = malloc(HDR_LINE_LENGTH);
+-		memset(th.hdr[i], 0, sizeof(th.hdr[i]));
++		memset(th.hdr[i], 0, HDR_LINE_LENGTH);
+ 	}
+ 
+ 	for (i = 0; i < fps->num; i++) {

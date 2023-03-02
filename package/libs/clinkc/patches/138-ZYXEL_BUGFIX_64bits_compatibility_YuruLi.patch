@@ -1,0 +1,15 @@
+Index: clinkc/src/cybergarage/http/chttp_server.c
+===================================================================
+--- clinkc.orig/src/cybergarage/http/chttp_server.c	2021-03-03 11:20:47.424640058 +0800
++++ clinkc/src/cybergarage/http/chttp_server.c	2021-03-03 13:45:30.023048757 +0800
+@@ -289,10 +289,6 @@
+ 
+ 	cg_log_debug_l4("Entering...\n");
+ 
+-
+-#ifdef ZYXEL_PATCH //set thread un-joinabled, by Mark 20140903
+-	pthread_detach(pthread_self());
+-#endif
+ 	clientData = (CgHttpServerClientData *)cg_thread_getuserdata(thread);
+ 	httpServer = clientData->httpServer;
+ #ifdef ZYXEL_PATCH

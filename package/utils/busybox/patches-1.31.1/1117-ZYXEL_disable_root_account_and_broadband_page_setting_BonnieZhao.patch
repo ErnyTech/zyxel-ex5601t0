@@ -1,0 +1,76 @@
+Index: busybox-1.31.1/loginutils/login.c
+===================================================================
+--- busybox-1.31.1.orig/loginutils/login.c	2021-04-07 17:12:24.005218448 +0800
++++ busybox-1.31.1/loginutils/login.c	2021-04-07 17:12:55.225217547 +0800
+@@ -1217,6 +1217,7 @@
+ 
+ 				memset(userPriviege, 0, sizeof(userPriviege));
+ #endif
++				IID_INIT(logGpObjIid);
+ 				IID_INIT(logAccountObjIid);
+ 				while(zcfgFeObjStructGetNext(RDM_OID_ZY_LOG_CFG_GP_ACCOUNT, &logAccountObjIid, (void **) &accountObj) == ZCFG_SUCCESS) {
+ 					if (!strcmp(accountObj->Username, username)){
+@@ -1225,46 +1226,52 @@
+ 						idle_times = accountObj->AccountIdleTime;
+ 						cur_user_idx[GROUP_IID] = logAccountObjIid.idx[GROUP_IID];
+ 						cur_user_idx[ACCOUNT_IID] = logAccountObjIid.idx[ACCOUNT_IID];
++						memcpy(&logGpObjIid, &logAccountObjIid, sizeof(objIndex_t));
++
+ #ifdef ZYXEL_REMOTE_ACCESS_PRIVILEGE
+ 						if (accountObj->RemoteAccessPrivilege){
+ 							strcpy(userPriviege, accountObj->RemoteAccessPrivilege);
+ 							syslog(LOG_INFO, "Account privilege:  %s Priviege = %s !!!!", username, userPriviege);
+ 						}
+ #endif
+-
+-#ifndef ZYXEL_REMOTE_ACCOUNT_ACCESS_PRIVILEGE
+-						free(accountObj);
++#if !defined(ZYXEL_REMOTE_ACCOUNT_ACCESS_PRIVILEGE) && !defined(MSTC_TTNET_MULTI_USER)
++						zcfgFeObjStructFree(accountObj);
+ #endif
+ 						break;
+ 					}
+-					free(accountObj);
++					zcfgFeObjStructFree(accountObj);
+ 				}
+ 				/*group privilege authentication */
+-				IID_INIT(logGpObjIid);
+-				logGpObjIid.level = logAccountObjIid.level - 1;
+-				logGpObjIid.idx[GROUP_IID] = logAccountObjIid.idx[GROUP_IID];
+-				logGpObjIid.idx[ACCOUNT_IID] = 0;
++				//IID_INIT(logGpObjIid);
++				if(logGpObjIid.idx[GROUP_IID] && logGpObjIid.idx[ACCOUNT_IID]){
++					logGpObjIid.idx[ACCOUNT_IID] = 0;
++					logGpObjIid.level = logAccountObjIid.level - 1;
++				}
++
+ 				if(zcfgFeObjStructGet(RDM_OID_ZY_LOG_CFG_GP, &logGpObjIid, (void **) &logGpObj) == ZCFG_SUCCESS) {
+ 					if (strstr(logGpObj->GP_Privilege, "telnet") == NULL
+ #ifdef ZYXEL_REMOTE_ACCOUNT_ACCESS_PRIVILEGE
+ 						|| strstr(accountObj->Privilege, "telnet") == NULL
+ #endif
++#ifdef MSTC_TTNET_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
++						|| accountObj->Enabled == false
++#endif
+ 					){
+ 						snprintf(logStr, sizeof(logStr), "Account: '%s' TELNET permission denied.", username);
+ 						puts(logStr);
+ 						syslog(LOG_INFO, "Account:'%s' TELNET permission denied.", username);
++						free(accountObj);
+ 						free(logGpObj);
+ 						return EXIT_FAILURE;
+ 					}
+ #ifdef ABUU_CUSTOMIZATION
+ 					else if(autoDisableHighUser == true && !strcmp("root", username)){
+ 						free(logGpObj);
++						zcfgFeObjStructFree(accountObj);
+ 						goto auth_failed;
+ 					}
+ #endif
+-#ifdef ZYXEL_REMOTE_ACCOUNT_ACCESS_PRIVILEGE
+-					free(accountObj);
+-#endif
++					zcfgFeObjStructFree(accountObj);
+ 					free(logGpObj);
+ 				}
+ #ifdef ZYXEL_REMOMGMT_ONLY_HTTPS_ALLOWS_FOR_WLAN_CONNECT

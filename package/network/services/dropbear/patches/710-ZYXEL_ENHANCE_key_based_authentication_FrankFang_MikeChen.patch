@@ -1,0 +1,43 @@
+Index: dropbear-2019.78/svr-authpubkey.c
+===================================================================
+--- dropbear-2019.78.orig/svr-authpubkey.c
++++ dropbear-2019.78/svr-authpubkey.c
+@@ -342,11 +342,16 @@ static int checkpubkey(const char* algo,
+ 		/* we don't need to check pw and pw_dir for validity, since
+ 		 * its been done in checkpubkeyperms. */
+ 		len = strlen(ses.authstate.pw_dir);
++#if 1
++	filename = m_malloc(21);
++	strcpy(filename,"/var/authorized_keys");
++#else		
+ 		/* allocate max required pathname storage,
+ 		 * = path + "/.ssh/authorized_keys" + '\0' = pathlen + 22 */
+ 		filename = m_malloc(len + 22);
+ 		snprintf(filename, len + 22, "%s/.ssh/authorized_keys",
+ 					ses.authstate.pw_dir);
++#endif					
+ 	} else {
+ 		filename = m_malloc(30);
+ 		strncpy(filename, "/etc/dropbear/authorized_keys", 30);
+@@ -423,6 +428,13 @@ static int checkpubkeyperms() {
+ 
+ 	TRACE(("enter checkpubkeyperms"))
+ 
++#if 1
++	filename = m_malloc(len + 21);
++	strcpy(filename, "/var/authorized_keys");
++	if (checkfileperm(filename) != DROPBEAR_SUCCESS) {
++		goto out;
++	}
++#else	
+ 	if (ses.authstate.pw_dir == NULL) {
+ 		goto out;
+ 	}
+@@ -462,6 +474,7 @@ static int checkpubkeyperms() {
+ 			goto out;
+ 		}
+ 	}
++#endif
+ 
+ 	/* file looks ok, return success */
+ 	ret = DROPBEAR_SUCCESS;

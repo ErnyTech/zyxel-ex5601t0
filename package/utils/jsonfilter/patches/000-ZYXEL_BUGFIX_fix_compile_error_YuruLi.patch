@@ -1,0 +1,22 @@
+Index: jsonfilter-2018-02-04-c7e938d6/main.c
+===================================================================
+--- jsonfilter-2018-02-04-c7e938d6.orig/main.c
++++ jsonfilter-2018-02-04-c7e938d6/main.c
+@@ -278,6 +278,8 @@ export_value(struct list_head *matches,
+ 
+ 			case json_type_null:
+ 				break;
++			default:
++				break;
+ 			}
+ 		}
+ 
+@@ -306,6 +308,8 @@ export_value(struct list_head *matches,
+ 
+ 			case json_type_null:
+ 				break;
++			default:
++				break;
+ 			}
+ 		}
+ 	}

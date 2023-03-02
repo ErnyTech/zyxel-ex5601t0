@@ -1,0 +1,13 @@
+Index: pure-ftpd-1.0.30/src/ftpd.h
+===================================================================
+--- pure-ftpd-1.0.30.orig/src/ftpd.h
++++ pure-ftpd-1.0.30/src/ftpd.h
+@@ -768,6 +768,8 @@ Your platform has a very large MAXPATHLE
+ #endif    
+     
+ #include "bsd-realpath.h"    
++#ifndef LIBC_USE_MUSL
+ #include "fakechroot.h"
++#endif
+         
+ #endif

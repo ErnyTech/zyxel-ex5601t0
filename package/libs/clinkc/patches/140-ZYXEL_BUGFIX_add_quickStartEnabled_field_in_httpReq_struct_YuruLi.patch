@@ -1,0 +1,12 @@
+Index: clinkc/include/cybergarage/http/chttp.h
+===================================================================
+--- clinkc.orig/include/cybergarage/http/chttp.h
++++ clinkc/include/cybergarage/http/chttp.h
+@@ -364,6 +364,7 @@ typedef struct _CgHttpRequest {
+ 	BOOL needChgPasswd;
+ 	BOOL showSkipBtn; /* show skip button in change password page if password is automatically generated */
+ 	BOOL needQuickStart;
++	BOOL quickStartEnabled;
+ #endif
+ 	void *authList;
+ } CgHttpRequest;

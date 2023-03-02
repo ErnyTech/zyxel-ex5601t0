@@ -1,0 +1,49 @@
+Index: ppp-2.4.3/pppd/ipcp.c
+===================================================================
+--- ppp-2.4.3.orig/pppd/ipcp.c	2019-10-25 19:47:52.868112554 +0800
++++ ppp-2.4.3/pppd/ipcp.c	2019-10-25 19:55:53.432126072 +0800
+@@ -311,7 +311,7 @@
+ /*
+    __ZYXEL__, MelissaChen, 20171122, Support PPTP VPN.
+ */
+-#ifdef CONFIG_PPTP_SUPPORT
++#if defined(CONFIG_PPTP_SUPPORT) || defined(CONFIG_ZYXEL_VPN_CLIENT)
+ 
+ #ifdef BROADCOM_PLATFORM
+ #define PPTP_RUTING_UP_SCRIPT "/var/pptp_up.sh"
+@@ -1903,9 +1903,16 @@
+ 	demand_rexmit(PPP_IP,go->ouraddr);
+ 	sifnpmode(f->unit, PPP_IP, NPMODE_PASS);
+ 	//__ZYXEL__, MelissaChen, 20171122, Support PPTP VPN.
+-#ifdef CONFIG_PPTP_SUPPORT
++#if defined(CONFIG_PPTP_SUPPORT) || defined(CONFIG_ZYXEL_VPN_CLIENT)
+ 	notice("local  IP address %I", go->ouraddr);
+ 	notice("remote IP address %I", ho->hisaddr);
++
++
++	char cmd[1024] = {};
++	memset(cmd, 0x0, sizeof(cmd));
++	sprintf(cmd, "%s", "ip route delete %I/32", ho->hisaddr);
++	notice("\n Remove remote IP route entry >>>  %s \n",cmd);
++	system(cmd);
+ #endif
+     } else {
+ 	/*
+@@ -1966,7 +1973,7 @@
+ 	if (!strstr(ifname, "pppowwan")){
+ 		ipcp_wantoptions[0].ouraddr = go->ouraddr;		
+ 	//__ZYXEL__, MelissaChen, 20171122, Support PPTP VPN.
+-	#ifdef CONFIG_PPTP_SUPPORT
++	#if defined(CONFIG_PPTP_SUPPORT) || defined(CONFIG_ZYXEL_VPN_CLIENT)
+ 		pptp_down_routing();
+ 		pptp_up_routing(ho); 
+ 	#endif
+@@ -2099,7 +2106,7 @@
+     }
+ 
+ 	//__ZYXEL__, MelissaChen, 20171122, Support PPTP VPN.
+-#ifdef CONFIG_PPTP_SUPPORT
++#if defined(CONFIG_PPTP_SUPPORT) || defined(CONFIG_ZYXEL_VPN_CLIENT)
+ 	pptp_down_routing();
+ #endif
+ }

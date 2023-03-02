@@ -1,0 +1,864 @@
+# Copyright (C) 2006-2013 OpenWrt.org
+#
+# This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
+#
+
+menu "Zyxel customization"
+
+	menu "ZyXEL Project Configuration"
+	   config ZYXEL_FIRMWARE_VERSION
+		string "ZyXEL firmware version"
+		default "V0.00(AAA.0)b0"
+
+	   config ZYXEL_FIRMWARE_VERSION_EXT
+		string "Zyxel external firmware version"
+		default ""
+
+	   config ZYXEL_FIRMWARE_ID
+			string "ZyXEL firmware Id"
+			default ""
+
+	   config ZYXEL_GUI_PATCH_DIR
+			string "ZyXEL GUI patch directory"
+			default ""
+		
+	   menu "Build system options"
+
+		choice
+			prompt "working on which openwrt version?"
+			default ZYXEL_OPENWRT_21_02
+
+		config ZYXEL_OPENWRT_19_07_7
+			bool "OpenWrt 19"
+
+		config ZYXEL_OPENWRT_21_02
+			bool "OpenWrt 21"
+			default y
+
+		endchoice
+
+		config ZYXEL_OPENWRT_19
+			bool "OpenWrt 19.07"
+			default y
+			depends on ZYXEL_OPENWRT_19_07_7
+
+		config ZYXEL_OPENWRT_21
+			bool "OpenWrt 21.02"
+			default y
+			depends on ZYXEL_OPENWRT_21_02
+
+		config IGNORE_OPENWRT_GEN_FILES
+		bool "Ignore OpenWRT generic files & patches"
+		default n
+		help
+		  Ignore all files and patch files which are located in folder 
+		  target/linux/generic/files* and target/linux/generic/patches*
+
+		config ZYXEL_EXTERNAL_TARBALL_SERVER
+			bool "Download tarball from Zyxel file server"
+			default n
+
+		config CUSTOM_KCONFIG_PREFIX
+			string "Prefix for kernel configuration file"
+			default ""
+			help
+			  This prefix will be used for search SUBTARGET's kernel configuration file.
+			  (no effect any files which are located in folder 'target/linux/generic').
+			  For example: OpenWRT will search following kernel configuration files
+			   kernel configuration files:
+				target/linux/generic/config-$(KERNEL_PATCHVER)
+				target/linux/$(PLATFORM_DIR)/$(CUSTOM_KCONFIG_PREFIX)config-$(KERNEL_PATCHVER)
+				target/linux/$(PLATFORM_DIR)/$(SUBTARGET)/$(CUSTOM_KCONFIG_PREFIX)config-$(KERNEL_PATCHVER)
+
+		config CUSTOM_KPATCH_PREFIX
+			string "Prefix for kernel patch/files folader"
+			default ""
+			help
+			  This prefix will be used for search SUBTARGET's patch folder and files folder.
+			  (no effect any folders which are located in folder 'target/linux/generic').
+			  For example: OpenWRT will search following folders
+			   patch folders:
+				target/linux/generic/patches-$(KERNEL_PATCHVER)
+				target/linux/$(PLATFORM_DIR)/$(CUSTOM_KPATCH_PREFIX)patches-$(KERNEL_PATCHVER)
+				target/linux/$(PLATFORM_DIR)/$(SUBTARGET)/$(CUSTOM_KPATCH_PREFIX)patches-$(KERNEL_PATCHVER)
+			   files folders:
+				target/linux/generic/files-$(KERNEL_PATCHVER)
+				target/linux/$(PLATFORM_DIR)/$(CUSTOM_KPATCH_PREFIX)files-$(KERNEL_PATCHVER)
+				target/linux/$(PLATFORM_DIR)/$(SUBTARGET)/$(CUSTOM_KPATCH_PREFIX)files-$(KERNEL_PATCHVER)
+
+		config PAD_KERNEL_IMG_TO_ALIGN_BYTE
+			int "Pad kernel image to align bytes"
+			default 2048
+			depends on !EMBEDDED_KERNEL_IN_ROOTFS
+
+		config PAD_ROOTFS_IMG_TO_ALIGN_BYTE
+			int "Pad rootfs image to align bytes"
+			default 0
+
+	   endmenu
+
+	   menu "Default MRD information"
+	   config MRD_VENDOR_NAME
+		string "Vendor Name"
+		default "ZyXEL Communications Corp."
+
+	   config MRD_PRODUCT_NAME
+		string "Product Name"
+		default "Unknown"
+
+	   config MRD_SERIAL_NO
+		string "Product Serial Number"
+		default "S090Y00000000"
+
+	   config MRD_MAIN_FEATURE_BIT
+		int "Main Feature Bit"
+		default 0
+
+	   config MRD_MODEL_ID
+		string "Model ID"
+		default ""
+
+	   config MRD_DEBUG_BIT
+		int "Debug Bit"
+		default 0
+
+	   config MRD_COUNTRY_CODE
+		hex "Country Code"
+		default 0xFF
+		
+	   config MRD_WLAN_FEATURE
+		hex "Wlan Feature for brcm"
+		default 0x0
+	   endmenu
+
+	   menu "Other MRD information"
+		choice
+			prompt "Hardware vendor"
+			default ZYXEL_HARDWARE_VENDOR_PEGATRON
+
+		config ZYXEL_HARDWARE_VENDOR_PEGATRON
+			bool "Pegatron"
+			help
+				Pegatron
+
+		config ZYXEL_HARDWARE_VENDOR_MSTC
+			bool "MSTC"
+			help
+				MSTC
+
+		config ZYXEL_HARDWARE_VENDOR_TWSZ
+			bool "T&W"
+			help
+				T&W
+
+		config ZYXEL_HARDWARE_VENDOR_PROWARE
+			bool "Proware"
+			help
+				Proware
+		endchoice
+
+		config ZYXEL_HARDWARE_VENDOR
+			string
+			default "PEGATRON" if ZYXEL_HARDWARE_VENDOR_PEGATRON
+			default "MSTC" if ZYXEL_HARDWARE_VENDOR_MSTC
+			default "TWSZ" if ZYXEL_HARDWARE_VENDOR_TWSZ
+			default "PROWARE" if ZYXEL_HARDWARE_VENDOR_PROWARE
+
+		config ZYXEL_HARDWARE_VERSION
+			int "Which hardware version current used?"
+			default "1"
+
+		config SAME_FW_FOR_PROJECTS
+			bool "Common firmware for projects"
+			default y if ZYXEL_FEATURE_BITS
+			depends on ZYXEL_FEATURE_BITS
+
+		menu "Zyxel Feature Bits Option"
+		config ZYXEL_FEATURE_BITS
+			bool "Enable Zyxel Feature Bits"
+			default n
+			help
+				Zyxel Feature Bits Feature.
+
+		config MRD_FEATURE_BITS
+			bool "MRD Feature Bits Option"
+			default n
+			depends on ZYXEL_FEATURE_BITS
+			help
+				MRD Other Feature Bits Option.
+
+		config MRD_SUPPORT_VOICE
+			bool "Voice Support"
+			default n
+			depends on MRD_FEATURE_BITS
+		config MRD_SUPPORT_VOICE_SINGLE
+			bool "Voice Only Support One Port"
+			default n
+			depends on MRD_SUPPORT_VOICE
+
+		config MRD_SUPPORT_2_4_G
+			bool "2.4G Support"
+			default n
+			depends on MRD_FEATURE_BITS
+		config MRD_SUPPORT_FEM_2_4_G
+			bool "2.4G FEM Support"
+			default n
+			depends on MRD_SUPPORT_2_4_G
+		config MRD_SUPPORT_EXTANT_2_4_G
+			bool "2.4G Ext. Antenna Support"
+			default n
+			depends on MRD_SUPPORT_2_4_G
+
+		config MRD_SUPPORT_5G
+			bool "5G Support"
+			default n
+			depends on MRD_FEATURE_BITS
+		config MRD_SUPPORT_FEM_5G
+			bool "5G FEM Support"
+			default n
+			depends on MRD_SUPPORT_5G
+		config MRD_SUPPORT_EXTANT_5G
+			bool "5G Ext. Antenna Support"
+			default n
+			depends on MRD_SUPPORT_5G
+
+		config MRD_SUPPORT_VDSL_17A
+			bool "VDSL Profile 17a Support"
+			default n
+			depends on MRD_FEATURE_BITS
+		config MRD_SUPPORT_VDSL_35B
+			bool "VDSL Profile 35b Support"
+			default n
+			depends on MRD_FEATURE_BITS
+		config MRD_SUPPORT_GFAST
+			bool "G.Fast Support"
+			default n
+			depends on MRD_FEATURE_BITS
+
+		choice
+			prompt "ADSL Type"
+			default MRD_SUPPORT_ANNEX_A
+			depends on MRD_FEATURE_BITS
+
+			config MRD_SUPPORT_WITHOUT_XDSL
+				bool "Without xDSL"
+				help
+					ADSL Annex A
+
+			config MRD_SUPPORT_ANNEX_A
+				bool "Annex A"
+				help
+					ADSL Annex A
+			config MRD_SUPPORT_ANNEX_B
+				bool "Annex B"
+				help
+					ADSL Annex B
+			config MRD_SUPPORT_ANNEX_C
+				bool "Annex C"
+				help
+					ADSL Annex C
+		endchoice
+
+		config MRD_SUPPORT_ZIGBEE
+			bool "Zigbee Support"
+			default n
+			depends on MRD_FEATURE_BITS
+
+		endmenu
+
+		config ZYXEL_SUPPORT_MISC
+			bool "Support misc partition"
+			default n
+
+		choice
+			prompt "MISC partition in which layer"
+			default ZYXEL_SUPPORT_MISC_IN_MTD
+			depends on ZYXEL_SUPPORT_MISC
+
+			config ZYXEL_SUPPORT_MISC_IN_MTD
+				bool "misc partition is a dedicated MTD partition."
+
+			config ZYXEL_SUPPORT_MISC_IN_UBIVOLUME
+				bool "misc partition is a UBI Volume."
+		endchoice
+
+		config ZYXEL_SUPPORT_MISC_VOLUME_ID
+			int "default MISC ubi volume id"
+			default 12
+			depends on ZYXEL_SUPPORT_MISC_IN_UBIVOLUME
+			help
+				This value should sync with the SoC environment!!!
+
+		config ZYXEL_SUPPORT_MISC_VOLUME_SIZE
+			int "default MISC ubi volume size"
+			default 32 if (TARGET_NAND_FLASH_TOTAL_SIZE=256)
+			default 230 if (TARGET_NAND_FLASH_TOTAL_SIZE=512)
+			depends on ZYXEL_SUPPORT_MISC_IN_UBIVOLUME
+			help
+				This value should sync with the Project NAND flash usage!!!
+				MISC may have 32 MB to use when flash size is 256 MB.
+				MISC may have 230 MB to use when flash size is 512 MB.
+
+		config ZYXEL_CUSTOMISED_MISC_NAME
+			string "Name of customised misc partition"
+			depends on ZYXEL_SUPPORT_MISC
+			default "zymisc" if ZYXEL_SUPPORT_MISC_IN_UBIVOLUME
+			default "misc1" if (TARGET_brcm963xx=y && ZYXEL_SUPPORT_MISC=y)
+			default "misc" if (TARGET_en75xx=y && ZYXEL_SUPPORT_MISC=y)
+			help
+					For Broadcom projects, some of WiFi chips (ex.43684 series) default use misc1 as an embeded nvram,
+					so the name of Zyxel customised misc partiton need to use "misc2".
+					For Econet projects, all use the name "misc".
+
+		config ZYXEL_BROADCOM_LICENSE_NAME
+			string "Name of replace license file name"
+		default "license_zyxel_20112601.txt"
+			depends on PACKAGE_brcm-license
+			help
+			The filename should follow the naming rule, license_zyxel_yymmddss.txt
+			file is located at https://svn.zyxel.com/svn/TPDC/pkg_tarball/private/Broadcom/brcm-licence
+			yymmdd means this files is got in 20yy/mm/dd and ss mean the order if there are two files got in the same day.
+
+	   endmenu
+
+	   menu "Supported components on hardware"
+		config DSL_SUPPORT
+			bool
+			prompt "xDSL components"
+			default y
+			help
+					Support ADSL, VDSL.
+
+		config XPON_SUPPORT
+			bool
+			prompt "xPON components"
+			default n
+			help
+					Support EPON, GPON.
+		config LTE_SUPPORT
+			bool
+			prompt "LTE components"
+			default n
+			help
+					Support LTE.
+		config PROXIMITY_SENSOR_SUPPORT
+			bool
+			prompt "Proximity sensor, SX9301, components"
+			select KERNEL_I2C_SX9310
+			default n
+			help
+					Support Proximity sensor.
+					For now, only on Project VMG8823-B10B
+		config ZYXEL_ZIGBEE_SUPPORT
+			bool
+			prompt "Zigbee module"
+			select PACKAGE_Z3GatewayHost
+			select PACKAGE_ZigbeeNcpUpdate
+			select PACKAGE_picocom
+			default n
+			help
+					Support Zigbee module.
+	   endmenu
+
+	   menu "Hardware depend misc."
+		config ZYXEL_QTN_WIFI_5G_SUPPORT
+				bool
+				prompt "QTN WiFi 5G components"
+				default n
+				help
+						Support QTN WiFi 5G.
+
+		config ZYXEL_QTN_SW_RESET
+			bool "QTN software reset"
+			depends on ZYXEL_QTN_WIFI_5G_SUPPORT
+			help
+				Reset QTN software.
+
+		config ZYXEL_SW_RESET_WIFI_MODULE
+			bool "Software reset WiFi modules"
+			default n
+			help
+				Software reset WiFi modules.
+
+		config ZYXEL_WPS_SPOTLIGHT
+			bool
+			prompt "WPS spotlight"
+			default n
+			help
+				Display WPS spotlight.
+
+		config ZYXEL_WPS_SPOTLIGHT_BLINK
+			bool
+			prompt "WPS blink spotlight"
+			default n
+			help
+				Display WPS spotlight blink.
+				
+		config ZYXEL_WPS_SPOTLIGHT_2GPIO
+			bool
+			prompt "WPS spotlight"
+			default n
+			depends on ZYXEL_WPS_SPOTLIGHT
+			help
+				Display WPS spotlight. (use Red LED and Green LED to generate orange LED)
+
+		config ZYXEL_WPS_IPTVPARING_2GPIO
+			bool
+			prompt "WPS IptvParing LED controled by 2 GPIO"
+			default n
+			help
+				Display WPS IptvParing.
+
+		config ZYXEL_QUALITY_AMBER_2GPIO
+			bool
+			prompt "QUALITY AMBER"
+			default n
+			help
+				Display QUALITY AMBER. (use Red LED and Green LED to generate orange LED)
+
+		config ZYXEL_LED_EN_SUPPORT
+			bool
+			prompt "LED EN"
+			default n
+			help
+				support LED EN.
+
+		config ZYXEL_SFP_MODULE_SUPPORT
+			bool
+			prompt "SFP/xPON components"
+			default n
+			help
+				Support SFP module.
+
+		config ZYXEL_DEDICATED_SFPWAN_INTERFACE
+			bool
+			prompt "support dedicated SFP wan interface"
+			default n
+			help
+				Support dedicated SFP wan interface.
+
+		config ZYXEL_SFP_DETECT_PIN
+			bool "SFP detect pin"
+			default n
+			depends on ZYXEL_SFP_MODULE_SUPPORT
+			help
+				Get SFP detect pin value.
+
+		config ZYXEL_SFP_TX_FAULT_PIN
+			bool "SFP tx fault pin"
+			default n
+			depends on ZYXEL_SFP_MODULE_SUPPORT
+			help
+				Get SFP tx fault pin value.
+
+		config ZYXEL_SFP_TX_DISABLE
+			bool "SFP tx disable pin"
+			default n
+			depends on ZYXEL_SFP_MODULE_SUPPORT
+			help
+				Get SFP tx disable pin value.
+
+		config ZYXEL_SFP_RX_SLEEP
+			bool "rx sleep mod pin for BOSA"
+			default n
+			depends on ZYXEL_SFP_MODULE_SUPPORT
+			help
+				Get rx sleep mod pin value.
+
+			config ZYXEL_SFP_SW_RX_LOS
+					bool "get sfp rx los (sw)"
+					default n
+					depends on ZYXEL_SFP_MODULE_SUPPORT
+					help
+							Get SFP rx los (sw).
+
+		config ZYXEL_FEM_DETECT
+			bool
+			prompt "Detect FEM component"
+			default n
+			help
+				Detect FEM component.
+
+		config ZYXEL_BOARD_DETECT_BY_GPIO
+			bool
+			prompt "Detect board type by GPIO"
+			default n
+			help
+				Detect board type by GPIO.
+
+		config ZYXEL_SUPPORT_BOTH_256_512_FLASH
+			bool
+			prompt "Support both 256MB & 512MB flash"
+			default n
+			help
+				Support both 256MB & 512MB flash.
+				For now, only apply on VMG8825-B50B WIND & Generic.
+	   endmenu
+
+	   config ZYXEL_UPS_FEATURE
+			bool "Display the status of UPS battery by LED."
+			default n
+			
+	   config ZYXEL_NEW_ATEN_ATSE
+			bool "New ATEN/ATSE algorithm"
+			default n
+
+	   config ZYXEL_NEW_ATSN
+			bool "SET TT New ATSN"
+			default n
+
+	   config ZYXEL_SFP_PHASE1
+			bool "SET SFP PHASE1 Function"
+			default n
+
+		config ZYXEL_SUPPORT_REALTEK_RTL8221B_PHY
+			bool "Support REALTEK RTL8221B PHY"
+			default n
+
+	   config ZYXEL_SUPPORT_MAXLINEAR_GPY211_PHY
+			bool "Support MAXLINEAR GPY211 PHY"
+			default n
+
+	   config ZYXEL_AT_SET_KEY
+			bool "AT SET KEY"
+			default n
+			help
+				store admin password and WiFi PSK key in MRD information.
+				if these item is not empty, zcfg_be will use them.
+				if these item is empty, zcfg_be will auto-generate them(not store in MRD).
+
+	   config ZYXEL_AT_SET_SUPERVISOR_KEY
+			bool "AT SET SUPERVISOR KEY"
+			default n
+			depends on ZYXEL_AT_SET_KEY
+			help
+				store supervisor password and WiFi PSK key in MRD information.
+				Generially, Zyxel will not enable this flag.
+
+	   config ZYXEL_SUPPORT_ATCK_ENCRYPTION
+			bool "SUPPORT ATCK ENCRYPTION"
+			default n
+			depends on ZYXEL_AT_SET_KEY
+
+	   config ZYXEL_ENCRYPTKEY_USE_AT_KEY
+					bool "ZYXEL ENCRYPTKEY USE AT KEY"
+					default n
+					depends on ZYXEL_AT_SET_SUPERVISOR_KEY
+					help
+							Use random pwd for encrypt key, not use hardcode string.
+
+		config ZYXEL_NPACK_GET_ATCK_GEN_BACKHAUL
+			bool "Get ATCK info to Gen BACKHAUL SSID and Key "
+			default n
+			depends on ZYXEL_AT_SET_SUPERVISOR_KEY
+			help
+				Support Get ATCK info to Gen BACKHAUL SSID and Key.
+				
+		config ZYXEL_AT_SET_TUTK_UID
+			bool "AT SET TUTK UID"
+			default n
+
+	   menu "Customization design for new id"
+		config ZYXEL_DISABLE_TXRX_FOR_WAN_ACT
+			bool "Disable tx/rx activity which is generated by PHY."
+			default n
+			help
+				Disable tx/rx activity which is generated by PHY.
+
+		config ZYXEL_WIND_NEW_XDSL_BEHAVIOR
+			bool "New xDSL LED behavior: 994 slow amber & 992/993 fast green."
+			default n
+			help
+				New xDSL LED behavior: 994 slow amber & 992/993 fast green.
+
+		config ZYXEL_SUPPORT_SW_LAN_AGGREGATE_LED
+			bool "Support software control lan aggregate led."
+			default n
+			help
+				Support software control lan aggregate led.
+
+		config ZYXEL_SUPPORT_SW_CTL_WAN_LED
+			bool "Change HW_LED to software control. (WAN)"
+			default n
+			help
+				Change HW_LED to software control. (WAN)
+	   endmenu
+
+		menu "Manufacture feature "
+
+			config TARGET_NAND_FLASH_TOTAL_SIZE
+				int "NAND flash size in MB for target board"
+				default 256
+
+			config ZYXEL_SYS_FWUR_SUPPORT
+				bool "sys fwur command"
+				select PACKAGE_atftp
+				default y
+
+			config APPS_VOIP_AUTO_TEST
+				bool "Support VOIP Auto Test"
+				default n
+
+			config MINI_BOOT
+				bool "Support mini boot"
+				default n
+
+			config ZYXEL_WEB_GUI_SPEED_TEST
+				bool "Run speed test via GUI"
+				default n
+
+		endmenu
+
+	endmenu
+
+	menu "Zyxel kernel options"
+	config KERNEL_ZYXEL_USE_LINUX_SIP_ALG
+		bool "Use Linux original SIP ALG"
+		default y
+
+	config KERNEL_ZYXEL_NF_GUEST_AP_SESSION_CTL
+		bool "Enable /proc/sys/net/netfilter/nf_guest_ap_session_ctl_max"
+		default n
+
+	config KERNEL_ZYXEL_NF_SESSION_RSV
+		bool "Enable /proc/sys/net/netfilter/nf_session_reserve"
+		default n
+
+	config KERNEL_ZYXEL_NF_SESSION_CTL
+		bool "Enable /proc/net/nf_session_ctl"
+		default n
+
+	config KERNEL_ZYXEL_PPTP_SUPPORT
+		bool "Support PPTP VPN"
+		default n
+
+	config KERNEL_ZYXEL_L2TP_SUPPORT
+		bool "Support L2TP VPN"
+		default n
+
+    config KERNEL_ZYXEL_RS_TRY_5_TIMES
+	    bool "Enable/Disable Zyxel Restart pppoe process if RS TRY 5 TIMES / Restart dhcp6c if DHCPv6 client don't get option 64"
+	    default n
+
+	config KERNEL_ZYXEL_PPTPD_RELAY
+		bool "Support PPTPD RELAY PPPoA"
+		default n
+		
+	config KERNEL_ZYXEL_EOGRE_SUPPORT
+		bool "Support EoGRE Tunnel"
+		default n
+		
+	config KERNEL_ZYXEL_SUPPORT_USB_FALL_BACK_2_0
+		bool "Usb can be set by user manually"
+		default n
+	
+	config KERNEL_PRINTK_CONSOLE_DBG_LEVEL
+		int "kernel debug level"
+		range 0 7
+		default 7
+		help
+			Support kernel dbg level(0~7) configuration.
+
+	config KERNEL_NETFILTER_XT_CONNMARK
+		tristate 'ctmark target and match support'
+		default y if  KERNEL_ZYXEL_EXT_MARK
+		default n if !KERNEL_ZYXEL_EXT_MARK
+
+	config KERNEL_NETFILTER_XT_TARGET_CONNMARK
+		tristate 'ctmark target and match support'
+		default y if  KERNEL_ZYXEL_EXT_MARK
+		default n if !KERNEL_ZYXEL_EXT_MARK
+
+	config KERNEL_NETFILTER_XT_MATCH_CONNMARK
+		tristate 'ctmark target and match support'
+		default y if  KERNEL_ZYXEL_EXT_MARK
+		default n if !KERNEL_ZYXEL_EXT_MARK
+
+	config KERNEL_ZYXEL_EXT_MARK_DEBUG
+		tristate 'EXTMARK compiler debug'
+		default y if  KERNEL_ZYXEL_EXT_MARK
+		default n if !KERNEL_ZYXEL_EXT_MARK
+
+	config KERNEL_ZYXEL_EXT_MARK
+		bool "Support Extension Mark"
+		default y if TARGET_brcm963xx && !BRCM963xx_SDK_VER_416L02A && !BRCM963xx_SDK_VER_416L05 && !BRCM963xx_SDK_VER_502L04
+
+	config KERNEL_NETFILTER_XT_CONNZEXTMARK
+		tristate 'ctmark target and match support'
+		default m if  KERNEL_ZYXEL_EXT_MARK
+		default n if !KERNEL_ZYXEL_EXT_MARK
+		---help---
+		This option adds the "ZEXTCONNMARK" target and "zextconnmark" match.
+		Netfilter allows you to store a mark value per connection (a.k.a.
+		ctmark), similarly to the packet mark (nfmark). Using this
+		target and match, you can set and match on this mark.
+
+	config KERNEL_NETFILTER_XT_MATCH_CONNZEXTMARK
+		tristate 'ctmark target and match support'
+		default m if  KERNEL_ZYXEL_EXT_MARK
+		default n if !KERNEL_ZYXEL_EXT_MARK
+		---help---
+		This option adds the "ZEXTCONNMARK" target and "zextconnmark" match.
+		Netfilter allows you to store a mark value per connection (a.k.a.
+		ctmark), similarly to the packet mark (nfmark). Using this
+		target and match, you can set and match on this mark.
+		
+	config KERNEL_NETFILTER_XT_TARGET_CONNZEXTMARK
+		tristate 'ctmark target and match support'
+		default m if  KERNEL_ZYXEL_EXT_MARK
+		default n if !KERNEL_ZYXEL_EXT_MARK
+		---help---
+		This option adds the "ZEXTCONNMARK" target and "zextconnmark" match.
+		Netfilter allows you to store a mark value per connection (a.k.a.
+		ctmark), similarly to the packet mark (nfmark). Using this
+		target and match, you can set and match on this mark.
+
+	config KERNEL_NETFILTER_XT_ZEXTMARK
+		tristate '"zextmark" match support'
+		depends on KERNEL_ZYXEL_EXT_MARK
+		default m if  KERNEL_ZYXEL_EXT_MARK
+		default n if !KERNEL_ZYXEL_EXT_MARK
+		---help---
+		  ZEXT private mark in skb
+		  To compile it as a module, choose M here.  If unsure, say N.
+
+	config KERNEL_NETFILTER_XT_MATCH_ZEXTMARK
+		tristate '"zextmark" match support'
+		depends on KERNEL_ZYXEL_EXT_MARK
+		default m if  KERNEL_ZYXEL_EXT_MARK
+		default n if !KERNEL_ZYXEL_EXT_MARK
+		---help---
+		  ZEXT private mark in skb
+		  To compile it as a module, choose M here.  If unsure, say N.
+
+	config KERNEL_NETFILTER_XT_TARGET_ZEXTMARK
+		tristate '"zextmark" match support'
+		depends on KERNEL_ZYXEL_EXT_MARK
+		default m if  KERNEL_ZYXEL_EXT_MARK
+		default n if !KERNEL_ZYXEL_EXT_MARK
+		---help---
+		  ZEXT private mark in skb
+
+		  To compile it as a module, choose M here.  If unsure, say N.
+		  
+	config KERNEL_BRIDGE_EBT_ZEXTMARK
+		tristate "ebt: zextmark filter support"
+		default m if  KERNEL_ZYXEL_EXT_MARK
+		default n if !KERNEL_ZYXEL_EXT_MARK
+		help
+		  This option adds the zextmark match, which allows matching frames based on
+		  the 'nfmark' value in the frame. This can be set by the zextmark target.
+		  This value is the same as the one used in the iptables zextmark match and
+		  target.
+
+		  To compile it as a module, choose M here.  If unsure, say N.
+
+	config KERNEL_BRIDGE_EBT_ZEXTMARK_T
+		tristate "ebt: zextmark target support"
+		default m if  KERNEL_ZYXEL_EXT_MARK
+		default n if !KERNEL_ZYXEL_EXT_MARK
+		help
+		  This option adds the zextmark target, which allows marking frames by
+		  setting the 'nfmark' value in the frame.
+		  This value is the same as the one used in the iptables zextmark match and
+		  target.
+
+		  To compile it as a module, choose M here.  If unsure, say N.
+    
+    config KERNEL_BRIDGE_EBT_NFQUEUE
+        tristate "ebt: nfqueue target support"
+        default n
+        help
+          This option adds the nfqueue target on ebtables.
+
+          To compile it as a module, choose M here.  If unsure, say N.
+		  
+    config KERNEL_ZYXEL_ALLOW_BR_GROUP_FWD
+        bool "Allow forwarding control protocols like STP and LLDP"
+        default n
+
+    config KERNEL_ZYXEL_KF_IVI
+           bool "KERNEL_ZYXEL_KF_IVI"
+           default n
+
+    config KERNEL_ZYXEL_IVI
+           tristate "Support for MAP-T MAP-E"
+           default n.
+           
+    config KERNEL_ZYXEL_L2TP_SUPPORT
+           bool "Support L2TP VPN"
+           default n
+
+    config KERNEL_MSTC_GPON
+           bool "Support MSTC Patch"
+           default n
+
+    config KERNEL_MSTC_TRANSCEIVER
+           tristate "Build MSTC GPON Transceiver Module"
+           default n
+
+    config KERNEL_MSTC_TRANSCEIVER_IMPL
+           int "Implementation index for MSTC GPON Transceiver Module"
+           depends on KERNEL_MSTC_TRANSCEIVER
+		   default 3
+
+	config KERNEL_ZYXEL_RECORD_CALL_TRACE
+		bool "Support kernel oops files saving after booting"
+		default n
+	
+	config KERNEL_ZYXEL_DEC_AND_GZIP_CORE
+		bool "Support kernel compressed coredump files saving after booting"
+		default n
+
+        config KERNEL_BRIDGE_EBT_DHCPOPT
+                tristate "Support ebt dhcp option module"
+                default n
+				
+	config KERNEL_ARP_PROTECT
+		bool "ARP Spoofing Protection (EXPERIMENTAL)"
+		default n
+		help
+         Provides basic protection against ARP spoofing attacks.
+	config KERNEL_ZYXEL_RECORD_CALL_TRACE
+		bool "Support kernel oops files saving after booting"
+		default n
+	config KERNEL_ZYXEL_DEC_AND_GZIP_CORE
+		bool "Support kernel coredump files saving after booting"
+		default n
+
+	config KERNEL_ZYXEL_KF_TMS
+		bool "Support NComm TMS Module"
+		default n
+
+	config KERNEL_ZYXEL_ZYBSP_BOARD_DETECT
+		bool "Support ZYXEL board detect by GPIO"
+		default n
+
+	config KERNEL_ZYXEL_ZYBSP_VENDOR_BOARD_DETECT
+		bool "Support ZYXEL vendor board detect by GPIO"
+		default n
+
+	config KERNEL_ZYXEL_ZYBSP_BOARD_EX5601_T0
+		bool "Support ZYXEL co-fw borad name"
+		default n
+
+	config KERNEL_ZYXEL_ZYBSP_DYING_GASP
+		bool "Support ZYXEL dying gasp by GPIO"
+		default n
+
+	config KERNEL_ZYXEL_ZYBSP_FEATURE_BITS
+		bool "Support ZYXEL board feature bits"
+		default n
+
+	endmenu
+
+source "config/Config-zyxel_voice.in"
+
+source "config/Config-zyxel_feature.in"
+
+source "config/Config-zyxel_webgui.in"
+
+source "config/Config-zyxel_customization.in"
+
+endmenu

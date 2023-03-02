@@ -1,0 +1,17 @@
+Index: linux-5.4.171/net/sched/sch_generic.c
+===================================================================
+--- linux-5.4.171.orig/net/sched/sch_generic.c
++++ linux-5.4.171/net/sched/sch_generic.c
+@@ -469,8 +469,12 @@ static void dev_watchdog(struct timer_li
+ 
+ 			if (some_queue_timedout) {
+ 				trace_net_dev_xmit_timeout(dev, i);
++#if 1 // ZyXEL : Do not display call trace when lan causes loop.
++				printk("NETDEV WATCHDOG: %s (%s): transmit queue %u timed out\n",dev->name, netdev_drivername(dev), i);
++#else
+ 				WARN_ONCE(1, KERN_INFO "NETDEV WATCHDOG: %s (%s): transmit queue %u timed out\n",
+ 				       dev->name, netdev_drivername(dev), i);
++#endif
+ 				dev->netdev_ops->ndo_tx_timeout(dev);
+ 			}
+ 			if (!mod_timer(&dev->watchdog_timer,

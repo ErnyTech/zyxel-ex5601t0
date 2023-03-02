@@ -1,0 +1,29 @@
+Index: json-c-0.15/CMakeLists.txt
+===================================================================
+--- json-c-0.15.orig/CMakeLists.txt
++++ json-c-0.15/CMakeLists.txt
+@@ -368,11 +368,11 @@ set(JSON_C_PUBLIC_HEADERS
+     ${PROJECT_SOURCE_DIR}/json_visit.h
+     ${PROJECT_SOURCE_DIR}/linkhash.h
+     ${PROJECT_SOURCE_DIR}/printbuf.h
++    ${PROJECT_SOURCE_DIR}/json_object_private.h
+ )
+ 
+ set(JSON_C_HEADERS
+     ${JSON_C_PUBLIC_HEADERS}
+-    ${PROJECT_SOURCE_DIR}/json_object_private.h
+     ${PROJECT_SOURCE_DIR}/random_seed.h
+     ${PROJECT_SOURCE_DIR}/strerror_override.h
+     ${PROJECT_SOURCE_DIR}/strerror_override_private.h
+Index: json-c-0.15/json-c.sym
+===================================================================
+--- json-c-0.15.orig/json-c.sym
++++ json-c-0.15/json-c.sym
+@@ -126,6 +126,7 @@ JSONC_0.14 {
+     json_object_set_uint64;
+     json_object_set_userdata;
+     json_object_set_type;
++	json_object_set_param;
+     json_object_to_fd;
+     json_object_to_file;
+     json_object_to_file_ext;

@@ -1,0 +1,487 @@
+Index: busybox-1.31.1/networking/wget.c
+===================================================================
+--- busybox-1.31.1.orig/networking/wget.c	2019-10-21 22:54:40.000000000 +0800
++++ busybox-1.31.1/networking/wget.c	2021-04-13 20:14:38.177691800 +0800
+@@ -153,6 +153,14 @@
+ 
+ #include "libbb.h"
+ 
++#if defined(ZCFG_SUPPORT) //Tr143: DownloadDiagnostic
++#include <time.h>
++#include <json/json.h>
++#include "zcfg_common.h"
++#include "zcfg_net.h"
++#include "zcfg_msg.h"
++#endif
++
+ #if 0
+ # define log_io(...) bb_error_msg(__VA_ARGS__)
+ # define SENDFMT(fp, fmt, ...) \
+@@ -242,6 +250,11 @@
+ 	unsigned timeout_seconds;
+ 	smallint die_if_timed_out;
+ #endif
++#if defined(ZCFG_SUPPORT) //Support TR143:DownloadDiagnstic
++	char *ifName;
++	char *dscp;
++	char *ethernetPriority;
++#endif
+ 	smallint chunked;         /* chunked transfer encoding */
+ 	smallint got_clen;        /* got content-length: from server  */
+ 	/* Local downloads do benefit from big buffer.
+@@ -258,6 +271,25 @@
+ 	FREE_PTR_TO_GLOBALS(); \
+ } while (0)
+ 
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++#define DEFAULT_DATETIME "0001-01-01T00:00:00Z"
++
++static char DiagnosticsState[64] = "";
++static char ROMTime[64] = DEFAULT_DATETIME;
++static char BOMTime[64] = DEFAULT_DATETIME;
++static char EOMTime[64] = DEFAULT_DATETIME;
++static char TCPOpenRequestTime[64] = DEFAULT_DATETIME;
++static char TCPOpenResponseTime[64] = DEFAULT_DATETIME;
++static unsigned long TotalBytesReceived = 0;
++static unsigned long ifBytesReceivedStart = 0;
++static unsigned long ifBytesReceivedEnd = 0;
++
++int priorityMark=0;
++char dstIP[32]={0};
++
++unsigned long getReceiveByte(char *ifName);
++void set_priorityMark(int act);
++#endif
+ 
+ /* Must match option string! */
+ enum {
+@@ -270,12 +302,24 @@
+ 	WGET_OPT_PROXY      = (1 << 6),
+ 	WGET_OPT_USER_AGENT = (1 << 7),
+ 	WGET_OPT_NETWORK_READ_TIMEOUT = (1 << 8),
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++	WGET_OPT_INTERFACE  = (1 << 9),
++	WGET_OPT_DSCP       = (1 << 10),
++	WGET_OPT_ETNERPRIORITY = (1 << 11),
++	WGET_OPT_RETRIES    = (1 << 12),
++	WGET_OPT_nsomething = (1 << 13),
++	WGET_OPT_HEADER     = (1 << 14) * ENABLE_FEATURE_WGET_LONG_OPTIONS,
++	WGET_OPT_POST_DATA  = (1 << 15) * ENABLE_FEATURE_WGET_LONG_OPTIONS,
++	WGET_OPT_SPIDER     = (1 << 16) * ENABLE_FEATURE_WGET_LONG_OPTIONS,
++	WGET_OPT_NO_CHECK_CERT = (1 << 17) * ENABLE_FEATURE_WGET_LONG_OPTIONS,
++#else
+ 	WGET_OPT_RETRIES    = (1 << 9),
+ 	WGET_OPT_nsomething = (1 << 10),
+ 	WGET_OPT_HEADER     = (1 << 11) * ENABLE_FEATURE_WGET_LONG_OPTIONS,
+ 	WGET_OPT_POST_DATA  = (1 << 12) * ENABLE_FEATURE_WGET_LONG_OPTIONS,
+ 	WGET_OPT_SPIDER     = (1 << 13) * ENABLE_FEATURE_WGET_LONG_OPTIONS,
+ 	WGET_OPT_NO_CHECK_CERT = (1 << 14) * ENABLE_FEATURE_WGET_LONG_OPTIONS,
++#endif
+ };
+ 
+ enum {
+@@ -283,6 +327,124 @@
+ 	PROGRESS_END   = 0,
+ 	PROGRESS_BUMP  = 1,
+ };
++
++#if defined(ZCFG_SUPPORT)//TR143
++zcfgRet_t ResultMsgSend(int msg_type, int payloadLen, const char *payload);
++static size_t safe_fwrite(void *ptr, size_t size, size_t nmemb, FILE *stream);
++void getDateTime(char *buf);
++
++
++
++zcfgRet_t ResultMsgSend(int msg_type, int payloadLen, const char *payload)
++{
++	zcfgRet_t ret = 0;
++	void *sendBuf = NULL;
++	void *recvBuf = NULL;
++	zcfgMsg_t *sendMsgHdr = NULL;
++	char *recv_str = NULL;
++	int buf_size = 0;
++
++	buf_size = sizeof(zcfgMsg_t)+payloadLen;
++	sendBuf = malloc(buf_size);
++	sendMsgHdr = (zcfgMsg_t*)sendBuf;
++
++	sendMsgHdr->type = msg_type;
++	sendMsgHdr->length = payloadLen;
++	sendMsgHdr->srcEid = ZCFG_EID_WGET;
++	sendMsgHdr->dstEid = ZCFG_EID_ESMD;
++
++	if(payload != NULL)
++		memcpy(sendBuf+sizeof(zcfgMsg_t), payload, payloadLen);
++
++	printf("#####ResultMsgSend  ret=%d\n", ret);
++
++	ret = zcfgMsgSendAndGetReply(sendMsgHdr, (zcfgMsg_t **)&recvBuf, 0);
++
++	if(ret == ZCFG_SUCCESS) {
++		recv_str = (char *)recvBuf+sizeof(zcfgMsg_t);
++		printf("Receive message : %s\n", recv_str);
++	}
++
++	return ret;
++}
++
++
++void set_priorityMark(int act)
++{
++	char cmd[128];
++
++	if (act == 0){ //del
++		sprintf(cmd, "iptables -t mangle -D OUTPUT -j MARK --set-mark 0x%x -d %s",
++								priorityMark, dstIP);
++		printf("set_priorityMark (del) cmd:%s\n", cmd);
++		system(cmd);
++	}
++	else if (act == 1){ //add
++		sprintf(cmd, "iptables -t mangle -A OUTPUT -j MARK --set-mark 0x%x -d %s",
++								priorityMark, dstIP);
++		printf("set_priorityMark (add) cmd:%s\n", cmd);
++		system(cmd);
++	}
++}
++
++
++/* Write NMEMB elements of SIZE bytes from PTR to STREAM.  Returns the
++ * number of elements written, and a short count if an eof or non-interrupt
++ * error is encountered.  */
++static size_t safe_fwrite(void *ptr, size_t size, size_t nmemb, FILE *stream)
++{
++	size_t ret = 0;
++
++	do {
++		clearerr(stream);
++		ret += fwrite((char *)ptr + (ret * size), size, nmemb - ret, stream);
++	} while (ret < nmemb && ferror(stream) && errno == EINTR);
++
++	return ret;
++}
++
++void getDateTime(char *buf)
++{
++	struct timeval c_tv;
++	struct timezone c_tz;
++	struct tm *p;
++	gettimeofday(&c_tv,&c_tz);
++	p = gmtime(&c_tv.tv_sec);
++	sprintf(buf, "%d-%02d-%02dT%02d:%02d:%02d.%ld", (1900+p->tm_year), (1+p->tm_mon), p->tm_mday, p->tm_hour, p->tm_min, p->tm_sec, c_tv.tv_usec);
++	return;
++}
++
++unsigned long getReceiveByte(char *ifName)
++{
++	FILE *fp;
++	unsigned long receiveBytes;
++	char interfaceName[32]={0};
++	char buf[512];
++
++	fp = popen("cat /proc/net/dev", "r");
++
++	while (fgets(buf, sizeof(buf), fp) != NULL) {
++		char *ptr;
++
++		if ( (ptr = strchr(buf, ':')) == NULL )
++			continue;
++		else
++			*ptr = ' ';
++
++		sscanf(buf, "%s %ld", interfaceName, &receiveBytes); //receiveBytes may overflow!
++
++		if( !strcmp(interfaceName, ifName) ){
++			//printf("interfaceName:%s, receiveBytes:%ld\n", interfaceName, receiveBytes);
++			return receiveBytes;
++		}
++	}
++	pclose(fp);
++
++	return 0;
++}
++#endif
++
++
+ #if ENABLE_FEATURE_WGET_STATUSBAR
+ static void progress_meter(int flag)
+ {
+@@ -452,7 +614,12 @@
+ 
+ 	set_alarm();
+ 	if (fgets(G.wget_buf, sizeof(G.wget_buf), fp) == NULL)
++	{
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++		strcpy(DiagnosticsState, "Error_NoResponse");
++#endif
+ 		bb_perror_msg_and_die("error getting response");
++	}
+ 	clear_alarm();
+ 
+ 	buf_ptr = strchrnul(G.wget_buf, '\n');
+@@ -924,7 +1091,15 @@
+ 			n = fread(G.wget_buf, 1, rdsz, dfp);
+ 
+ 			if (n > 0) {
++#if defined(ZCFG_SUPPORT) //TR143
++				if (safe_fwrite(G.wget_buf, 1, n, (FILE *)G.output_fd) != n)
++				{
++					set_priorityMark(0);
++					strcpy(DiagnosticsState, "Error_TransferFailed");
++				}
++#else
+ 				xwrite(G.output_fd, G.wget_buf, n);
++#endif
+ #if ENABLE_FEATURE_WGET_STATUSBAR
+ 				G.transferred += n;
+ #endif
+@@ -948,6 +1123,9 @@
+ 			if (errno != EAGAIN) {
+ 				if (ferror(dfp)) {
+ 					progress_meter(PROGRESS_END);
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++					set_priorityMark(0);
++#endif
+ 					bb_perror_msg_and_die(bb_msg_read_error);
+ 				}
+ 				break; /* EOF, not error */
+@@ -977,6 +1155,10 @@
+ 			progress_meter(PROGRESS_BUMP);
+ 		} /* while (reading data) */
+ 
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++		TotalBytesReceived = ifBytesReceivedStart - ifBytesReceivedEnd;
++		getDateTime(EOMTime);
++#endif
+ #if ENABLE_FEATURE_WGET_STATUSBAR || ENABLE_FEATURE_WGET_TIMEOUT
+ 		clearerr(dfp);
+ 		ndelay_off(polldata.fd); /* else fgets can get very unhappy */
+@@ -1048,7 +1230,12 @@
+ 	char *redirected_path = NULL;
+ 	struct host_info server;
+ 	struct host_info target;
+-
++#if defined(ZCFG_SUPPORT) //tr143
++	//char cmd[128];
++	struct json_object *diag_result = NULL;
++	const char *payload = NULL;
++	int payloadLen = 0;
++#endif
+ 	server.allocated = NULL;
+ 	target.allocated = NULL;
+ 	server.user = NULL;
+@@ -1117,6 +1304,10 @@
+ 		fprintf(stderr, "Connecting to %s (%s)\n", server.host, s);
+ 		free(s);
+ 	}
++#if defined(ZCFG_SUPPORT) //TR143
++	strcpy(dstIP, inet_ntoa(lsa->u.sin.sin_addr));
++	set_priorityMark(1);
++#endif
+  establish_session:
+ 	/*G.content_len = 0; - redundant, got_clen = 0 is enough */
+ 	G.got_clen = 0;
+@@ -1128,6 +1319,9 @@
+ 		char *str;
+ 		int status;
+ 
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++		getDateTime(TCPOpenRequestTime);
++#endif
+ 		/* Open socket to http(s) server */
+ #if ENABLE_FEATURE_WGET_OPENSSL
+ 		/* openssl (and maybe internal TLS) support is configured */
+@@ -1139,6 +1333,13 @@
+ # if ENABLE_FEATURE_WGET_HTTPS
+ 			if (fd < 0) { /* no openssl? try internal */
+ 				sfp = open_socket(lsa);
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++				if (sfp == NULL)
++				{
++					strcpy(DiagnosticsState, "Error_InitConnectionFailed");
++				}
++				getDateTime(TCPOpenResponseTime);
++#endif
+ 				spawn_ssl_client(server.host, fileno(sfp), /*flags*/ 0);
+ 				goto socket_opened;
+ 			}
+@@ -1151,6 +1352,13 @@
+ 			goto socket_opened;
+ 		}
+ 		sfp = open_socket(lsa);
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++		if (sfp == NULL)
++		{
++			strcpy(DiagnosticsState, "Error_InitConnectionFailed");
++		}
++		getDateTime(TCPOpenResponseTime);
++#endif
+  socket_opened:
+ #elif ENABLE_FEATURE_WGET_HTTPS
+ 		/* Only internal TLS support is configured */
+@@ -1195,6 +1403,14 @@
+ 		if (G.beg_range != 0 && !USR_HEADER_RANGE)
+ 			SENDFMT(sfp, "Range: bytes=%"OFF_FMT"u-\r\n", G.beg_range);
+ 
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++		getDateTime(ROMTime);
++
++		if (option_mask32 & WGET_OPT_INTERFACE){
++			ifBytesReceivedStart = getReceiveByte(G.ifName);
++		}
++#endif
++
+ #if ENABLE_FEATURE_WGET_LONG_OPTIONS
+ 		if (G.extra_headers) {
+ 			log_io(G.extra_headers);
+@@ -1252,6 +1468,9 @@
+ 
+ 		/* Success responses */
+ 		case 200:
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++			getDateTime(BOMTime);
++#endif
+ 			/* fall through */
+ 		case 201: /* 201 Created */
+ /* "The request has been fulfilled and resulted in a new resource being created" */
+@@ -1387,11 +1606,24 @@
+ 	free(lsa);
+ 
+ 	if (!(option_mask32 & WGET_OPT_SPIDER)) {
+-		if (G.output_fd < 0)
++		if (G.output_fd < 0){
++#if defined(ZCFG_SUPPORT) //TR143
++			G.output_fd = (int )xfopen(G.fname_out, ((option_mask32 & WGET_OPT_CONTINUE) ? "a" : "w"));
++#else
+ 			G.output_fd = xopen(G.fname_out, G.o_flags);
++#endif
++		}
+ 		retrieve_file_data(dfp);
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++		if (option_mask32 & WGET_OPT_INTERFACE)
++			ifBytesReceivedEnd = getReceiveByte(G.ifName);
++#endif
+ 		if (!(option_mask32 & WGET_OPT_OUTNAME)) {
++#if defined(ZCFG_SUPPORT) //TR143
++			fclose((FILE *)(G.output_fd));
++#else
+ 			xclose(G.output_fd);
++#endif
+ 			G.output_fd = -1;
+ 		}
+ 	} else {
+@@ -1408,6 +1640,26 @@
+ 	}
+ 	fclose(sfp);
+ 
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++	strcpy(DiagnosticsState, "Completed");
++
++	diag_result = json_object_new_object();
++	json_object_object_add(diag_result, "DiagnosticsState", json_object_new_string(DiagnosticsState));
++	json_object_object_add(diag_result, "ROMTime", json_object_new_string(ROMTime));
++	json_object_object_add(diag_result, "BOMTime", json_object_new_string(BOMTime));
++	json_object_object_add(diag_result, "EOMTime", json_object_new_string(EOMTime));
++	json_object_object_add(diag_result, "TotalBytesReceived", json_object_new_int(TotalBytesReceived));
++	json_object_object_add(diag_result, "TCPOpenRequestTime", json_object_new_string(TCPOpenRequestTime));
++	json_object_object_add(diag_result, "TCPOpenResponseTime", json_object_new_string(TCPOpenResponseTime));
++
++	payload = json_object_to_json_string(diag_result);
++	payloadLen = strlen(payload) + 1;
++	ResultMsgSend(ZCFG_MSG_DOWNLOAD_DIAG_COMPLETE_EVENT, payloadLen, payload);
++
++	json_object_put(diag_result);
++	set_priorityMark(0);
++#endif
++
+ 	free(server.allocated);
+ 	free(target.allocated);
+ 	free(server.user);
+@@ -1432,6 +1684,11 @@
+ 		"user-agent\0"       Required_argument "U"
+ IF_FEATURE_WGET_TIMEOUT(
+ 		"timeout\0"          Required_argument "T")
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++		"interfaceName"      Required_argument "i"
++		"DSCP"               Required_argument "d"
++		"ethernetPriority"   Required_argument "M"
++#endif
+ 		/* Ignored: */
+ IF_DESKTOP(	"tries\0"            Required_argument "t")
+ 		"header\0"           Required_argument "\xff"
+@@ -1460,6 +1717,9 @@
+ 
+ 	INIT_G();
+ 
++#if defined(ZCFG_SUPPORT) //TR143
++	zcfgEidInit(ZCFG_EID_WGET, NULL);
++#endif
+ #if ENABLE_FEATURE_WGET_TIMEOUT
+ 	G.timeout_seconds = 900;
+ 	signal(SIGALRM, alarm_handler);
+@@ -1467,6 +1727,33 @@
+ 	G.proxy_flag = "on";   /* use proxies if env vars are set */
+ 	G.user_agent = "Wget"; /* "User-Agent" header field */
+ 
++#if defined(ZCFG_SUPPORT) //TR143
++	GETOPT32(argv, "^"
++		"cqSO:o:P:Y:U:T:i:wd:M:R:+"
++		/*ignored:*/ "t:"
++		/*ignored:*/ "n::"
++		/* wget has exactly four -n<letter> opts, all of which we can ignore:
++		 * -nv --no-verbose: be moderately quiet (-q is full quiet)
++		 * -nc --no-clobber: abort if exists, neither download to FILE.n nor overwrite FILE
++		 * -nH --no-host-directories: wget -r http://host/ won't create host/
++		 * -np --no-parent
++		 * "n::" above says that we accept -n[ARG].
++		 * Specifying "n:" would be a bug: "-n ARG" would eat ARG!
++		 */
++		"\0"
++		"-1" /* at least one URL */
++		IF_FEATURE_WGET_LONG_OPTIONS(":\xff::") /* --header is a list */
++		LONGOPTS
++		, &G.fname_out, &G.fname_log, &G.dir_prefix,
++		&G.proxy_flag, &G.user_agent,
++		IF_FEATURE_WGET_TIMEOUT(&G.timeout_seconds) IF_NOT_FEATURE_WGET_TIMEOUT(NULL),
++		&G.ifName, &G.dscp, &G.ethernetPriority,
++		NULL, /* -t RETRIES */
++		NULL  /* -n[ARG] */
++		IF_FEATURE_WGET_LONG_OPTIONS(, &headers_llist)
++		IF_FEATURE_WGET_LONG_OPTIONS(, &G.post_data)
++	);
++#else
+ 	GETOPT32(argv, "^"
+ 		"cqSO:o:P:Y:U:T:+"
+ 		/*ignored:*/ "t:"
+@@ -1491,6 +1778,7 @@
+ 		IF_FEATURE_WGET_LONG_OPTIONS(, &headers_llist)
+ 		IF_FEATURE_WGET_LONG_OPTIONS(, &G.post_data)
+ 	);
++#endif
+ #if 0 /* option bits debug */
+ 	if (option_mask32 & WGET_OPT_RETRIES) bb_error_msg("-t NUM");
+ 	if (option_mask32 & WGET_OPT_nsomething) bb_error_msg("-nsomething");
+@@ -1533,6 +1821,11 @@
+ 		}
+ 	}
+ #endif
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++	if (option_mask32 & WGET_OPT_ETNERPRIORITY)
++		priorityMark = atoi(G.ethernetPriority)<<13 | 0x1000;
++#endif
++
+ 
+ 	G.output_fd = -1;
+ 	G.o_flags = O_WRONLY | O_CREAT | O_TRUNC | O_EXCL;
+@@ -1541,6 +1834,12 @@
+ 			G.output_fd = 1;
+ 			option_mask32 &= ~WGET_OPT_CONTINUE;
+ 		}
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++		else
++		{
++			G.output_fd = (int )xfopen(G.fname_out, ((option_mask32 & WGET_OPT_CONTINUE) ? "a" : "w"));
++		}
++#endif
+ 		/* compat with wget: -O FILE can overwrite */
+ 		G.o_flags = O_WRONLY | O_CREAT | O_TRUNC;
+ 	}

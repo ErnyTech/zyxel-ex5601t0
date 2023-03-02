@@ -1,0 +1,13 @@
+Index: dropbear-2020.81/default_options.h
+===================================================================
+--- dropbear-2020.81.orig/default_options.h
++++ dropbear-2020.81/default_options.h
+@@ -110,7 +110,7 @@ IMPORTANT: Some options will require "ma
+ 
+ /* Message integrity. sha2-256 is recommended as a default, 
+    sha1 for compatibility */
+-#define DROPBEAR_SHA1_HMAC 1
++#define DROPBEAR_SHA1_HMAC 0
+ #define DROPBEAR_SHA2_256_HMAC 1
+ #define DROPBEAR_SHA1_96_HMAC 0
+ 

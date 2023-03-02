@@ -1,0 +1,441 @@
+Index: radvd-1.8/radvd.c
+===================================================================
+--- radvd-1.8.orig/radvd.c	2021-03-05 13:49:36.861171528 +0800
++++ radvd-1.8/radvd.c	2021-03-05 13:41:03.230130600 +0800
+@@ -14,6 +14,7 @@
+  *
+  */
+ 
++#include <stdbool.h>
+ #include "config.h"
+ #include "includes.h"
+ #include "radvd.h"
+@@ -26,6 +27,7 @@
+ #include <poll.h>
+ 
+ struct Interface *IfaceList = NULL;
++struct AdvPrefix *MainOldAdvPrefixList = NULL;
+ 
+ #ifdef HAVE_GETOPT_LONG
+ 
+@@ -107,6 +109,8 @@
+ int onePrefixExpiredCurrently();
+ void prefixExipreSendRaImmediately();
+ 
++static void add_old_prefix(void);
++
+ int
+ main(int argc, char *argv[])
+ {
+@@ -363,6 +367,10 @@
+ 
+ 	config_interface();
+ 
++#ifdef ZYXEL_OLD_ADVPREFIXLIST
++	add_old_prefix();
++	kickoff_adverts();
++#else
+ 	// see if need to use 3 RA architecture. (pd is changed)
+ 	backup_new_prefix();
+ 	if (is_old_new_prefix_exist_and_diff()==1) {
+@@ -373,6 +381,7 @@
+ 	kickoff_adverts();
+ 	}
+ 	backup_old_prefix(); // for the next time radvd.bin be restart.
++#endif
+ 
+ 	main_loop();
+ 	stop_adverts();
+@@ -522,12 +531,36 @@
+ 	iface->next_multicast = next_timeval(next);
+ }
+ 
++static void
++iface_maxadvvalidlifetime(struct Interface *iface)
++{
++	bool running = true;
++	struct AdvPrefix *prefix;
++	uint32_t maxadvvalidlifetime = 0;
++
++	prefix = iface ? iface->AdvPrefixList : NULL;
++	running = (prefix) ? running : !running;
++
++	while(running)
++	{
++		maxadvvalidlifetime = (prefix->AdvValidLifetime > maxadvvalidlifetime) ? prefix->AdvValidLifetime : maxadvvalidlifetime;
++		prefix = prefix->next;
++		running = (prefix) ? running : !running;
++	}
++
++	if(iface)
++		iface->MaxAdvValidLifetime = maxadvvalidlifetime;
++}
++
+ void
+ config_interface(void)
+ {
+ 	struct Interface *iface;
+ 	for(iface=IfaceList; iface; iface=iface->next)
+ 	{
++
++		iface_maxadvvalidlifetime(iface);
++
+ 		if (iface->AdvLinkMTU)
+ 			set_interface_linkmtu(iface->Name, iface->AdvLinkMTU);
+ 		if (iface->AdvCurHopLimit)
+@@ -701,6 +734,10 @@
+ 	/* Linux has "one-shot" signals, reinstall the signal handler */
+ 	signal(SIGTERM, sigterm_handler);
+ 
++#ifdef ZYXEL_OLD_ADVPREFIXLIST
++	backup_old_prefix();
++#endif
++
+ 	dlog(LOG_DEBUG, 4, "sigterm_handler called");
+ 
+ 	++sigterm_received;
+@@ -956,6 +993,111 @@
+ 		}
+ 	}
+ }
++
++static int add_radvd_prefix_file_address(struct in6_addr *prx_s6addr, char *buf)
++{
++	bool running = true;
++	int n = 0;
++	char prx_str[INET6_ADDRSTRLEN] = {0};
++
++	running = (prx_s6addr && buf) ? running : !running;
++	if(!running)
++		return -1;
++
++	while(running){
++		prx_s6addr->s6_addr[n] = buf[n];
++		n++;
++		running = (n == sizeof(struct in6_addr)) ? !running : running;
++	}
++
++	print_addr(prx_s6addr, prx_str);
++	//printf("%s: pfx: %s\n", __func__, prx_str);
++
++	return 1;
++}
++
++static int prefix_prefixlist_cmp(struct AdvPrefix *prefix, struct AdvPrefix *prefixList)
++{
++	bool running = true;
++	int rst = 1;
++	struct AdvPrefix *lstprx;
++	char prx_str[INET6_ADDRSTRLEN] = {0};
++
++	lstprx = prefixList;
++	running = (lstprx && prefix) ? running : !running;
++
++	while(running)
++	{
++		rst = ((memcmp(&prefix->Prefix, &lstprx->Prefix, sizeof(struct in6_addr)) == 0) &&
++				(prefix->PrefixLen == lstprx->PrefixLen)) ? 0 : 1;
++		if(rst == 0){
++			print_addr(&prefix->Prefix, prx_str);
++			//printf("%s: pfx: %s == 0\n", __func__, prx_str);
++		}
++		lstprx = lstprx->next;
++		running = (rst == 0 || !lstprx) ? !running : running;
++	}
++
++	return rst;
++}
++
++static void add_old_prefix(void)
++{
++	bool running = true;
++	FILE *pFile = NULL;
++	struct stat fst = {0};
++	struct AdvPrefix *OldAdvPrefixList, *oldprx;
++	char prx_str[INET6_ADDRSTRLEN] = {0};
++	struct Interface *iface;
++
++	//printf("%s: %s\n", __func__, RADVD_OLDPREFIX_FILE);
++	iface = IfaceList;
++	pFile = fopen(RADVD_OLDPREFIX_FILE, "rb");
++	if(stat(RADVD_OLDPREFIX_FILE, &fst) != 0 || fst.st_size == 0){
++		printf("%s: %s stat fail\n", __func__, RADVD_OLDPREFIX_FILE);
++		return;
++	}else if(!iface || !pFile){
++		printf("%s: %s fail\n", __func__, RADVD_OLDPREFIX_FILE);
++		return;
++	}
++
++	while(running){
++		OldAdvPrefixList = NULL;
++		while(running)
++		{
++			oldprx = (struct AdvPrefix *)malloc(sizeof(struct AdvPrefix));
++			memset(oldprx, 0, sizeof(struct AdvPrefix));
++			running = ((feof(pFile) == 0) && (fread((void *)oldprx, sizeof(struct AdvPrefix), 1, pFile) > 0)) ? running : !running;
++			if(!running)
++			{
++
++				free(oldprx);
++			}else{
++
++				if(oldprx->curr_validlft > iface->MaxAdvValidLifetime)
++					oldprx->curr_validlft = iface->MaxAdvValidLifetime;
++
++				if(prefix_prefixlist_cmp(oldprx, iface->AdvPrefixList) != 0){
++					print_addr(&oldprx->Prefix, prx_str);
++					printf("%s: add pfx: %s\n", __func__, prx_str);
++					oldprx->next = OldAdvPrefixList;
++					OldAdvPrefixList = oldprx;
++				}else{
++					free(oldprx);
++				}
++			}
++
++		}
++
++		MainOldAdvPrefixList = OldAdvPrefixList ? OldAdvPrefixList : MainOldAdvPrefixList;
++		iface = iface->next;
++		running = (iface && (feof(pFile) == 0)) ? !running : running;
++	}
++
++	fclose(pFile);
++
++}
++
+ void set_prefix_to_old(void)
+ {
+ 	struct AdvPrefix *prefix;
+@@ -1048,21 +1190,83 @@
+ 		}
+ 	}
+ }
++
++static void output_old_prefix_list(struct AdvPrefix *prefixList, FILE *pFile)
++{
++	bool running = true;
++	struct AdvPrefix *prefix;
++	char prxstr[INET6_ADDRSTRLEN] = {0};
++
++	prefix = prefixList;
++
++	if(!prefix || !pFile){
++		printf("%s: fail\n", __func__);
++		return;
++	}
++
++	while(running){
++
++		if(prefix->curr_validlft == 0){
++			prefix = prefix->next;
++			running = prefix ? running : !running;
++
++			continue;
++		}
++
++		print_addr(&prefix->Prefix, prxstr);
++		printf("%s: prx: %s\n", __func__, prxstr);
++
++		prefix->curr_preferredlft = prefix->AdvPreferredLifetime = 0;
++
++		if(prefix->curr_validlft > RADVD_HOUR_TIME*2)
++			prefix->curr_validlft = RADVD_HOUR_TIME*2;
++
++		prefix->DeprecatePrefixFlag = 1;
++		prefix->DecrementLifetimesFlag = 1;
++		fwrite(prefix, sizeof(struct AdvPrefix), 1, pFile);
++
++		prefix = prefix->next;
++		running = prefix ? running : !running;
++	}
++
++}
++
+ void backup_old_prefix(void)
+ {
+     struct AdvPrefix *prefix;
+-    char pfx_str[INET6_ADDRSTRLEN];
++    char pfx_str[INET6_ADDRSTRLEN] = {0};
+     struct Interface *iface = NULL;
++
+     iface=IfaceList;
+     if (!iface) return;
++
++#ifdef ZYXEL_OLD_ADVPREFIXLIST
++    FILE* fp = NULL;
++    fp = fopen(RADVD_OLDPREFIX_FILE, "wb");
++    if(!fp) {
++        system("echo $(date +%H:%M:%S)'  radvd.bin  backup_old_prefix()  tmpradvd_oldprefix could not open' > /tmp/dd");
++        return;
++    }
++
++    for (iface; iface; iface = iface->next)
++    {
++        output_old_prefix_list(iface->AdvPrefixList, fp);
++        output_old_prefix_list(MainOldAdvPrefixList, fp);
++    }
++
++    fclose(fp);
++#else
+     for (iface; iface; iface = iface->next)
+     {
+         if (!iface) return;
+         for (prefix = iface->AdvPrefixList; prefix;
+                         prefix = prefix->next)
+         {
+-            if (!prefix)return;
++            //if (!prefix)return;
++
+             print_addr(&prefix->Prefix, pfx_str);
++            //printf("%s: prx: %s\n", __func__, pfx_str);
++
+ 
+             // backup old prefix
+             unsigned char buff[16];
+@@ -1080,6 +1284,8 @@
+             }
+         }
+     }
++#endif
++
+ }
+ void backup_new_prefix(void)
+ {
+Index: radvd-1.8/radvd.h
+===================================================================
+--- radvd-1.8.orig/radvd.h	2021-03-05 13:49:36.765171528 +0800
++++ radvd-1.8/radvd.h	2021-03-05 13:49:36.873171528 +0800
+@@ -28,6 +28,8 @@
+ 
+ #define min(a,b)	(((a) < (b)) ? (a) : (b))
+ 
++#define RADVD_HOUR_TIME		3600
++
+ struct AdvPrefix;
+ struct Clients;
+ 
+@@ -61,6 +63,7 @@
+ 	uint32_t		AdvLinkMTU;
+ 	uint32_t		AdvReachableTime;
+ 	uint32_t		AdvRetransTimer;
++	uint32_t		MaxAdvValidLifetime;
+ 	uint8_t			AdvCurHopLimit;
+ 	int32_t			AdvDefaultLifetime;   /* XXX: really uint16_t but we need to use -1 */
+ 	int32_t			AdvDefaultLifetime_bak;	//2016/01/07 Niko: backup Router Lifetime for set_prefix_lifetimes_to_zero() and set_prefix_lifetimes_back() functions
+Index: radvd-1.8/send.c
+===================================================================
+--- radvd-1.8.orig/send.c	2021-03-05 13:49:36.841171528 +0800
++++ radvd-1.8/send.c	2021-03-05 13:42:51.788130600 +0800
+@@ -21,9 +21,12 @@
+ #include <sys/socket.h>
+ #include <net/if.h>
+ #include <unistd.h>
++#include <stdbool.h>
+ #include <linux/ethtool.h>
+ #include <linux/sockios.h>
+ 
++extern struct AdvPrefix *MainOldAdvPrefixList;
++
+ g_NeedSetRaltToZero=0;
+ g_HasSetRaltToZero=0;
+ /*
+@@ -398,10 +401,10 @@
+ 
+ static void cease_adv_pfx_msg(const char *if_name, struct in6_addr *pfx, const int pfx_len)
+ {
+-	char pfx_str[INET6_ADDRSTRLEN];
++	char pfx_str[INET6_ADDRSTRLEN] = {0};
+ 
+ 	print_addr(pfx, pfx_str);
+-
++	printf("%s: prx: %s\n", __func__, pfx_str);
+ 	dlog(LOG_DEBUG, 3, "Will cease advertising %s/%u%%%s, preferred lifetime is 0", pfx_str, pfx_len, if_name);
+ 
+ }
+@@ -417,7 +420,10 @@
+ 	struct iovec iov;
+ 	char __attribute__((aligned(8))) chdr[CMSG_SPACE(sizeof(struct in6_pktinfo))];
+ 	struct nd_router_advert *radvert;
+-	struct AdvPrefix *prefix;
++	bool running = true;
++	struct AdvPrefix *prefix, *prvsprefix;
++	struct AdvPrefix **headp;
++
+ 	struct AdvRoute *route;
+ 	struct AdvRDNSS *rdnss;
+ 	struct AdvDNSSL *dnssl;
+@@ -583,7 +588,61 @@
+ 		//               it has no prefixes configured or delegated to it.
+ 		radvert->nd_ra_router_lifetime = 0;
+ 	}
++#ifdef ZYXEL_OLD_ADVPREFIXLIST
++	prefix = prvsprefix = MainOldAdvPrefixList;
++	headp = &MainOldAdvPrefixList;
++	running = prefix ? running : !running;
++
++	while(running){
++
++		struct nd_opt_prefix_info *pinfo;
++
++		if(!prefix->DeprecatePrefixFlag){
++			prvsprefix = prefix;
++			prefix = prefix->next;
++			continue;
++		}
++
++		pinfo = (struct nd_opt_prefix_info *)(buff + len);
++
++		send_ra_inc_len(&len, sizeof(struct nd_opt_prefix_info));
++		pinfo->nd_opt_pi_type = ND_OPT_PREFIX_INFORMATION;
++		pinfo->nd_opt_pi_len = 4;
++		pinfo->nd_opt_pi_prefix_len = prefix->PrefixLen;
++
++		pinfo->nd_opt_pi_flags_reserved = (prefix->AdvAutonomousFlag) ? ND_OPT_PI_FLAG_AUTO : 0;
++		pinfo->nd_opt_pi_flags_reserved = (prefix->AdvRouterAddr) ? ND_OPT_PI_FLAG_RADDR : 0;
+ 
++		if(prefix->DecrementLifetimesFlag && prefix->curr_validlft > 0){
++			decrement_lifetime(secs_since_last_ra, &prefix->curr_validlft);
++		}
++
++		pinfo->nd_opt_pi_valid_time = htonl(prefix->curr_validlft);
++		pinfo->nd_opt_pi_preferred_time = htonl(prefix->curr_preferredlft);
++		memcpy(&pinfo->nd_opt_pi_prefix, &prefix->Prefix, sizeof(struct in6_addr));
++		//printf("%s: send out old prefix: validlft %u\n", __func__, prefix->curr_validlft);
++
++		if(prefix->curr_validlft == 0){
++			char pfx_str[INET6_ADDRSTRLEN] = {0};
++			print_addr(&prefix->Prefix, pfx_str);
++			printf("%s: deprecate prx out: delete %s\n", __func__, pfx_str);
++			if(*headp == prefix){
++				*headp = prefix->next;
++				prvsprefix = prefix->next;
++				free(prefix);
++				prefix = prvsprefix;
++			}else{
++				prvsprefix->next = prefix->next;
++				free(prefix);
++				prefix = prvsprefix->next;
++			}
++		}else{
++			prvsprefix = prefix;
++			prefix = prefix->next;
++		}
++		running = prefix ? running : !running;
++	}
++#endif
+ 	route = iface->AdvRouteList;
+ 
+ 	/*
+Index: radvd-1.8/pathnames.h
+===================================================================
+--- radvd-1.8.orig/pathnames.h	2011-02-27 00:00:23.000000000 +0800
++++ radvd-1.8/pathnames.h	2021-03-05 13:49:36.873171528 +0800
+@@ -32,6 +32,8 @@
+ #define PATH_PROC_NET_IF_INET6 "/proc/net/if_inet6"
+ #define PATH_PROC_NET_IGMP6 "/proc/net/igmp6"
+ 
++#define RADVD_OLDPREFIX_FILE "/tmp/radvd_oldprefix"
++
+ #ifdef __linux__
+ #define SYSCTL_IP6_FORWARDING CTL_NET, NET_IPV6, NET_IPV6_CONF, NET_PROTO_CONF_ALL, NET_IPV6_FORWARDING
+ #define PROC_SYS_IP6_FORWARDING "/proc/sys/net/ipv6/conf/all/forwarding"

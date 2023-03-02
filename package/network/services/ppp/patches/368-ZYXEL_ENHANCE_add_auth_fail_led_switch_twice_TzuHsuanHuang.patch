@@ -1,0 +1,14 @@
+Index: ppp-2.4.3/pppd/main.c
+===================================================================
+--- ppp-2.4.3.orig/pppd/main.c	2020-09-25 10:00:35.889700866 +0800
++++ ppp-2.4.3/pppd/main.c	2020-09-25 10:06:37.097585894 +0800
+@@ -713,7 +713,8 @@
+ 	}
+ #endif
+ 
+-#ifdef ZyXEL_WEB_REDIRECT /* __ZyXEL__, Albert, 20150416, Web redirect   */
++/* __ZyXEL__, Albert, 20150416, Web redirect   */
++#if defined(ZyXEL_WEB_REDIRECT) || defined(ABUU_CUSTOMIZATION)
+ 
+         switch(status){
+              case EXIT_PEER_AUTH_FAILED:

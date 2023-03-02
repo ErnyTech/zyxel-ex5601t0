@@ -1,0 +1,15 @@
+Index: busybox-1.31.1/networking/traceroute.c
+===================================================================
+--- busybox-1.31.1.orig/networking/traceroute.c	2021-03-18 10:26:05.430541149 +0800
++++ busybox-1.31.1/networking/traceroute.c	2021-03-18 10:26:16.430541202 +0800
+@@ -1481,6 +1481,10 @@
+ int traceroute6_main(int argc, char **argv) MAIN_EXTERNALLY_VISIBLE;
+ int traceroute6_main(int argc UNUSED_PARAM, char **argv)
+ {
++
++#ifdef ZCFG_SUPPORT
++	zcfgEidInit(ZCFG_EID_TRACERT, NULL);
++#endif
+ 	return common_traceroute_main(OPT_IPV6, argv);
+ }
+ #endif

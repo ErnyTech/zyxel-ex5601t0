@@ -1,0 +1,22 @@
+#!/bin/sh
+
+. /lib/functions.sh
+. /lib/functions/uci-defaults.sh
+
+setled()
+{
+	local board="$1"
+
+	case $board in
+	*wx5600-t0-c2*)
+		ucidef_set_led_netdev "wlan5g" "WiFi" "zyled-green-wlan" "rax0" "link tx rx"
+		;;
+	esac
+}
+
+board_config_update
+board=$(board_name)
+setled $board
+board_config_flush
+
+exit 0

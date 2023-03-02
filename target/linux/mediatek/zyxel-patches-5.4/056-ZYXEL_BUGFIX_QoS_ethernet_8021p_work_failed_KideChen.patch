@@ -1,0 +1,18 @@
+Index: linux-5.4.171/net/netfilter/xt_AUTOMAP.c
+===================================================================
+--- linux-5.4.171.orig/net/netfilter/xt_AUTOMAP.c
++++ linux-5.4.171/net/netfilter/xt_AUTOMAP.c
+@@ -42,8 +42,11 @@ static int getVlanPrioAndIpHeader(struct
+     ih = ip_hdr(skb);
+     *iph = ih;
+ 
+-    /* tagged packet */
+-    if (skb->protocol == ETH_P_8021Q) {
++    /*+++ Kide@zyxel: Zyxel Qos vtag */
++    if (skb->vtag) {
++        id = (skb->vtag & 0xfff) - 1;
++        *prio = ((skb->vtag >> 13) - 1) & 0x7;
++    } else if (skb->protocol == ETH_P_8021Q) { /* tagged packet */
+         fp = skb_header_pointer(skb, 0, sizeof(_frame), &_frame);
+         if (fp == NULL)
+             return -1;

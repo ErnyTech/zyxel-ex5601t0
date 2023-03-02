@@ -1,0 +1,57 @@
+Index: json-c-0.15/arraylist.c
+===================================================================
+--- json-c-0.15.orig/arraylist.c
++++ json-c-0.15/arraylist.c
+@@ -199,7 +199,8 @@ int array_list_add(struct array_list *ar
+ 		return -1;
+ 	arr->array[idx] = data;
+ 	arr->length++;
+-	return 0;
++	//return 0;
++	return arr->length;
+ }
+ 
+ void array_list_sort(struct array_list *arr, int (*compar)(const void *, const void *))
+Index: json-c-0.15/json_object.c
+===================================================================
+--- json-c-0.15.orig/json_object.c
++++ json-c-0.15/json_object.c
+@@ -1317,6 +1317,8 @@ int json_object_set_param(struct json_ob
+ 		JC_INT(jso)->cint.c_int64 = (int32_t)atoi(v);
+ 		break;
+ 	case json_type_string:
++		json_object_set_string(jso, v);
++#if 0
+ 		if(JC_STRING(jso)->c_string.pdata) {
+ 			free(JC_STRING(jso)->c_string.pdata);
+ 			JC_STRING(jso)->c_string.pdata = NULL;
+@@ -1324,6 +1326,7 @@ int json_object_set_param(struct json_ob
+ 		}
+ 		JC_STRING(jso)->c_string.pdata = strdup(v);
+ 		JC_STRING(jso)->len = strlen(v);
++#endif
+ 		break;
+ 	case json_type_double:
+ 	default:
+@@ -1729,6 +1732,8 @@ int json_object_equal(struct json_object
+ 	case json_type_array: return json_array_equal(jso1, jso2);
+ 
+ 	case json_type_null: return 1;
++	default:
++		break;
+ 	};
+ 
+ 	return 0;
+Index: json-c-0.15/json_tokener.c
+===================================================================
+--- json-c-0.15.orig/json_tokener.c
++++ json-c-0.15/json_tokener.c
+@@ -1044,7 +1044,7 @@ struct json_object *json_tokener_parse_e
+ 			break;
+ 
+ 		case json_tokener_state_array_add:
+-			if (json_object_array_add(current, obj) != 0)
++			if( json_object_array_add(current, obj) < 0 ) //I-Chia 20190827
+ 				goto out;
+ 			saved_state = json_tokener_state_array_sep;
+ 			state = json_tokener_state_eatws;

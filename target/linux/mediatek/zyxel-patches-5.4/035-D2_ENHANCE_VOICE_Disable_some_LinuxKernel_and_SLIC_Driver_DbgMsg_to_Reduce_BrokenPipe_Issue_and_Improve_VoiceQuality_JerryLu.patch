@@ -1,0 +1,86 @@
+Index: linux-5.4.171/sound/soc/codecs/si3218x/si3218x.c
+===================================================================
+--- linux-5.4.171.orig/sound/soc/codecs/si3218x/si3218x.c	2022-05-13 17:46:28.126744000 +0800
++++ linux-5.4.171/sound/soc/codecs/si3218x/si3218x.c	2022-05-20 03:49:14.638000000 +0800
+@@ -301,7 +301,7 @@ static int si3218x_ring_get(struct snd_k
+ #else
+ 	ucontrol->value.integer.value[0] =
+ 		(ProSLIC_ReadReg(ports[slic_chan].ProObj,30) == 4) ? 1 : 0;
+-	printk("%s %d D2 debug.\n", __func__, __LINE__);
++	//printk("%s %d D2 debug.\n", __func__, __LINE__);
+ #endif // D2 MOD.
+ 
+ 	return 0;
+@@ -353,7 +353,7 @@ static int si3218x_getPcmMode(struct snd
+     }
+ 	ucontrol->value.integer.value[0] = ProSLIC_ReadReg(ports[slic_chan].ProObj, 11);
+ 
+-    printk("%s %d D2 debug \n", __func__, __LINE__);
++    //printk("%s %d D2 debug \n", __func__, __LINE__);
+     return 0;
+ }
+ 
+@@ -365,7 +365,7 @@ static int si3218x_getLineState(struct s
+ 		return 0;
+     }
+ 
+-    printk("%s %d D2 debug \n", __func__, __LINE__);
++    //printk("%s %d D2 debug \n", __func__, __LINE__);
+     return 0;
+ }
+ 
+@@ -440,7 +440,7 @@ static int si3218x_setIrq(struct snd_kco
+         return (0);
+     }
+ 
+-    printk("%s %d set chan: %d irq2: %02x \n", __func__, __LINE__, chan, val);
++    //printk("%s %d set chan: %d irq2: %02x \n", __func__, __LINE__, chan, val);
+     ProSLIC_WriteReg(ports[chan].ProObj, 23, val);
+  
+     return (0);
+@@ -467,12 +467,12 @@ static int si3218x_setReg(struct snd_kco
+         return (0);
+     }
+     if (1 == chan) {
+-        printk("%s %d chan: %d reg:%d val: 0x%02x \n", __func__, __LINE__, chan, reg, val);
++//        printk("%s %d chan: %d reg:%d val: 0x%02x \n", __func__, __LINE__, chan, reg, val);
+         ProSLIC_WriteReg(ports[chan].ProObj, reg, val);
+     }
+     //---------------------------------------------
+     else {
+-        printk("%s %d chan: %d reg:%d val: 0x%02x \n", __func__, __LINE__, slic_chan, reg, val);
++//        printk("%s %d chan: %d reg:%d val: 0x%02x \n", __func__, __LINE__, slic_chan, reg, val);
+         ProSLIC_WriteReg(ports[slic_chan].ProObj, reg, val);
+     }
+     return 0;
+@@ -494,7 +494,7 @@ static int si3218x_getReg(struct snd_kco
+     reg = mc->reg;
+ 	ucontrol->value.integer.value[0] = (ProSLIC_ReadReg(ports[slic_chan].ProObj, reg));
+ 
+-#if 1
++#if 0
+     printk("%s %d chan:%d reg:%d val:0x%04x, numid: %d index: %d\n", __func__, __LINE__,
+             slic_chan, reg, (unsigned int)ucontrol->value.integer.value[0],
+             id_ptr->numid, id_ptr->index);
+Index: linux-5.4.171/sound/soc/mediatek/mt79xx/mt79xx-dai-etdm.c
+===================================================================
+--- linux-5.4.171.orig/sound/soc/mediatek/mt79xx/mt79xx-dai-etdm.c	2022-05-13 17:46:28.126744000 +0800
++++ linux-5.4.171/sound/soc/mediatek/mt79xx/mt79xx-dai-etdm.c	2022-05-20 03:30:12.440074255 +0800
+@@ -309,7 +309,7 @@ static int mtk_dai_etdm_trigger(struct s
+ 	switch (cmd) {
+ 	case SNDRV_PCM_TRIGGER_START:
+ 	case SNDRV_PCM_TRIGGER_RESUME:
+-        printk("%s %d D2 debug TRIGGER START/RESUME \n", __func__, __LINE__);
++//        printk("%s %d D2 debug TRIGGER START/RESUME \n", __func__, __LINE__);
+ #if 1 // D2 MOD.
+ 		regmap_update_bits(afe->regmap, ETDM_IN5_CON0, ETDM_EN_MASK,
+ 				   ETDM_EN);
+@@ -319,7 +319,7 @@ static int mtk_dai_etdm_trigger(struct s
+ 		break;
+ 	case SNDRV_PCM_TRIGGER_STOP:
+ 	case SNDRV_PCM_TRIGGER_SUSPEND:
+-        printk("%s %d D2 debug TRIGGER STOP/SUSPEND\n", __func__, __LINE__);
++//        printk("%s %d D2 debug TRIGGER STOP/SUSPEND\n", __func__, __LINE__);
+ #if 1 // D2 MOD.
+ 		regmap_update_bits(afe->regmap, ETDM_IN5_CON0, ETDM_EN_MASK,
+ 				   0);

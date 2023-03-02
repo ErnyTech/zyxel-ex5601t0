@@ -1,0 +1,30 @@
+diff -ruN a/drivers/net/ethernet/mediatek/mtk_hnat/hnat_nf_hook.c d/drivers/net/ethernet/mediatek/mtk_hnat/hnat_nf_hook.c
+--- a/drivers/net/ethernet/mediatek/mtk_hnat/hnat_nf_hook.c	2022-04-27 22:54:38.957842000 +0800
++++ d/drivers/net/ethernet/mediatek/mtk_hnat/hnat_nf_hook.c	2022-05-26 19:32:39.353542050 +0800
+@@ -1183,7 +1183,7 @@
+ 
+ 				entry.ipv4_hnapt.vlan1 = hw_path->vlan_id;
+ 
+-				if (skb->vlan_tci && FROM_GE_WAN(skb) && IS_LAN(dev)) {
++				if (skb->vlan_present && skb->vlan_tci && FROM_GE_WAN(skb) && IS_LAN(dev)) {
+ 					entry.bfib1.vlan_layer += 1;
+ 
+ 					if (entry.ipv4_hnapt.vlan1)
+@@ -1235,7 +1235,7 @@
+ 
+ 			entry.ipv6_5t_route.vlan1 = hw_path->vlan_id;
+ 
+-			if (skb->vlan_tci && FROM_GE_WAN(skb) && IS_LAN(dev)) {
++			if (skb->vlan_present && skb->vlan_tci && FROM_GE_WAN(skb) && IS_LAN(dev)) {
+ 				entry.bfib1.vlan_layer += 1;
+ 
+ 				if (entry.ipv6_5t_route.vlan1)
+@@ -1633,7 +1633,7 @@
+ 		break;
+ 	}
+ 
+-	if (skb->vlan_tci) {
++	if ((skb->vlan_tci) && skb->vlan_present){
+ 		entry->bfib1.vlan_layer += 1;
+ 		entry->bfib1.vpm = 1;
+ 		if (IS_IPV4_GRP(entry)) {

@@ -1,0 +1,228 @@
+Index: linux-5.4.171/drivers/net/ppp/ppp_generic.c
+===================================================================
+--- linux-5.4.171.orig/drivers/net/ppp/ppp_generic.c
++++ linux-5.4.171/drivers/net/ppp/ppp_generic.c
+@@ -1589,6 +1589,54 @@ pad_compress_skb(struct ppp *ppp, struct
+ 	return new_skb;
+ }
+ 
++#if 1	/* Zyxel: PPP demand dial for LAN only */
++/*
++zyxel_on_demand_filter(...) and ppp_send_frame(...) are protected for SMP+Preempt safety
++by ppp_xmit_lock(ppp) => spin_lock_bh(&(ppp)->wlock) and ppp_xmit_unlock(ppp) =>  spin_unlock_bh(&(ppp)->wlock).
++*/
++
++/*
++ * Excluding timestamp for packet generated from ADSL modem
++ * these include WAN-side RIP,dnsprobe
++ */
++static int
++zyxel_on_demand_filter(char *data)
++{
++	unsigned short udp_port=0;
++
++#if 0
++	char cmd;
++
++        printk("%02x%02x%02x%02x\n%02x%02x%02x%02x\n",data[2],data[3],data[4],data[5],data[6],data[7],data[8],data[9]);
++        printk("%02x%02x%02x%02x\n%02x%02x%02x%02x\n",data[10],data[11],data[12],data[13],data[14],data[15],data[16],data[17]);
++        printk("%02x%02x%02x%02x\n",data[18],data[19],data[20],data[21]);
++#endif
++
++	if ( data[11] == 0x2 )  /* IGMP */
++		return 0;
++	if ( data[11] == 0x11 ) { /* UDP */
++	   udp_port= (data[24]<< 8) + data[25];
++	   if ( udp_port == 123 ) { /* ntpclient */
++		return 0;
++	   }
++	   if ( udp_port == 53 ) {
++		if ( data[45] == 'r' && data[46] == 'o' && data[47] == 'o' && data[48] =='t')
++
++		return 0;
++	   }
++	   else if (udp_port == 520) { /* RIP */
++#if 0
++			cmd = data[30]; // 1=request, 2=reply
++			if ( cmd == 1)
++#endif
++			  return 0;
++	   }
++	}
++
++        return 1;
++}
++#endif
++
+ /*
+  * Compress and send a frame.
+  * The caller should have locked the xmit path,
+@@ -1601,6 +1649,24 @@ ppp_send_frame(struct ppp *ppp, struct s
+ 	struct sk_buff *new_skb;
+ 	int len;
+ 	unsigned char *cp;
++#if 1	/* Zyxel: PPP demand dial for LAN only */
++	unsigned char *data;
++	int timestamp = 1;
++
++	if ( proto == PPP_IP || proto == PPP_IPV6) {
++        /* Only record timestamp when tx packet is sent from LAN -> WAN
++         * Packet from LAN: skb->dev->name=ppp{i}, skb->original_dev->name=br{i}
++         * Packet from CPE: skb->dev->name=ppp{i}, skb->original_dev->name=NULL
++         */
++        if (skb->original_dev->name == NULL) {
++            timestamp = 0;
++        }
++        else {
++		    data = skb->data;
++		    timestamp = zyxel_on_demand_filter(data);
++        }
++	}
++#endif
+ 
+ 	if (proto < 0x8000) {
+ #ifdef CONFIG_PPP_FILTER
+@@ -1620,10 +1686,16 @@ ppp_send_frame(struct ppp *ppp, struct s
+ 		/* if this packet passes the active filter, record the time */
+ 		if (!(ppp->active_filter &&
+ 		      BPF_PROG_RUN(ppp->active_filter, skb) == 0))
++#if 1	/* Zyxel: PPP demand dial for LAN only */
++		if (timestamp)
++#endif
+ 			ppp->last_xmit = jiffies;
+ 		skb_pull(skb, 2);
+ #else
+ 		/* for data packets, record the time */
++#if 1	/* Zyxel: PPP demand dial for LAN only */
++		if (timestamp)
++#endif
+ 		ppp->last_xmit = jiffies;
+ #endif /* CONFIG_PPP_FILTER */
+ 	}
+@@ -1694,6 +1766,10 @@ ppp_send_frame(struct ppp *ppp, struct s
+ 	if (ppp->flags & SC_LOOP_TRAFFIC) {
+ 		if (ppp->file.rq.qlen > PPP_MAX_RQLEN)
+ 			goto drop;
++#if 1	/* Zyxel: PPP demand dial for LAN only */
++		if (!timestamp)
++			goto drop;
++#endif
+ 		skb_queue_tail(&ppp->file.rq, skb);
+ 		wake_up_interruptible(&ppp->file.rwait);
+ 		return;
+@@ -2188,11 +2264,30 @@ ppp_receive_error(struct ppp *ppp)
+ 		slhc_toss(ppp->vj);
+ }
+ 
++#if 1
++static int
++ppp_rx_filter(char *data)
++{
++    struct iphdr *encap;
++
++    encap = (struct iphdr *)(data + 2);
++    /* Multicast */
++    if (ipv4_is_multicast(encap->daddr) && !ipv4_is_local_multicast(encap->daddr))
++        return 1;
++
++    return 0;
++}
++#endif
+ static void
+ ppp_receive_nonmp_frame(struct ppp *ppp, struct sk_buff *skb)
+ {
+ 	struct sk_buff *ns;
+ 	int proto, len, npi;
++#if 1
++	struct sk_buff *tmp;
++	int timestamp = 0;
++	unsigned char *data;
++#endif
+ 
+ 	/*
+ 	 * Decompress the frame, if compressed.
+@@ -2210,6 +2305,12 @@ ppp_receive_nonmp_frame(struct ppp *ppp,
+ 	 * ppp_input(), ppp_decompress_frame() or in ppp_receive_mp_frame().
+ 	 */
+ 	proto = PPP_PROTO(skb);
++#if 1
++    if (proto == PPP_IP) {
++		data = skb->data;
++		timestamp = ppp_rx_filter(data);
++	}
++#endif
+ 	switch (proto) {
+ 	case PPP_VJC_COMP:
+ 		/* decompress VJ compressed packets */
+@@ -2285,6 +2386,36 @@ ppp_receive_nonmp_frame(struct ppp *ppp,
+ 	} else {
+ 		/* network protocol frame - give it to the kernel */
+ 
++#if 1
++    #ifdef CONFIG_PPP_FILTER
++        /* check if the packet passes the pass and active filters */
++        /* the filter instructions are constructed assuming
++           a four-byte PPP header on each packet */
++		if (skb_headroom(skb) < 2) {
++            tmp = alloc_skb(skb->len+2,GFP_ATOMIC);
++            skb_reserve(tmp, 2);
++            memcpy(skb_put(tmp, skb->len), skb->data, skb->len);
++            kfree_skb(skb);
++            skb = tmp;
++        }
++        *(u8 *)skb_push(skb, 2) = 0;
++        if (ppp->pass_filter &&
++        	BPF_PROG_RUN(ppp->pass_filter, skb) == 0) {
++            if (ppp->debug & 1)
++                printk(KERN_DEBUG "PPP: inbound frame not passed\n");
++            kfree_skb(skb);
++            return;
++        }
++        if (!(ppp->active_filter &&
++        	BPF_PROG_RUN(ppp->active_filter, skb) == 0))
++            if (timestamp)
++                ppp->last_recv = jiffies;
++            skb_pull(skb, 2);
++    #else
++        if (timestamp)
++            ppp->last_recv = jiffies;
++    #endif /* CONFIG_PPP_FILTER */
++#else
+ #ifdef CONFIG_PPP_FILTER
+ 		/* check if the packet passes the pass and active filters */
+ 		/* the filter instructions are constructed assuming
+@@ -2310,6 +2441,7 @@ ppp_receive_nonmp_frame(struct ppp *ppp,
+ 		} else
+ #endif /* CONFIG_PPP_FILTER */
+ 			ppp->last_recv = jiffies;
++#endif
+ 
+ 		if ((ppp->dev->flags & IFF_UP) == 0 ||
+ 		    ppp->npmode[npi] != NPMODE_PASS) {
+Index: linux-5.4.171/net/core/dev.c
+===================================================================
+--- linux-5.4.171.orig/net/core/dev.c
++++ linux-5.4.171/net/core/dev.c
+@@ -4808,6 +4808,7 @@ static int __netif_receive_skb_core(stru
+ 	trace_netif_receive_skb(skb);
+ 
+ 	orig_dev = skb->dev;
++	skb->original_dev = skb->dev;	/* Zyxel: PPP demand dial for LAN only */
+ 
+ 	skb_reset_network_header(skb);
+ 	if (!skb_transport_header_was_set(skb))
+Index: linux-5.4.171/include/linux/skbuff.h
+===================================================================
+--- linux-5.4.171.orig/include/linux/skbuff.h
++++ linux-5.4.171/include/linux/skbuff.h
+@@ -764,7 +764,9 @@ struct sk_buff {
+ 	/* private: */
+ 	__u32			headers_start[0];
+ 	/* public: */
+-
++#if 1	/*  Zyxel: PPP demand dial for LAN only */
++	struct net_device   *original_dev;
++#endif
+ /* if you move pkt_type around you also must adapt those constants */
+ #ifdef __BIG_ENDIAN_BITFIELD
+ #define PKT_TYPE_MAX	(7 << 5)

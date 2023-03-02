@@ -1,0 +1,43 @@
+Index: json-c-0.15/json_object.h
+===================================================================
+--- json-c-0.15.orig/json_object.h
++++ json-c-0.15/json_object.h
+@@ -195,6 +195,8 @@ JSON_EXPORT int json_object_is_type(cons
+      json_type_array,
+      json_type_string
+  */
++JSON_EXPORT void json_object_set_type(struct json_object *obj, enum json_type type);
++
+ JSON_EXPORT enum json_type json_object_get_type(const struct json_object *obj);
+ 
+ /** Stringify object to json format.
+Index: json-c-0.15/json_object.c
+===================================================================
+--- json-c-0.15.orig/json_object.c
++++ json-c-0.15/json_object.c
+@@ -378,6 +378,13 @@ int json_object_is_type(const struct jso
+ 	return (jso->o_type == type);
+ }
+ 
++void json_object_set_type(struct json_object *obj, enum json_type type)
++{
++   if(!obj)
++       return;
++   obj->o_type = type;
++}
++
+ enum json_type json_object_get_type(const struct json_object *jso)
+ {
+ 	if (!jso)
+Index: json-c-0.15/json-c.sym
+===================================================================
+--- json-c-0.15.orig/json-c.sym
++++ json-c-0.15/json-c.sym
+@@ -125,6 +125,7 @@ JSONC_0.14 {
+     json_object_set_string_len;
+     json_object_set_uint64;
+     json_object_set_userdata;
++    json_object_set_type;
+     json_object_to_fd;
+     json_object_to_file;
+     json_object_to_file_ext;

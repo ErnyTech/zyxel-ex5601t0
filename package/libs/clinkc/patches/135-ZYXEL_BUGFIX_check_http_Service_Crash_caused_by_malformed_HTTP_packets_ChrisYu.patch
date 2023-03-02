@@ -1,0 +1,51 @@
+Index: clinkc/src/cybergarage/http/chttp_request.c
+===================================================================
+--- clinkc.orig/src/cybergarage/http/chttp_request.c	2020-12-01 13:35:52.326367316 +0800
++++ clinkc/src/cybergarage/http/chttp_request.c	2020-12-01 14:51:41.597465427 +0800
+@@ -1199,7 +1199,7 @@
+ {
+ 	char *uri = NULL;
+ 	char *pch = NULL;
+-	char tempStr[128] = {0};
++	char tempStr[256] = {0};
+ 	int len, i, check_ascii_0, check_ascii;
+ 	BOOL bFail = FALSE;
+ 
+@@ -1231,7 +1231,7 @@
+ 	}
+ 
+ 	if (bFail == TRUE){ //return bFail;
+-		//printf("http_request_parse_uri >>>>�@Invalid uri -1!!! \n");
++		//printf("http_request_parse_uri >>>> Invalid uri -1!!! \n");
+ 		return TRUE;
+ 	}
+ 
+@@ -1240,14 +1240,24 @@
+ 	
+ 	if(pch != NULL){
+ 		len = pch-uri;
+-		memset(tempStr, '\0', sizeof(tempStr));
+-		strncpy(tempStr, uri , len);
+-		if(strchr(tempStr, '=')){
++		//printf("Get len = %d \n", len);
++		if (len >= sizeof(tempStr)){
++			/***
++			if '?' check length never over tempStr.
++			It's mean '?' over 256 length in uri is invalid.
++			***/
+ 			bFail = TRUE;
++		}	
++		else{
++			memset(tempStr, '\0', sizeof(tempStr));
++			strncpy(tempStr, uri , len);
++			if(strchr(tempStr, '=')){
++				bFail = TRUE;
++			}
+ 		}
+ 	}
+ 	if (bFail == TRUE){ //return bFail;
+-		//printf("http_request_parse_uri >>>>�@Invalid uri -2!!! \n");
++		//printf("http_request_parse_uri >>>> Invalid uri -2!!! \n");
+ 		return TRUE;
+ 	}
+ 

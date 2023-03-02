@@ -1,0 +1,28 @@
+Index: minidlna-1.3.0/metadata.c
+===================================================================
+--- minidlna-1.3.0.orig/metadata.c
++++ minidlna-1.3.0/metadata.c
+@@ -1134,6 +1134,10 @@ GetVideoMetadata(const char *path, const
+ 			xasprintf(&m.mime, "video/x-matroska");
+ 		else if( strcmp(ctx->iformat->name, "flv") == 0 )
+ 			xasprintf(&m.mime, "video/x-flv");
++		else if( strcmp(ctx->iformat->name, "rm") == 0 )
++			xasprintf(&m.mime, "video/x-pn-realvideo");
++		else if( strcmp(ctx->iformat->name, "rmvb") == 0 )
++			xasprintf(&m.mime, "video/x-pn-realvideo");
+ 		if( m.mime )
+ 			goto video_no_dlna;
+ 
+Index: minidlna-1.3.0/utils.c
+===================================================================
+--- minidlna-1.3.0.orig/utils.c
++++ minidlna-1.3.0/utils.c
+@@ -368,6 +368,8 @@ mime_to_ext(const char * mime)
+ 				return "3gp";
+ 			else if( strncmp(mime+6, "x-tivo-mpeg", 11) == 0 )
+ 				return "TiVo";
++			else if( strcmp(mime+6, "x-pn-realvideo") == 0 )
++				return "rm";
+ 			break;
+ 		case 'i':
+ 			if( strcmp(mime+6, "jpeg") == 0 )

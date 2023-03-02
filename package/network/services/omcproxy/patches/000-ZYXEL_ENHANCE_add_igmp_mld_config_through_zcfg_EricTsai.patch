@@ -1,0 +1,602 @@
+Index: omcproxy-2018-12-14-722151f0/src/client.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/client.c
++++ omcproxy-2018-12-14-722151f0/src/client.c
+@@ -30,6 +30,7 @@
+ 
+ #include "client.h"
+ 
++#include "omcpzcfg.h"
+ 
+ // Add / update / remove a client entry for a multicast group
+ int client_set(struct client *client, const struct in6_addr *group,
+@@ -92,13 +93,17 @@ int client_set(struct client *client, co
+ // Initialize client-instance
+ int client_init(struct client *client, int ifindex)
+ {
+-	client->igmp_fd = socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
+-	if (client->igmp_fd < 0)
+-		return -errno;
+-
+-	client->mld_fd = socket(AF_INET6, SOCK_DGRAM | SOCK_CLOEXEC, 0);
+-	if (client->mld_fd < 0)
+-		return -errno;
++	if(omcpzcfg_app_igmp()){
++		client->igmp_fd = socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
++		if (client->igmp_fd < 0)
++			return -errno;
++	}
++
++	if(omcpzcfg_app_mld()){
++		client->mld_fd = socket(AF_INET6, SOCK_DGRAM | SOCK_CLOEXEC, 0);
++		if (client->mld_fd < 0)
++			return -errno;
++	}
+ 
+ 	client->ifindex = ifindex;
+ 	return 0;
+Index: omcproxy-2018-12-14-722151f0/src/groups.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/groups.c
++++ omcproxy-2018-12-14-722151f0/src/groups.c
+@@ -22,6 +22,7 @@
+ #include <errno.h>
+ #include "groups.h"
+ 
++#include "omcpzcfg.h"
+ 
+ // Group comparator for AVL-tree
+ static int compare_groups(const void *k1, const void *k2, __unused void *ptr)
+@@ -180,13 +181,40 @@ static void expire_groups(struct uloop_t
+ // Initialize a group-state
+ void groups_init(struct groups *groups)
+ {
++#ifdef ZYXEL_OMCPROXY
++	int query_interval = 0;
++	int query_response_interval = 0;
++	int robustness_value = 0;
++	int value;
++
++	avl_init(&groups->groups, compare_groups, false, NULL);
++	groups->timer.cb = expire_groups;
++
++	// 'QueryResponseInterval', unit in s precision
++	// query_response_interval, uint in ms precision
++	query_response_interval = ((value = omcpzcfg_param_value("QueryResponseInterval")) > 0) ?
++			(value * OMGP_TIME_PER_SECOND) : (OMGP_TIME_PER_SECOND * 10);
++	query_interval = ((value = omcpzcfg_param_value("QueryInterval")) > 0) ?
++			(value * OMGP_TIME_PER_SECOND) : (125 * OMGP_TIME_PER_SECOND);
++	robustness_value = ((value = omcpzcfg_param_value("RobustnessValue")) > 0) ? value : 2;
++
++	groups_update_config(groups, false, query_response_interval, query_interval, robustness_value);
++	groups_update_config(groups, true, query_response_interval, query_interval, robustness_value);
++#else
+ 	avl_init(&groups->groups, compare_groups, false, NULL);
+ 	groups->timer.cb = expire_groups;
+ 
+-	groups_update_config(groups, false, OMGP_TIME_PER_SECOND / 10,
++//	groups_update_config(groups, false, OMGP_TIME_PER_SECOND / 10,
++	//		125 * OMGP_TIME_PER_SECOND, 2);
++	//groups_update_config(groups, true, OMGP_TIME_PER_SECOND / 10,
++		//		125 * OMGP_TIME_PER_SECOND, 2);
++
++	groups_update_config(groups, false, OMGP_TIME_PER_SECOND * 10,
+ 			125 * OMGP_TIME_PER_SECOND, 2);
+-	groups_update_config(groups, true, OMGP_TIME_PER_SECOND / 10,
++	groups_update_config(groups, true, OMGP_TIME_PER_SECOND * 10,
+ 				125 * OMGP_TIME_PER_SECOND, 2);
++
++#endif
+ }
+ 
+ // Cleanup a group-state
+@@ -248,7 +276,19 @@ void groups_update_config(struct groups
+ 	cfg->query_interval = query_interval;
+ 	cfg->robustness = robustness;
+ 	cfg->last_listener_query_count = cfg->robustness;
+-	cfg->last_listener_query_interval = 1 * OMGP_TIME_PER_SECOND;
++#ifdef ZYXEL_OMCPROXY
++	{
++		//cfg->last_listener_query_interval = 1 * OMGP_TIME_PER_SECOND;
++
++		int value;
++		// 'LastMemberQueryInterval', seeming that's std default, 10(unit in 0.1s) == 1s(10 * 0.1)
++		// last_listener_query_interval, precision in ms
++		cfg->last_listener_query_interval = ((value = omcpzcfg_param_value("LastMemberQueryInterval")) > 0) ?
++				(value * 100) : (1 * OMGP_TIME_PER_SECOND);
++	}
++#else
++	cfg->last_listener_query_interval = 1 * OMGP_TIME_PER_SECOND; // precision in ms
++#endif
+ }
+ 
+ // Update timers for a given group (called when receiving queries from other queriers)
+Index: omcproxy-2018-12-14-722151f0/src/igmp.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/igmp.c
++++ omcproxy-2018-12-14-722151f0/src/igmp.c
+@@ -191,8 +191,8 @@ int igmp_send_query(struct querier_iface
+ 						__FUNCTION__, QUERIER_MAX_SOURCE);
+ 				break;
+ 			}
+-
+-			query.q.srcs[cnt] = querier_unmap(&s->addr);
++			// collect srcs
++			query.q.srcs[cnt++] = querier_unmap(&s->addr);
+ 		}
+ 	}
+ 	query.q.nsrcs = htons(cnt);
+Index: omcproxy-2018-12-14-722151f0/src/mrib.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/mrib.c
++++ omcproxy-2018-12-14-722151f0/src/mrib.c
+@@ -40,6 +40,8 @@
+ #include "omcproxy.h"
+ #include "mrib.h"
+ 
++#include "omcpzcfg.h"
++
+ struct mrib_route {
+ 	struct list_head head;
+ 	struct in6_addr group;
+@@ -180,8 +182,8 @@ static void mrib_notify_newsource(struct
+ 	mrib_filter filter = 0;
+ 	struct mrib_user *user;
+ 	list_for_each_entry(user, &iface->users, head)
+-		if (user->cb_newsource)
+-			user->cb_newsource(user, group, source, &filter);
++	if (user->cb_newsource)
++		user->cb_newsource(user, group, source, &filter);
+ 
+ 	char groupbuf[INET6_ADDRSTRLEN], sourcebuf[INET6_ADDRSTRLEN];
+ 	inet_ntop(AF_INET6, group, groupbuf, sizeof(groupbuf));
+@@ -496,7 +498,70 @@ static int mrib_init(void)
+ 		goto err;
+ 
+ 	mrt_fd.fd = fd;
++#if 0
++	if ((fd = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6)) < 0)
++		goto err;
++
++	// We need to know the source interface and hop-opts
++	val = 1;
++	if (setsockopt(fd, IPPROTO_IPV6, MRT6_INIT, &val, sizeof(val)))
++		goto err;
++
++	if (setsockopt(fd, IPPROTO_IPV6, IPV6_RECVHOPOPTS, &val, sizeof(val)))
++		goto err;
++
++	if (setsockopt(fd, IPPROTO_IPV6, IPV6_RECVHOPLIMIT, &val, sizeof(val)))
++		goto err;
++
++	// MLD has hoplimit 1
++	if (setsockopt(fd, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &val, sizeof(val)))
++		goto err;
++
++	val = 0;
++	if (setsockopt(fd, IPPROTO_IPV6, IPV6_MULTICAST_LOOP, &val, sizeof(val)))
++		goto err;
+ 
++	// Let the kernel compute our checksums
++	val = 2;
++	if (setsockopt(fd, IPPROTO_RAW, IPV6_CHECKSUM, &val, sizeof(val)))
++		goto err;
++
++	// Set hop-by-hop router alert on outgoing
++	if (setsockopt(fd, IPPROTO_IPV6, IPV6_HOPOPTS, &ipv6_rtr_alert, sizeof(ipv6_rtr_alert)))
++		goto err;
++
++	// Set ICMP6 filter
++	struct icmp6_filter flt;
++	ICMP6_FILTER_SETBLOCKALL(&flt);
++	ICMP6_FILTER_SETPASS(ICMPV6_MGM_QUERY, &flt);
++	ICMP6_FILTER_SETPASS(ICMPV6_MGM_REPORT, &flt);
++	ICMP6_FILTER_SETPASS(ICMPV6_MGM_REDUCTION, &flt);
++	ICMP6_FILTER_SETPASS(ICMPV6_MLD2_REPORT, &flt);
++	if (setsockopt(fd, IPPROTO_ICMPV6, ICMP6_FILTER, &flt, sizeof(flt)))
++		goto err;
++
++	mrt6_fd.fd = fd;
++#endif
++
++	mrt_fd.cb = mrib_receive_mrt;
++//	mrt6_fd.cb = mrib_receive_mrt6;
++
++	uloop_fd_add(&mrt_fd, ULOOP_READ | ULOOP_EDGE_TRIGGER);
++	//uloop_fd_add(&mrt6_fd, ULOOP_READ | ULOOP_EDGE_TRIGGER);
++
++	fd = -1;
++	errno = 0;
++
++err:
++	if (fd >= 0)
++		close(fd);
++	return -errno;
++}
++
++static int mrib_mld_init(void)
++{
++	int fd;
++	int val;
+ 
+ 	if ((fd = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6)) < 0)
+ 		goto err;
+@@ -541,10 +606,8 @@ static int mrib_init(void)
+ 
+ 	mrt6_fd.fd = fd;
+ 
+-	mrt_fd.cb = mrib_receive_mrt;
+ 	mrt6_fd.cb = mrib_receive_mrt6;
+ 
+-	uloop_fd_add(&mrt_fd, ULOOP_READ | ULOOP_EDGE_TRIGGER);
+ 	uloop_fd_add(&mrt6_fd, ULOOP_READ | ULOOP_EDGE_TRIGGER);
+ 
+ 	fd = -1;
+@@ -558,8 +621,11 @@ err:
+ 
+ // Create new interface entry
+ static struct mrib_iface* mrib_get_iface(int ifindex)
+-{
+-	if (mrt_fd.fd < 0 && mrib_init() < 0)
++{	// mrt and mrt6
++	if (omcpzcfg_app_igmp() && mrt_fd.fd < 0 && mrib_init() < 0)
++		return NULL;
++
++	if (omcpzcfg_app_mld() && mrt6_fd.fd < 0 && mrib_mld_init() < 0)
+ 		return NULL;
+ 
+ 	size_t mifid = mrib_find(ifindex);
+@@ -572,25 +638,33 @@ static struct mrib_iface* mrib_get_iface
+ 
+ 	struct mrib_iface *iface = &mifs[mifid];
+ 
+-	struct vifctl ctl = {mifid, VIFF_USE_IFINDEX, 1, 0, { .vifc_lcl_ifindex = ifindex }, {INADDR_ANY}};
+-	if (setsockopt(mrt_fd.fd, IPPROTO_IP, MRT_ADD_VIF, &ctl, sizeof(ctl)))
+-		return NULL;
++	if(omcpzcfg_app_igmp()){
+ 
+-	struct mif6ctl ctl6 = {mifid, 0, 1, ifindex, 0};
+-	if (setsockopt(mrt6_fd.fd, IPPROTO_IPV6, MRT6_ADD_MIF, &ctl6, sizeof(ctl6)))
+-		return NULL;
++		struct vifctl ctl = {mifid, VIFF_USE_IFINDEX, 1, 0, { .vifc_lcl_ifindex = ifindex }, {INADDR_ANY}};
++		if (setsockopt(mrt_fd.fd, IPPROTO_IP, MRT_ADD_VIF, &ctl, sizeof(ctl)))
++			return NULL;
+ 
+-	struct ip_mreqn mreq = {{INADDR_ALLIGMPV3RTRS_GROUP}, {INADDR_ANY}, ifindex};
+-	setsockopt(mrt_fd.fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq));
++		struct ip_mreqn mreq = {{INADDR_ALLIGMPV3RTRS_GROUP}, {INADDR_ANY}, ifindex};
++		setsockopt(mrt_fd.fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq));
+ 
+-	mreq.imr_multiaddr.s_addr = cpu_to_be32(INADDR_ALLRTRS_GROUP);
+-	setsockopt(mrt_fd.fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq));
++		mreq.imr_multiaddr.s_addr = cpu_to_be32(INADDR_ALLRTRS_GROUP);
++		setsockopt(mrt_fd.fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq));
++
++	}
+ 
+-	struct ipv6_mreq mreq6 = {MLD2_ALL_MCR_INIT, ifindex};
+-	setsockopt(mrt6_fd.fd, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP, &mreq6, sizeof(mreq6));
++	if(omcpzcfg_app_mld()){
+ 
+-	mreq6.ipv6mr_multiaddr.s6_addr[15] = 0x02;
+-	setsockopt(mrt6_fd.fd, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP, &mreq6, sizeof(mreq6));
++		struct mif6ctl ctl6 = {mifid, 0, 1, ifindex, 0};
++		if (setsockopt(mrt6_fd.fd, IPPROTO_IPV6, MRT6_ADD_MIF, &ctl6, sizeof(ctl6)))
++			return NULL;
++
++		struct ipv6_mreq mreq6 = {MLD2_ALL_MCR_INIT, ifindex};
++		setsockopt(mrt6_fd.fd, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP, &mreq6, sizeof(mreq6));
++
++		mreq6.ipv6mr_multiaddr.s6_addr[15] = 0x02;
++		setsockopt(mrt6_fd.fd, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP, &mreq6, sizeof(mreq6));
++
++	}
+ 
+ 	iface->timer.cb = mrib_clean;
+ 	iface->ifindex = ifindex;
+@@ -608,24 +682,34 @@ static void mrib_clean_iface(struct mrib
+ 		mrib_clean(&iface->timer);
+ 
+ 		size_t mifid = iface - mifs;
+-		struct vifctl ctl = {mifid, VIFF_USE_IFINDEX, 1, 0,
+-				{ .vifc_lcl_ifindex = iface->ifindex }, {INADDR_ANY}};
+-		setsockopt(mrt_fd.fd, IPPROTO_IP, MRT_DEL_VIF, &ctl, sizeof(ctl));
+ 
+-		struct mif6ctl ctl6 = {mifid, 0, 1, iface->ifindex, 0};
+-		setsockopt(mrt6_fd.fd, IPPROTO_IPV6, MRT6_DEL_MIF, &ctl6, sizeof(ctl6));
++		if(omcpzcfg_app_igmp()){
+ 
+-		struct ip_mreqn mreq = {{INADDR_ALLIGMPV3RTRS_GROUP}, {INADDR_ANY}, iface->ifindex};
+-		setsockopt(mrt_fd.fd, IPPROTO_IP, IP_DROP_MEMBERSHIP, &mreq, sizeof(mreq));
++			struct vifctl ctl = {mifid, VIFF_USE_IFINDEX, 1, 0,
++					{ .vifc_lcl_ifindex = iface->ifindex }, {INADDR_ANY}};
++			setsockopt(mrt_fd.fd, IPPROTO_IP, MRT_DEL_VIF, &ctl, sizeof(ctl));
+ 
+-		mreq.imr_multiaddr.s_addr = cpu_to_be32(INADDR_ALLRTRS_GROUP);
+-		setsockopt(mrt_fd.fd, IPPROTO_IP, IP_DROP_MEMBERSHIP, &mreq, sizeof(mreq));
+ 
+-		struct ipv6_mreq mreq6 = {MLD2_ALL_MCR_INIT, iface->ifindex};
+-		setsockopt(mrt6_fd.fd, IPPROTO_IPV6, IPV6_DROP_MEMBERSHIP, &mreq6, sizeof(mreq6));
++			struct ip_mreqn mreq = {{INADDR_ALLIGMPV3RTRS_GROUP}, {INADDR_ANY}, iface->ifindex};
++			setsockopt(mrt_fd.fd, IPPROTO_IP, IP_DROP_MEMBERSHIP, &mreq, sizeof(mreq));
+ 
+-		mreq6.ipv6mr_multiaddr.s6_addr[15] = 0x02;
+-		setsockopt(mrt6_fd.fd, IPPROTO_IPV6, IPV6_DROP_MEMBERSHIP, &mreq6, sizeof(mreq6));
++			mreq.imr_multiaddr.s_addr = cpu_to_be32(INADDR_ALLRTRS_GROUP);
++			setsockopt(mrt_fd.fd, IPPROTO_IP, IP_DROP_MEMBERSHIP, &mreq, sizeof(mreq));
++
++		}
++
++		if(omcpzcfg_app_mld()){
++
++			struct mif6ctl ctl6 = {mifid, 0, 1, iface->ifindex, 0};
++			setsockopt(mrt6_fd.fd, IPPROTO_IPV6, MRT6_DEL_MIF, &ctl6, sizeof(ctl6));
++
++			struct ipv6_mreq mreq6 = {MLD2_ALL_MCR_INIT, iface->ifindex};
++			setsockopt(mrt6_fd.fd, IPPROTO_IPV6, IPV6_DROP_MEMBERSHIP, &mreq6, sizeof(mreq6));
++
++			mreq6.ipv6mr_multiaddr.s6_addr[15] = 0x02;
++			setsockopt(mrt6_fd.fd, IPPROTO_IPV6, IPV6_DROP_MEMBERSHIP, &mreq6, sizeof(mreq6));
++
++		}
+ 	}
+ }
+ 
+Index: omcproxy-2018-12-14-722151f0/src/omcproxy.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/omcproxy.c
++++ omcproxy-2018-12-14-722151f0/src/omcproxy.c
+@@ -28,6 +28,7 @@
+ 
+ #include "omcproxy.h"
+ #include "proxy.h"
++#include "omcpzcfg.h"
+ 
+ int log_level = LOG_WARNING;
+ 
+@@ -151,6 +152,16 @@ int main(int argc, char **argv) {
+ 				log_level = 7;
+ 			continue;
+ 		}
++#ifdef ZYXEL_OMCPROXY
++		else if(!strncmp(argv[i], "mld", 3)) {
++			omcpzcfg_init("mld");
++			continue;
++		}
++		else if(!strncmp(argv[i], "igmp", 4)) {
++			omcpzcfg_init("igmp");
++			continue;
++		}
++#endif
+ 
+ 
+ 		blob_buf_init(&b, 0);
+Index: omcproxy-2018-12-14-722151f0/src/omcpzcfg.c
+===================================================================
+--- /dev/null
++++ omcproxy-2018-12-14-722151f0/src/omcpzcfg.c
+@@ -0,0 +1,68 @@
++
++
++#include <stdlib.h>
++#include <sys/types.h>
++#include <stdbool.h>
++#include <string.h>
++#include <json/json.h>
++
++#include "omcpzcfg.h"
++
++#define ZCFG_OMCP_IGMP_CONFIG "/tmp/omcproxy_igmp.json"
++#define ZCFG_OMCP_MLD_CONFIG "/tmp/omcproxy_mld.json"
++
++bool omcp_app_igmp = true, omcp_app_mld = true;
++
++#ifdef ZYXEL_OMCPROXY
++static struct json_object *zcfg_omcp_obj = NULL;
++
++
++// app = igmp, mld
++void omcpzcfg_init(char *app)
++{
++	if(!strncmp(app, "igmp", 4)){
++		zcfg_omcp_obj = json_object_from_file(ZCFG_OMCP_IGMP_CONFIG);
++		omcp_app_igmp = true;
++		omcp_app_mld = false;
++	}else if(!strncmp(app, "mld", 3)){
++		zcfg_omcp_obj = json_object_from_file(ZCFG_OMCP_MLD_CONFIG);
++		omcp_app_igmp = false;
++		omcp_app_mld = true;
++	}
++
++}
++
++// 'QueryResponseInterval', unit in s precision
++// 'LastMemberQueryInterval', unit in 0.1s, std default, 10 == 1s(10 * 0.1)
++int omcpzcfg_param_value(const char *parm_name)
++{
++	struct json_object *paramObj = NULL;
++	int value = -1;
++
++	if(!zcfg_omcp_obj)
++		return -1;
++
++	if((paramObj = json_object_object_get(zcfg_omcp_obj, parm_name))){
++		value = json_object_get_int(paramObj);
++	}
++
++	return value;
++}
++
++int omcpzcfg_ifname(char *ifname, int len)
++{
++	struct json_object *paramObj = NULL;
++	const char *value = NULL;
++
++	if(!zcfg_omcp_obj || !ifname)
++		return -1;
++
++	memset(ifname, 0, len);
++	if((paramObj = json_object_object_get(zcfg_omcp_obj, "ifName")) && (value = json_object_get_string(paramObj))){
++		strncpy(ifname, value, len-1);
++	}
++
++	return value ? 1 : -1;
++}
++#endif
++
+Index: omcproxy-2018-12-14-722151f0/src/omcpzcfg.h
+===================================================================
+--- /dev/null
++++ omcproxy-2018-12-14-722151f0/src/omcpzcfg.h
+@@ -0,0 +1,23 @@
++
++extern bool omcp_app_igmp, omcp_app_mld;
++
++
++#ifndef ZYXEL_OMCPROXY
++
++#define omcpzcfg_app_igmp() (true)
++#define omcpzcfg_app_mld() (true)
++
++//omcpzcfg_init(a) { }
++//omcpzcfg_param_value(b) { }
++//omcpzcfg_ifname(a, b) { }
++
++#else
++
++#define omcpzcfg_app_igmp() (omcp_app_igmp)
++#define omcpzcfg_app_mld() (omcp_app_mld)
++
++void omcpzcfg_init(char *app);
++int omcpzcfg_param_value(const char *parm_name);
++int omcpzcfg_ifname(char *ifname, int len);
++
++#endif
+Index: omcproxy-2018-12-14-722151f0/src/querier.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/querier.c
++++ omcproxy-2018-12-14-722151f0/src/querier.c
+@@ -27,6 +27,8 @@
+ 
+ #include "querier.h"
+ 
++#include "omcpzcfg.h"
++
+ static struct list_head ifaces = LIST_HEAD_INIT(ifaces);
+ 
+ 
+@@ -72,10 +74,17 @@ static void querier_send_query(struct gr
+ 			(!sources) ? "group" : "source", addrbuf, iface->ifindex, suppress);
+ 
+ 	bool v4 = IN6_IS_ADDR_V4MAPPED(group);
++#ifdef ZYXEL_OMCPROXY
++	if (v4 && !iface->igmp_other_querier && omcpzcfg_app_igmp())
++		igmp_send_query(iface, group, sources, suppress);
++	else if (!v4 && !iface->mld_other_querier && omcpzcfg_app_mld())
++		mld_send_query(iface, group, sources, suppress);
++#else
+ 	if (v4 && !iface->igmp_other_querier)
+ 		igmp_send_query(iface, group, sources, suppress);
+ 	else if (!v4 && !iface->mld_other_querier)
+ 		mld_send_query(iface, group, sources, suppress);
++#endif
+ }
+ 
+ // Expire interface timers and send queries (called by timer as callback)
+@@ -88,7 +97,9 @@ static void querier_iface_timer(struct u
+ 	if (iface->igmp_next_query <= now) {
+ 		// If the other querier is gone, reset interface config
+ 		if (iface->igmp_other_querier) {
++#ifndef ZYXEL_OMCPROXY
+ 			iface->groups.cfg_v4 = iface->cfg;
++#endif
+ 			iface->igmp_other_querier = false;
+ 		}
+ 
+@@ -109,7 +120,9 @@ static void querier_iface_timer(struct u
+ 	if (iface->mld_next_query <= now) {
+ 		// If the other querier is gone, reset interface config
+ 		if (iface->mld_other_querier) {
++#ifndef ZYXEL_OMCPROXY
+ 			iface->groups.cfg_v6 = iface->cfg;
++#endif
+ 			iface->mld_other_querier = false;
+ 		}
+ 
+@@ -206,15 +219,40 @@ int querier_attach(struct querier_user_i
+ 		uloop_timeout_set(&iface->timeout, 0);
+ 
+ 		groups_init(&iface->groups);
++#ifdef ZYXEL_OMCPROXY
++		{
++			int value;
++			iface->groups.group_limit = ((value = omcpzcfg_param_value("MaxGroups")) > 0 && value <= QUERIER_MAX_GROUPS) ?
++					value : QUERIER_MAX_GROUPS;
++			iface->groups.source_limit = ((value = omcpzcfg_param_value("MaxSources")) > 0 && value <= QUERIER_MAX_SOURCE) ?
++					value : QUERIER_MAX_SOURCE;
++		}
++#else
+ 		iface->groups.source_limit = QUERIER_MAX_SOURCE;
+ 		iface->groups.group_limit = QUERIER_MAX_GROUPS;
++#endif
+ 		iface->groups.cb_update = querier_announce_change;
+ 		iface->groups.cb_query = querier_send_query;
+-		iface->cfg = iface->groups.cfg_v6;
+ 		iface->igmp_startup_tries = iface->groups.cfg_v4.robustness;
+ 		iface->mld_startup_tries = iface->groups.cfg_v6.robustness;
++#ifdef ZYXEL_OMCPROXY
++		if (omcpzcfg_app_igmp() && !omcpzcfg_app_mld()){
++			iface->cfg = iface->groups.cfg_v4;
++			res = mrib_attach_querier(&iface->mrib, ifindex, igmp_handle, NULL);
++		}else if (!omcpzcfg_app_igmp() && omcpzcfg_app_mld()){
++			iface->cfg = iface->groups.cfg_v6;
++			res = mrib_attach_querier(&iface->mrib, ifindex, NULL, mld_handle);
++		}else{
++			// non-configuration
++			iface->cfg = iface->groups.cfg_v6;
++			res = mrib_attach_querier(&iface->mrib, ifindex, igmp_handle, mld_handle);
++		}
+ 
++		if(res)
++#else
++		iface->cfg = iface->groups.cfg_v6;
+ 		if ((res = mrib_attach_querier(&iface->mrib, ifindex, igmp_handle, mld_handle)))
++#endif
+ 			goto out;
+ 	}
+ 
+Index: omcproxy-2018-12-14-722151f0/CMakeLists.txt
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/CMakeLists.txt
++++ omcproxy-2018-12-14-722151f0/CMakeLists.txt
+@@ -23,7 +23,13 @@ else (WITH_LIBUBOX)
+   set(PLATFORM_SOURCE ${PLATFORM_SOURCE} libubox/uloop.c libubox/avl.c libubox/blobmsg.c libubox/blob.c)
+ endif(WITH_LIBUBOX)
+ 
++if(ZYXEL_OMCPROXY)
++set(PLATFORM_LINK ${PLATFORM_LINK} json-c)
++add_executable(omcproxy src/client.c src/mrib.c src/querier.c src/groups.c src/igmp.c src/mld.c src/proxy.c src/omcproxy.c src/omcpzcfg.c ${PLATFORM_SOURCE})
++else (ZYXEL_OMCPROXY)
+ add_executable(omcproxy src/client.c src/mrib.c src/querier.c src/groups.c src/igmp.c src/mld.c src/proxy.c src/omcproxy.c ${PLATFORM_SOURCE})
++endif(ZYXEL_OMCPROXY)
++
+ target_link_libraries(omcproxy ${PLATFORM_LINK})
+ 
+ install(TARGETS omcproxy DESTINATION sbin/)
+Index: omcproxy-2018-12-14-722151f0/src/proxy.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/proxy.c
++++ omcproxy-2018-12-14-722151f0/src/proxy.c
+@@ -158,9 +158,9 @@ int proxy_set(int uplink, const int down
+ 		struct querier_user_iface *iface = container_of(user, struct querier_user_iface, user);
+ 
+ 		size_t i;
+-		for (i = 0; i < downlinks_cnt && downlinks[i] == iface->iface->ifindex; ++i);
+-			if (i == downlinks_cnt)
+-				proxy_remove_downlink(container_of(iface, struct proxy_downlink, iface));
++		for (i = 0; i < downlinks_cnt && downlinks[i] == iface->iface->ifindex; ++i) {
++			if (i == downlinks_cnt) {
++				proxy_remove_downlink(container_of(iface, struct proxy_downlink, iface));}}
+ 	}
+ 
+ 	for (size_t i = 0; i < downlinks_cnt; ++i) {

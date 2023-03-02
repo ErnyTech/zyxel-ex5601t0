@@ -1,0 +1,14 @@
+Index: pure-ftpd-1.0.30/src/ftpd.c
+===================================================================
+--- pure-ftpd-1.0.30.orig/src/ftpd.c
++++ pure-ftpd-1.0.30/src/ftpd.c
+@@ -2394,6 +2394,9 @@ void dopass(char *password)
+ 
+ 	if(chk_account_is_locked(cur_user_idx, &login_fail_cnt, last_login_time, retry_times, lock_period)){
+ 		puts("Account has been blocked temporarily, please try later!");
++#ifdef MSTC_TTNET_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
++		addreply_noformat(530, "Account has been blocked temporarily, please try later!");
++#endif	/*_MSTC_, Linda, CPE User Definitions and Rights_END.*/
+ 		logfile(LOG_WARNING, "Account has been blocked temporarily, please try later!");
+ 		return;
+ 	}

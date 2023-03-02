@@ -1,0 +1,20 @@
+Index: busybox-1.31.1/modutils/depmod.c
+===================================================================
+--- busybox-1.31.1.orig/modutils/depmod.c	2019-06-10 18:50:53.000000000 +0800
++++ busybox-1.31.1/modutils/depmod.c	2021-03-12 21:05:52.368221154 +0800
+@@ -110,8 +110,15 @@
+ 
+ static void xfreopen_write(const char *file, FILE *f)
+ {
++#if 1 //due to depmod can't generate file at read-only file system, so modify the path that generate file
++	char modulePath[16] = "/var/";
++	strcat(modulePath, file);
++	if (freopen(modulePath, "w", f) == NULL)
++		bb_perror_msg_and_die("can't open '%s'", modulePath);
++#else
+ 	if (freopen(file, "w", f) == NULL)
+ 		bb_perror_msg_and_die("can't open '%s'", file);
++#endif
+ }
+ 
+ //usage:#if !ENABLE_MODPROBE_SMALL

@@ -1,0 +1,34 @@
+Index: pure-ftpd-1.0.30/src/ftpd.c
+===================================================================
+--- pure-ftpd-1.0.30.orig/src/ftpd.c	2021-01-15 13:18:59.740640993 +0800
++++ pure-ftpd-1.0.30/src/ftpd.c	2021-01-15 13:36:35.771406116 +0800
+@@ -5937,14 +5937,13 @@
+ #endif
+     if (display_banner) {
+ #ifdef BORING_MODE
+-        addreply_noformat(0, MSG_WELCOME_TO " Pure-FTPd.");
++        addreply_noformat(0, MSG_WELCOME_TO " FTP Server");
+ #else
+ # ifdef DEBUG
+         addreply_noformat(0, "--------- " MSG_WELCOME_TO 
+                           " Pure-FTPd " PACKAGE_VERSION VERSION_PRIVSEP VERSION_TLS " ----------");
+ # else
+-        addreply_noformat(0, "--------- " MSG_WELCOME_TO 
+-                          " Pure-FTPd" VERSION_PRIVSEP VERSION_TLS " ----------");
++        addreply_noformat(0, "--------- " MSG_WELCOME_TO " FTP Server ----------");
+ # endif
+ #endif
+         if (users > 0U) {
+Index: pure-ftpd-1.0.30/src/ftp_parser.c
+===================================================================
+--- pure-ftpd-1.0.30.orig/src/ftp_parser.c	2021-01-15 13:18:59.708640994 +0800
++++ pure-ftpd-1.0.30/src/ftp_parser.c	2021-01-15 13:18:59.752640993 +0800
+@@ -701,7 +701,7 @@
+                                       " ALIAS" CRLF
+ # endif
+                                       " CHMOD" CRLF " IDLE" CRLF " UTIME");
+-                    addreply_noformat(214, "Pure-FTPd - http://pureftpd.org/");
++                    //addreply_noformat(214, "Pure-FTPd - http://pureftpd.org/");
+                 } else if (!strcasecmp(arg, "chmod")) {
+                     char *sitearg2;
+                     mode_t mode;

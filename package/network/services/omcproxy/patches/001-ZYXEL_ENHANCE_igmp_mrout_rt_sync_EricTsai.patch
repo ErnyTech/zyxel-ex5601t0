@@ -1,0 +1,447 @@
+Index: omcproxy-2018-12-14-722151f0/src/mrib.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/mrib.c
++++ omcproxy-2018-12-14-722151f0/src/mrib.c
+@@ -37,11 +37,11 @@
+ 
+ #include <libubox/uloop.h>
+ 
+-#include "omcproxy.h"
+ #include "mrib.h"
+ 
+ #include "omcpzcfg.h"
+ 
++#if 0
+ struct mrib_route {
+ 	struct list_head head;
+ 	struct in6_addr group;
+@@ -56,7 +56,7 @@ struct mrib_iface {
+ 	struct list_head queriers;
+ 	struct uloop_timeout timer;
+ };
+-
++#endif
+ /* we can't use cpu_to_be32 outside a function */
+ #if __BYTE_ORDER == __BIG_ENDIAN
+ static uint32_t ipv4_rtr_alert = 0x94040000;
+@@ -86,7 +86,7 @@ static inline void mrib_unmap(struct in_
+ }
+ 
+ // Add / delete multicast route
+-static int mrib_set(const struct in6_addr *group, const struct in6_addr *source,
++int mrib_set(const struct in6_addr *group, const struct in6_addr *source,
+ 		struct mrib_iface *iface, mrib_filter dest, bool del)
+ {
+ 	int status = 0;
+@@ -155,6 +155,13 @@ static void mrib_clean(struct uloop_time
+ 	struct mrib_route *c, *n;
+ 	list_for_each_entry_safe(c, n, &iface->routes, head) {
+ 		if (c->valid_until <= now || (list_empty(&iface->users) && list_empty(&iface->queriers))) {
++			char groupbuf[INET6_ADDRSTRLEN], sourcebuf[INET6_ADDRSTRLEN];
++			inet_ntop(AF_INET6, &c->group, groupbuf, sizeof(groupbuf));
++			inet_ntop(AF_INET6, &c->source, sourcebuf, sizeof(sourcebuf));
++
++			L_DEBUG("%s: mroute:%s group:%s => %d\n", __FUNCTION__, sourcebuf, groupbuf, iface->ifindex);
++
++
+ 			mrib_set(&c->group, &c->source, iface, 0, 1);
+ 			list_del(&c->head);
+ 			free(c);
+@@ -191,6 +198,11 @@ static void mrib_notify_newsource(struct
+ 	L_DEBUG("%s: detected new multicast source %s for %s on %d",
+ 			__FUNCTION__, sourcebuf, groupbuf, iface->ifindex);
+ 
++	if(!filter){
++		L_DEBUG("%s: %d detected multicast source %s on group %s",
++				__FUNCTION__, iface->ifindex, sourcebuf, groupbuf);
++	}
++
+ 	struct mrib_route *route = malloc(sizeof(*route));
+ 	if (route) {
+ 		route->group = *group;
+@@ -201,7 +213,8 @@ static void mrib_notify_newsource(struct
+ 			uloop_timeout_set(&iface->timer, MRIB_DEFAULT_LIFETIME * OMGP_TIME_PER_SECOND);
+ 
+ 		list_add_tail(&route->head, &iface->routes);
+-		mrib_set(group, source, iface, filter, 0);
++		if(mrib_set(group, source, iface, filter, 0) == 0)
++			route->mrts = filter;
+ 	}
+ }
+ 
+@@ -401,6 +414,48 @@ static void mrib_receive_mrt6(struct ulo
+ 	}
+ }
+ 
++void mrib_rt_mrts(struct mrib_iface *iface, const struct in6_addr *group, const struct in6_addr *source)
++{
++	char groupbuf[INET6_ADDRSTRLEN], sourcebuf[INET6_ADDRSTRLEN];
++
++	if(!iface)
++		return NULL;
++
++	if(!group && !source)
++		return NULL;
++
++	struct mrib_user *user;
++	mrib_filter mrts = 0;
++	list_for_each_entry(user, &iface->users, head) {
++		struct mrib_route *rt = NULL, *n;
++		list_for_each_entry_safe(rt, n, &iface->routes, head) {
++			memset(groupbuf, 0, INET6_ADDRSTRLEN);
++			memset(sourcebuf, 0, INET6_ADDRSTRLEN);
++			inet_ntop(AF_INET6, &rt->group, groupbuf, sizeof(groupbuf));
++			inet_ntop(AF_INET6, &rt->source, sourcebuf, sizeof(sourcebuf));
++			L_DEBUG("%s: rtgp:%s rtsr:%s\n", __FUNCTION__, groupbuf, sourcebuf);
++
++			if(group && memcmp(&rt->group, group, sizeof(struct in6_addr)))
++				continue;
++
++			if(source && memcmp(&rt->source, source, sizeof(struct in6_addr)))
++				continue;
++
++			if (rt && user->cb_newsource)
++				user->cb_newsource(user, group, source, &mrts);
++
++			if(mrts && rt->mrts != mrts) {
++				if(mrib_set(group, source, iface, mrts, 0) == 0)
++					rt->mrts = mrts;
++			}
++
++			break;
++		}
++	}
++
++
++}
++
+ // Send an IGMP-packet
+ int mrib_send_igmp(struct mrib_querier *q, struct igmpv3_query *igmp, size_t len,
+ 		const struct sockaddr_in *dest)
+@@ -543,6 +598,10 @@ static int mrib_init(void)
+ 	mrt6_fd.fd = fd;
+ #endif
+ 
++	val = 0x00;
++	if (setsockopt(fd, IPPROTO_IP, IP_MULTICAST_ALL, &val, sizeof(val)))
++		goto err;
++
+ 	mrt_fd.cb = mrib_receive_mrt;
+ //	mrt6_fd.cb = mrib_receive_mrt6;
+ 
+@@ -604,6 +663,10 @@ static int mrib_mld_init(void)
+ 	if (setsockopt(fd, IPPROTO_ICMPV6, ICMP6_FILTER, &flt, sizeof(flt)))
+ 		goto err;
+ 
++	val = 0;
++	if (setsockopt(fd, IPPROTO_IPV6, IPV6_MULTICAST_ALL, &val, sizeof(val)))
++		goto err;
++
+ 	mrt6_fd.fd = fd;
+ 
+ 	mrt6_fd.cb = mrib_receive_mrt6;
+@@ -619,6 +682,14 @@ err:
+ 	return -errno;
+ }
+ 
++struct mrib_iface *mrib_retrieve_iface(int ifindex)
++{
++	size_t mifid = mrib_find(ifindex);
++	struct mrib_iface *iface = (mifid < MAXMIFS) ? &mifs[mifid] : NULL;
++
++	return iface;
++}
++
+ // Create new interface entry
+ static struct mrib_iface* mrib_get_iface(int ifindex)
+ {	// mrt and mrt6
+Index: omcproxy-2018-12-14-722151f0/src/client.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/client.c
++++ omcproxy-2018-12-14-722151f0/src/client.c
+@@ -75,6 +75,17 @@ int client_set(struct client *client, co
+ 			in6_addr->sin6_addr = sources[i];
+ 	}
+ 
++	int val = 0;
++	if(family == AF_INET)
++	{
++		if (setsockopt(client->igmp_fd, IPPROTO_IP, IP_MULTICAST_ALL, &val, sizeof(val)))
++			return -errno;
++	}
++	else{
++		if (setsockopt(client->mld_fd, IPPROTO_IPV6, IPV6_MULTICAST_ALL, &val, sizeof(val)))
++			return -errno;
++	}
++
+ 	int fd = (family == AF_INET) ? client->igmp_fd : client->mld_fd;
+ 	setsockopt(fd, sol, MCAST_LEAVE_GROUP, filter, sizeof(struct group_req));
+ 	if (!include || cnt > 0) {
+Index: omcproxy-2018-12-14-722151f0/src/groups.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/groups.c
++++ omcproxy-2018-12-14-722151f0/src/groups.c
+@@ -53,7 +53,7 @@ static void querier_remove_group(struct
+ 	group->exclude_until = 0;
+ 
+ 	if (groups->cb_update)
+-		groups->cb_update(groups, group, now);
++		groups->cb_update(groups, group, now, 0);
+ 
+ 	avl_delete(&groups->groups, &group->node);
+ 	free(group);
+@@ -151,7 +151,7 @@ static omgp_time_t expire_group(struct g
+ 	if (group->exclude_until == 0 && group->source_count == 0)
+ 		querier_remove_group(groups, group, now);
+ 	else if (changed && groups->cb_update)
+-		groups->cb_update(groups, group, now);
++		groups->cb_update(groups, group, now, 0);
+ 
+ 	return next_event;
+ }
+@@ -498,7 +498,10 @@ void groups_update_state(struct groups *
+ 	}
+ 
+ 	if (changed && groups->cb_update)
+-		groups->cb_update(groups, group, now);
++	{
++		//groups->cb_update(groups, group, now);
++		groups->cb_update(groups, group, now, true);
++	}
+ 
+ 	if (group_is_included(group, now) && group->source_count == 0)
+ 		next_event = now;
+Index: omcproxy-2018-12-14-722151f0/src/groups.h
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/groups.h
++++ omcproxy-2018-12-14-722151f0/src/groups.h
+@@ -62,7 +62,8 @@ struct groups {
+ 	size_t group_limit;
+ 	void (*cb_query)(struct groups *g, const struct in6_addr *addr,
+ 			const struct list_head *sources, bool suppress);
+-	void (*cb_update)(struct groups *g, struct group *group, omgp_time_t now);
++	//void (*cb_update)(struct groups *g, struct group *group, omgp_time_t now);
++	void (*cb_update)(struct groups *g, struct group *group, omgp_time_t now, bool sync_mrt);
+ };
+ 
+ 
+Index: omcproxy-2018-12-14-722151f0/src/igmp.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/igmp.c
++++ omcproxy-2018-12-14-722151f0/src/igmp.c
+@@ -111,8 +111,11 @@ void igmp_handle(struct mrib_querier *mr
+ 
+ 		if (!suppress && query->group) {
+ 			struct in6_addr sources[nsrc];
+-			for (size_t i = 0; i < nsrc; ++i)
+-				querier_map(&sources[i], query->srcs[i]);
++
++			if((size_t)len > sizeof(*igmp)){
++				for (size_t i = 0; i < nsrc; ++i)
++					querier_map(&sources[i], query->srcs[i]);
++			}
+ 
+ 			groups_update_timers(&q->groups, &group, sources, nsrc);
+ 		}
+Index: omcproxy-2018-12-14-722151f0/src/mrib.h
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/mrib.h
++++ omcproxy-2018-12-14-722151f0/src/mrib.h
+@@ -22,6 +22,7 @@
+ #include <netinet/in.h>
+ #include <libubox/list.h>
+ #include <sys/socket.h>
++#include <libubox/uloop.h>
+ 
+ #include <netinet/icmp6.h>
+ 
+@@ -30,11 +31,30 @@
+ #include <linux/icmpv6.h>
+ #undef icmp6_filter
+ 
++#include "omcproxy.h"
++
+ #define MRIB_DEFAULT_LIFETIME 125
+ 
+ #define IPV6_ALL_NODES_INIT		{ { { 0xff,0x02,0,0,0,0,0,0,0,0,0,0,0,0,0,0x1 } } }
+ #define INADDR_ALLIGMPV3RTRS_GROUP	cpu_to_be32(0xe0000016U)
+ 
++
++struct mrib_route {
++	struct list_head head;
++	struct in6_addr group;
++	struct in6_addr source;
++	omgp_time_t valid_until;
++	uint32_t mrts;
++};
++
++struct mrib_iface {
++	int ifindex;
++	struct list_head users;
++	struct list_head routes;
++	struct list_head queriers;
++	struct uloop_timeout timer;
++};
++
+ typedef uint32_t mrib_filter;
+ struct mrib_iface;
+ struct mrib_user;
+@@ -74,6 +94,12 @@ int mrib_attach_querier(struct mrib_quer
+ // Deregister a querier from mrib
+ void mrib_detach_querier(struct mrib_querier *querier);
+ 
++struct mrib_iface *mrib_retrieve_iface(int ifindex);
++void mrib_rt_mrts(struct mrib_iface *iface, const struct in6_addr *group, const struct in6_addr *source);
++
++int mrib_set(const struct in6_addr *group, const struct in6_addr *source,
++		struct mrib_iface *iface, mrib_filter dest, bool del);
++
+ // Flush state for a multicast route
+ int mrib_flush(struct mrib_user *user, const struct in6_addr *group, uint8_t group_plen, const struct in6_addr *source);
+ 
+Index: omcproxy-2018-12-14-722151f0/src/proxy.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/proxy.c
++++ omcproxy-2018-12-14-722151f0/src/proxy.c
+@@ -87,13 +87,65 @@ static void proxy_mrib(struct mrib_user
+ 	}
+ }
+ 
++void proxy_mrts_sync(struct client *client, const struct in6_addr *group, const struct in6_addr sources[], int len)
++{
++	int ifindex = client->ifindex;
++	struct mrib_iface *iface = mrib_retrieve_iface(ifindex);
++	char groupbuf[INET6_ADDRSTRLEN], sourcebuf[INET6_ADDRSTRLEN];
++	inet_ntop(AF_INET6, group, groupbuf, sizeof(groupbuf));
++	//inet_ntop(AF_INET6, source, sourcebuf, sizeof(sourcebuf));
++
++
++	L_DEBUG("%s: group:%s, srs: %d\n", __FUNCTION__, groupbuf, len);
++
++	if(len){
++		bool running = true;
++		int n = 0;
++		while(running) {
++			mrib_rt_mrts(iface, (const struct in6_addr *)group, (const struct in6_addr *)&sources[n]);
++			n++;
++			running = (n != len) ? true : false;
++		}
++	}
++	else{ // mostly v1/v2
++		mrib_filter mrts = 0;
++		struct mrib_user *user;
++		struct mrib_route *rt;
++		struct in6_addr *source;
++		list_for_each_entry(rt, &iface->routes, head) {
++			memset(groupbuf, 0, INET6_ADDRSTRLEN);
++			memset(sourcebuf, 0, INET6_ADDRSTRLEN);
++			inet_ntop(AF_INET6, &rt->group, groupbuf, sizeof(groupbuf));
++			inet_ntop(AF_INET6, &rt->source, sourcebuf, sizeof(sourcebuf));
++			L_DEBUG("%s: rtgroup:%s rtsrc:%s\n", __FUNCTION__, groupbuf, sourcebuf);
++			if(memcmp(&rt->group, group, sizeof(struct in6_addr)))
++				continue;
++
++			source = &rt->source;
++			list_for_each_entry(user, &iface->users, head)
++				if (user->cb_newsource)
++					user->cb_newsource(user, group, source, &mrts);
++
++			if(mrts && rt->mrts != mrts) {
++				if(mrib_set(group, source, iface, mrts, 0) == 0)
++					rt->mrts = mrts;
++			}
++		}
++	}
++}
++
+ // Update proxy state (called from querier on change of combined group-state)
++//static void proxy_trigger(struct querier_user_iface *user, const struct in6_addr *group,
++//		bool include, const struct in6_addr *sources, size_t len)
+ static void proxy_trigger(struct querier_user_iface *user, const struct in6_addr *group,
+-		bool include, const struct in6_addr *sources, size_t len)
++		bool include, const struct in6_addr *sources, size_t len, bool sync_mrt)
+ {
+ 	struct proxy_downlink *iface = container_of(user, struct proxy_downlink, iface);
+-	if (proxy_match_scope(iface->flags, group))
++	if (proxy_match_scope(iface->flags, group)) {
+ 		client_set(&iface->client, group, include, sources, len);
++		if(sync_mrt && (!include || (include && len)))
++			proxy_mrts_sync(&iface->client, group, sources, len);
++	}
+ }
+ 
+ // Remove proxy with given name
+Index: omcproxy-2018-12-14-722151f0/src/querier.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/querier.c
++++ omcproxy-2018-12-14-722151f0/src/querier.c
+@@ -33,7 +33,8 @@ static struct list_head ifaces = LIST_HE
+ 
+ 
+ // Handle querier update event from a querier-interface
+-static void querier_announce_iface(struct querier_user_iface *user, omgp_time_t now, const struct group *group, bool enabled)
++//static void querier_announce_iface(struct querier_user_iface *user, omgp_time_t now, const struct group *group, bool enabled)
++static void querier_announce_iface(struct querier_user_iface *user, omgp_time_t now, const struct group *group, bool enabled, bool sync_mrt)
+ {
+ 	bool include = true;
+ 	size_t cnt = 0;
+@@ -48,18 +49,21 @@ static void querier_announce_iface(struc
+ 	}
+ 
+ 	if (user->user_cb)
+-		user->user_cb(user, &group->addr, include, sources, cnt);
++		user->user_cb(user, &group->addr, include, sources, cnt, sync_mrt);
++
+ }
+ 
+ // Handle changes from a querier for a given group (called by a group-state as callback)
+-static void querier_announce_change(struct groups *groups, struct group *group, omgp_time_t now)
++//static void querier_announce_change(struct groups *groups, struct group *group, omgp_time_t now)
++static void querier_announce_change(struct groups *groups, struct group *group, omgp_time_t now, bool sync_mrt)
+ {
+ 	struct querier_iface *iface = container_of(groups, struct querier_iface, groups);
+ 
+ 	// Only recognize changes to non-link-local groups
+ 	struct querier_user_iface *user;
+ 	list_for_each_entry(user, &iface->users, head)
+-		querier_announce_iface(user, now, group, true);
++		querier_announce_iface(user, now, group, true, sync_mrt);
++
+ }
+ 
+ // Send query for a group + sources (called by a group-state as callback)
+@@ -268,7 +272,7 @@ out:
+ 
+ 		struct group *group;
+ 		groups_for_each_group(group, &iface->groups)
+-			querier_announce_iface(user, now, group, true);
++			querier_announce_iface(user, now, group, true, 0);
+ 	}
+ 
+ 	if (res)
+@@ -286,7 +290,8 @@ void querier_detach(struct querier_user_
+ 	omgp_time_t now = omgp_time();
+ 	struct group *group;
+ 	groups_for_each_group(group, &iface->groups)
+-		querier_announce_iface(user, now, group, false);
++		querier_announce_iface(user, now, group, false, false);
++
+ 
+ 	if (list_empty(&iface->users)) {
+ 		uloop_timeout_cancel(&iface->timeout);
+Index: omcproxy-2018-12-14-722151f0/src/querier.h
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/querier.h
++++ omcproxy-2018-12-14-722151f0/src/querier.h
+@@ -54,8 +54,10 @@ struct querier;
+ struct querier_user;
+ struct querier_user_iface;
+ 
++//typedef void (querier_iface_cb)(struct querier_user_iface *user, const struct in6_addr *group,
++	//	bool include, const struct in6_addr *sources, size_t len);
+ typedef void (querier_iface_cb)(struct querier_user_iface *user, const struct in6_addr *group,
+-		bool include, const struct in6_addr *sources, size_t len);
++		bool include, const struct in6_addr *sources, size_t len, bool sync_mrt);
+ 
+ struct querier_user {
+ 	struct list_head head;

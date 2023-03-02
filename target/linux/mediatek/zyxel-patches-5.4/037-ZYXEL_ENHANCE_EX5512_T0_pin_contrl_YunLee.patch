@@ -1,0 +1,16 @@
+Index: linux-5.4.171/drivers/pinctrl/mediatek/Kconfig
+===================================================================
+--- linux-5.4.171.orig/drivers/pinctrl/mediatek/Kconfig
++++ linux-5.4.171/drivers/pinctrl/mediatek/Kconfig
+@@ -112,6 +112,11 @@ config PINCTRL_MT7986
+ 	default ARM64 && ARCH_MEDIATEK
+ 	select PINCTRL_MTK_MOORE
+ 
++config ZYXEL_EX5512_T0
++	bool "ZYXEL EX5512_T0 pin control"
++	depends on PINCTRL_MT7986
++	select PINCTRL_MTK_MOORE
++
+ config PINCTRL_MT8173
+ 	bool "Mediatek MT8173 pin control"
+ 	depends on OF

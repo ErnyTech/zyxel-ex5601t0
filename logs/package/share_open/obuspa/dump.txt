@@ -1,0 +1,22 @@
+Makefile:16: /ALL/WWW/ex5601t0_release/include/local-development.mk: No such file or directory
+
+Package: obuspa
+Version: 5.0.0-1
+Depends: +libc +USE_GLIBC:librt +USE_GLIBC:libpthread +libopenssl +libsqlite3 +libcurl PACKAGE_libwebsockets:libwebsockets PACKAGE_libmosquitto:libmosquitto +libjson-c +libzcfg_fe_rdm_string +libzcfg_msg +libzcfg_fe_schema zcfg
+Conflicts: 
+Menu-Depends: 
+Provides: 
+Section: net
+Category: Zyxel share open packages
+Repository: base
+Title: USP(TR369) agent
+Maintainer: 
+Source: 
+License: BSD-3-Clause
+LicenseFiles: LICENSE
+Type: ipkg
+Description:   OB-USP-AGENT is a system daemon providing a User Services Platform (USP) Agent.
+
+@@
+
+make[4]: *** No rule to make target '/ALL/WWW/ex5601t0_release/include/local-development.mk'.  Stop.

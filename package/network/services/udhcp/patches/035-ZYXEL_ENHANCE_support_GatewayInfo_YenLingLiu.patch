@@ -1,0 +1,64 @@
+Index: udhcp-0.9.8/Makefile
+===================================================================
+--- udhcp-0.9.8.orig/Makefile
++++ udhcp-0.9.8/Makefile
+@@ -106,6 +106,10 @@ ifneq ($(strip $(CONFIG_TT_CUSTOMIZATION
+ CFLAGS += -DCONFIG_TT_CUSTOMIZATION_TR069
+ endif
+ 
++ifneq ($(strip $(CONFIG_ZYXEL_OPAL_EXTENDER)),)
++CFLAGS += -DZYXEL_OPAL_EXTENDER
++endif
++
+ all: clean $(EXEC1) $(EXEC2) $(EXEC3)
+ 	$(STRIP) --remove-section=.note --remove-section=.comment $(EXEC1) $(EXEC2) $(EXEC3)
+ 
+Index: udhcp-0.9.8/options.c
+===================================================================
+--- udhcp-0.9.8.orig/options.c
++++ udhcp-0.9.8/options.c
+@@ -55,6 +55,9 @@ struct dhcp_option options[] = {
+ 	/* Pochao: keep the following three options in order,
+ 	   since the function read_config_options will check these options by the order in the array*/
+ 	{"6rd", OPTION_STRING,          DHCP_6RD_OPT},
++#ifdef ZYXEL_OPAL_EXTENDER
++	{"vsi",		OPTION_STRING | OPTION_LIST,		0x7d},
++#endif
+ #if 1 /* DHCP option 43, 121(must be last two options in this array for implementation concerns), ZyXEL, John */
+ 	{"acsinfo",	OPTION_STRING,				0x2b},
+ 	{"sroute",	OPTION_STRING | OPTION_LIST,				0x79},
+Index: udhcp-0.9.8/script.c
+===================================================================
+--- udhcp-0.9.8.orig/script.c
++++ udhcp-0.9.8/script.c
+@@ -272,6 +272,30 @@ static void fill_options(char *dest, uns
+ 				json_object_object_add(dhcpc_opt, type_p->name, json_object_new_string(sip_svr_addr));
+ 			}
+ #endif
++#ifdef ZYXEL_OPAL_EXTENDER
++			if (type_p->code == 0x7d) { // option 125
++				u_int8_t op125_total_len = option[-1];
++				u_int8_t sub_opt, sub_len, i, j;
++				char sub_value[32];
++				char *sub_value_ptr = sub_value;
++
++				for (i = 5; i < option[-1];) {
++					sub_opt = option[i++];
++					sub_len = option[i++];
++					for (j = 0; j < sub_len; j++) {
++						sub_value[j] = option[i++];
++					}
++					sub_value[j] = '\0';
++
++					if (sub_opt == 4)
++						json_object_object_add(dhcpc_opt, "gwOUI", json_object_new_string(sub_value));
++					else if (sub_opt == 5)
++						json_object_object_add(dhcpc_opt, "gwSN", json_object_new_string(sub_value));
++					else if (sub_opt == 6)
++						json_object_object_add(dhcpc_opt, "gwClass", json_object_new_string(sub_value));
++				}
++			}
++#endif
+ 			memcpy(dest, option, len);
+ 			dest[len] = '\0';
+ 			return;	 /* Short circuit this case */

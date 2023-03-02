@@ -1,0 +1,13 @@
+Index: udhcp-0.9.8/options.c
+===================================================================
+--- udhcp-0.9.8.orig/options.c
++++ udhcp-0.9.8/options.c
+@@ -355,7 +355,7 @@ int read_config_options(const char* intf
+ 		if(reqOptObj->Enable){
+ 
+ 			if(reqOptObj->Tag == 120) {//option120
+-				options[last_option_index - 4].flags |= OPTION_REQ;
++				options[last_option_index - 5].flags |= OPTION_REQ;
+ 			}
+ 
+ 			if(reqOptObj->Tag == DHCP_6RD_OPT) {

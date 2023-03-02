@@ -1,0 +1,68 @@
+# API source files  of data node
+
+SOURCES += src/vendor/zyxel/vendor_device_main.c
+SOURCES += src/vendor/zyxel/common/device_data_node_api.c
+
+# Data node source files of TR181  
+SOURCES += src/vendor/zyxel/tr181/Device_Main_Entry.c
+
+SOURCES += src/vendor/zyxel/tr181/Device_ATM.c
+SOURCES += src/vendor/zyxel/tr181/Device_Bridging.c
+SOURCES += src/vendor/zyxel/tr181/Device_BulkData.c
+SOURCES += src/vendor/zyxel/tr181/Device_CaptivePortal.c
+SOURCES += src/vendor/zyxel/tr181/Device_DeviceInfo.c    
+SOURCES += src/vendor/zyxel/tr181/Device_DHCPv4.c
+SOURCES += src/vendor/zyxel/tr181/Device_DHCPv6.c
+SOURCES += src/vendor/zyxel/tr181/Device_DLNA.c
+SOURCES += src/vendor/zyxel/tr181/Device_DNS.c
+SOURCES += src/vendor/zyxel/tr181/Device_DSL.c  
+SOURCES += src/vendor/zyxel/tr181/Device_DSLite.c  
+SOURCES += src/vendor/zyxel/tr181/Device_Ethernet.c        
+SOURCES += src/vendor/zyxel/tr181/Device_FAP.c             
+SOURCES += src/vendor/zyxel/tr181/Device_FaultMgmt.c       
+SOURCES += src/vendor/zyxel/tr181/Device_Firewall.c        
+SOURCES += src/vendor/zyxel/tr181/Device_GatewayInfo.c     
+SOURCES += src/vendor/zyxel/tr181/Device_Ghn.c             
+SOURCES += src/vendor/zyxel/tr181/Device_GRE.c            
+SOURCES += src/vendor/zyxel/tr181/Device_Homeplug.c        
+SOURCES += src/vendor/zyxel/tr181/Device_Hosts.c           
+SOURCES += src/vendor/zyxel/tr181/Device_HPNA.c            
+SOURCES += src/vendor/zyxel/tr181/Device_IEEE8021x.c      
+SOURCES += src/vendor/zyxel/tr181/Device_InterfaceStack.c  
+SOURCES += src/vendor/zyxel/tr181/Device_IP.c              
+SOURCES += src/vendor/zyxel/tr181/Device_IPsec.c           
+SOURCES += src/vendor/zyxel/tr181/Device_IPv6rd.c 
+SOURCES += src/vendor/zyxel/tr181/Device_LANConfigSecurity.c
+SOURCES += src/vendor/zyxel/tr181/Device_ManagementServer.c
+SOURCES += src/vendor/zyxel/tr181/Device_MAP.c
+SOURCES += src/vendor/zyxel/tr181/Device_MoCA.c
+SOURCES += src/vendor/zyxel/tr181/Device_NAT.c
+SOURCES += src/vendor/zyxel/tr181/Device_NeighborDiscovery.c
+SOURCES += src/vendor/zyxel/tr181/Device_Optical.c
+SOURCES += src/vendor/zyxel/tr181/Device_PeriodicStatistics.c
+SOURCES += src/vendor/zyxel/tr181/Device_PPP.c
+SOURCES += src/vendor/zyxel/tr181/Device_PTM.c
+SOURCES += src/vendor/zyxel/tr181/Device_QoS.c
+SOURCES += src/vendor/zyxel/tr181/Device_RouterAdvertisement.c
+SOURCES += src/vendor/zyxel/tr181/Device_Routing.c
+SOURCES += src/vendor/zyxel/tr181/Device_Security.c
+SOURCES += src/vendor/zyxel/tr181/Device_SelfTestDiagnostics.c
+SOURCES += src/vendor/zyxel/tr181/Device_Services.c
+SOURCES += src/vendor/zyxel/tr181/Device_SmartCardReaders.c
+SOURCES += src/vendor/zyxel/tr181/Device_SoftwareModules.c
+SOURCES += src/vendor/zyxel/tr181/Device_Time.c
+SOURCES += src/vendor/zyxel/tr181/Device_UPA.c
+SOURCES += src/vendor/zyxel/tr181/Device_UPnP.c
+SOURCES += src/vendor/zyxel/tr181/Device_USB.c
+SOURCES += src/vendor/zyxel/tr181/Device_UserInterface.c
+SOURCES += src/vendor/zyxel/tr181/Device_Users.c
+SOURCES += src/vendor/zyxel/tr181/Device_WiFi.c
+SOURCES += src/vendor/zyxel/tr181/Device_XMPP.c
+
+
+# Add extra vendor specific CPP or LD flags below
+AM_CFLAGS += -I$(top_srcdir)/src/vendor/zyxel/include
+
+
+include src/vendor/zyxel/vendor_customize.am
+

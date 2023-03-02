@@ -1,0 +1,13 @@
+Index: clinkc/src/cybergarage/upnp/cupnp_function.c
+===================================================================
+--- clinkc.orig/src/cybergarage/upnp/cupnp_function.c
++++ clinkc/src/cybergarage/upnp/cupnp_function.c
+@@ -29,7 +29,7 @@
+ #include <cybergarage/typedef.h>
+ 
+ #if defined(HAVE_UUID_UUID_H) || defined(HAVE_LIBUUID) || defined(TARGET_OS_IPHONE)
+-#include <uuid.h>
++#include <uuid/uuid.h>
+ #endif
+ 
+ #include <cybergarage/upnp/cupnp.h>

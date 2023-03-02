@@ -1,0 +1,15 @@
+diff -ruN a/kernel/time/timer.c b/kernel/time/timer.c
+--- a/kernel/time/timer.c	2022-01-11 22:23:33.000000000 +0800
++++ b/kernel/time/timer.c	2022-06-15 11:35:00.682274367 +0800
+@@ -821,7 +821,10 @@
+ 
+ 	debug_deactivate(timer);
+ 
+-	__hlist_del(entry);
++	if(entry != NULL)
++	{
++		__hlist_del(entry);
++	}
+ 	if (clear_pending)
+ 		entry->pprev = NULL;
+ 	entry->next = LIST_POISON2;

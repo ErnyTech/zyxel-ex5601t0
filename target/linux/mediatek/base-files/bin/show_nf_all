@@ -1,0 +1,3 @@
+#!/bin/sh
+
+cat /tmp/show_nf

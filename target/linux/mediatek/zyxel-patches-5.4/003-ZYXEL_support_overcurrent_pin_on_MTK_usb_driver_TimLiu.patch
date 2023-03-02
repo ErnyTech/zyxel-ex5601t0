@@ -1,0 +1,192 @@
+Index: linux-5.4.171/drivers/usb/host/xhci-mtk.h
+===================================================================
+--- linux-5.4.171.orig/drivers/usb/host/xhci-mtk.h
++++ linux-5.4.171/drivers/usb/host/xhci-mtk.h
+@@ -11,6 +11,10 @@
+ 
+ #include "xhci.h"
+ 
++#if 1
++#include <linux/gpio/consumer.h>
++#endif
++
+ /**
+  * To simplify scheduler algorithm, set a upper limit for ESIT,
+  * if a synchromous ep's ESIT is larger than @XHCI_MTK_MAX_ESIT,
+@@ -165,6 +169,13 @@ struct xhci_hcd_mtk {
+ 	u32     hqa_pos;
+ 	char   *hqa_buf;
+ #endif
++#if 1
++	struct gpio_desc *enable_gpio;
++	struct gpio_desc *oc_gpio;
++	int oc_state;
++#define OC_STATE_NORMAL   0
++#define OC_STATE_OCCURRED 1
++#endif
+ };
+ 
+ static inline struct xhci_hcd_mtk *hcd_to_mtk(struct usb_hcd *hcd)
+Index: linux-5.4.171/drivers/usb/host/xhci-mtk-test.c
+===================================================================
+--- linux-5.4.171.orig/drivers/usb/host/xhci-mtk-test.c
++++ linux-5.4.171/drivers/usb/host/xhci-mtk-test.c
+@@ -572,9 +572,43 @@ usb3hqa_store(struct device *dev, struct
+ }
+ static DEVICE_ATTR_RW(usb3hqa);
+ 
++#if 1
++static ssize_t usben_show(struct device *dev,
++		struct device_attribute *attr, char *buf)
++{
++	struct xhci_hcd_mtk *mtk = dev_get_drvdata(dev);
++	ssize_t cnt = 0;
++
++	cnt += sprintf(buf + cnt, "USB Enable is: %d\n", gpiod_get_value(mtk->enable_gpio));
++
++	return cnt;
++}
++
++static ssize_t
++usben_store(struct device *dev, struct device_attribute *attr,
++			const char *buf, size_t n)
++{
++	struct xhci_hcd_mtk *mtk = dev_get_drvdata(dev);
++	int enable;
++	int words;
++	//printk("DEBUG: %s\n", buf);
++	words = sscanf(buf, "%d", &enable);
++	if ( (words != 1) || ((enable != 0) && (enable != 1)) ) {
++		return -EINVAL;
++	}
++	gpiod_set_value(mtk->enable_gpio, enable);
++
++	return n;
++}
++static DEVICE_ATTR_RW(usben);
++#endif
++
+ static struct device_attribute *mu3h_hqa_attr_list[] = {
+ 	&dev_attr_hqa,
+ 	&dev_attr_usb3hqa,
++#if 1
++	&dev_attr_usben,
++#endif
+ #include "unusual-statement.h"
+ };
+ 
+Index: linux-5.4.171/drivers/usb/host/xhci-mtk.c
+===================================================================
+--- linux-5.4.171.orig/drivers/usb/host/xhci-mtk.c
++++ linux-5.4.171/drivers/usb/host/xhci-mtk.c
+@@ -434,6 +434,66 @@ static int xhci_mtk_setup(struct usb_hcd
+ 	return ret;
+ }
+ 
++#if 1
++// Because the Over Current Protect IC have some abnormal behavior
++// Software donnot need to control Enable pin when the Over Current interrupt was triggered.
++static irqreturn_t xhci_mtk_oc_thread(int irq, void *data)
++{
++	struct xhci_hcd_mtk *mtk = data;
++	struct device *dev = mtk->dev;
++	int ret;
++
++	if ( gpiod_get_value_cansleep(mtk->oc_gpio) ) {
++		printk("USB over-current was triggered!\n");
++		//if(mtk->enable_gpio)
++		//	gpiod_set_value_cansleep(mtk->enable_gpio, 0);
++	}else {
++		printk("USB over-current was released!\n");
++		//if(mtk->enable_gpio)
++		//	gpiod_set_value_cansleep(mtk->enable_gpio, 1);
++	}
++
++	return IRQ_HANDLED;
++}
++#else
++static irqreturn_t xhci_mtk_oc_irq(int irq, void *data)
++{
++	struct platform_device *pdev = data;
++	struct xhci_hcd_mtk *mtk = dev_get_platdata(&pdev->dev);
++	int val;
++
++	/* From the GPIO notifying the over-current situation, find
++	 * out the corresponding port */
++	printk("Enter xhci_mtk_oc_irq , gpio%d\n", desc_to_gpio(mtk->oc_gpio));
++	if (gpiod_to_irq(mtk->oc_gpio) == irq) {
++
++		val = gpiod_get_value(mtk->oc_gpio);
++
++		/* When notified of an over-current situation, disable power
++		   on the corresponding port, and mark this port in
++		   over-current. */
++		if (val && (mtk->oc_state != OC_STATE_OCCURRED) ) {
++			// do nothing, now
++			printk("Trigger over current!");
++			mtk->oc_state = OC_STATE_OCCURRED;
++			printk("Disable USB power!");
++			gpiod_set_value(mtk->enable_gpio, 0);
++		}else {
++			printk("Over current was released!");
++			mtk->oc_state = OC_STATE_NORMAL;
++			printk("Enable USB power!");
++			gpiod_set_value(mtk->enable_gpio, 1);
++		}
++
++		dev_dbg(& pdev->dev, "overcurrent situation %s\n",
++			val ? "exited" : "notified");
++		printk("overcurrent situation %s\n", val ? "exited" : "notified");
++	}
++
++	return IRQ_HANDLED;
++}
++#endif
++
+ static int xhci_mtk_probe(struct platform_device *pdev)
+ {
+ 	struct device *dev = &pdev->dev;
+@@ -467,6 +527,43 @@ static int xhci_mtk_probe(struct platfor
+ 		return PTR_ERR(mtk->vusb33);
+ 	}
+ 
++#if 1
++	mtk->enable_gpio =
++		devm_gpiod_get_optional(&pdev->dev, "mtk,enable", GPIOD_OUT_HIGH);
++	if (IS_ERR(mtk->enable_gpio)) {
++		dev_err(&pdev->dev, "unable to claim enable gpio\n");
++		return PTR_ERR(mtk->enable_gpio);
++	}
++	if(mtk->enable_gpio){
++		gpiod_set_value(mtk->enable_gpio, 1);
++		printk("DEBUG: enable is gpio %d and active %d\n", desc_to_gpio(mtk->enable_gpio), gpiod_is_active_low(mtk->enable_gpio));
++	}
++
++	mtk->oc_gpio =
++		devm_gpiod_get_optional(&pdev->dev, "mtk,oc", GPIOD_IN);
++	if (IS_ERR(mtk->oc_gpio)) {
++		dev_err(&pdev->dev, "unable to claim oc gpio \n");
++		return PTR_ERR(mtk->oc_gpio);
++	}
++	if(mtk->oc_gpio){
++		printk("DEBUG: oc is gpio %d and active %d\n", desc_to_gpio(mtk->oc_gpio), gpiod_is_active_low(mtk->oc_gpio));
++#if 1
++		ret = devm_request_threaded_irq(&pdev->dev, gpiod_to_irq(mtk->oc_gpio), NULL,
++				xhci_mtk_oc_thread, IRQF_TRIGGER_RISING |
++				IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
++				"XHCI over-current", mtk);
++#else
++		ret = devm_request_irq(&pdev->dev,
++					   gpiod_to_irq(mtk->oc_gpio),
++					   xhci_mtk_oc_irq,
++					   IRQF_TRIGGER_RISING|IRQF_TRIGGER_FALLING|IRQF_ONESHOT/*IRQF_SHARED*/,
++					   "XHCI over-current", pdev);
++#endif
++		if (ret)
++			dev_info(&pdev->dev, "failed to request gpio \"overcurrent\" IRQ\n");
++	}
++#endif
++
+ 	ret = xhci_mtk_clks_get(mtk);
+ 	if (ret)
+ 		return ret;

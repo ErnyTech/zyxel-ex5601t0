@@ -1,0 +1,4 @@
+#!/bin/sh
+
+dmesg | grep set_enable_nf |cut -d " " -f 3- > /tmp/show_nf ; tail -4  /tmp/show_nf
+

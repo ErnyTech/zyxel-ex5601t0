@@ -1,0 +1,158 @@
+Index: linux-5.4.171/net/netfilter/nf_conntrack_core.c
+===================================================================
+--- linux-5.4.171.orig/net/netfilter/nf_conntrack_core.c
++++ linux-5.4.171/net/netfilter/nf_conntrack_core.c
+@@ -219,7 +219,8 @@ EXPORT_SYMBOL_GPL(nf_session_reserve);
+ #endif
+ 
+ #ifdef CONFIG_ZYXEL_NF_SESSION_CTL//__ZYXEL__, Chi-Hsiang /proc/net/nf_session_ctl
+-//unsigned  int nf_session_ctl_max = 2048  __read_mostly;;	/*setup with /proc/sys/net/netfilter/ */
++#define SESSCTL_LOCKS 1024
++static __cacheline_aligned_in_smp spinlock_t nf_sessctl_locks[SESSCTL_LOCKS];
+ unsigned  int nf_session_ctl_max __read_mostly;
+ EXPORT_SYMBOL_GPL(nf_session_ctl_max);
+ 
+@@ -249,10 +250,12 @@ clean_session_ctl_lists(struct nf_conn *
+ 	struct nf_sess_ref_count *hc_ip = NULL;
+ 	unsigned int hashc_ip = hash_sesscnt(&ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple.src.u3);
+ 	struct hlist_nulls_node *n;
++	spinlock_t *lockp;
+ 
+ 	pr_debug("clean_session_ctl_lists(%p)\n", ct);
+ 
+-	//rcu_read_lock_bh();
++	lockp = &nf_sessctl_locks[hashc_ip % SESSCTL_LOCKS];
++	spin_lock(lockp);
+ 	hlist_nulls_for_each_entry_rcu(hc_ip, n, &net->ct.session_control_table[hashc_ip], hnnode)
+ 	{
+ 		if(ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple.src.u3.ip == hc_ip->u3.ip){
+@@ -260,32 +263,32 @@ clean_session_ctl_lists(struct nf_conn *
+ 			do_session_clean=0;
+ 			if( unlikely(atomic_read(&hc_ip->sess_Cnt) <= 0) ) {
+ 				hlist_nulls_del_rcu(&hc_ip->hnnode);
+-				kfree(&hc_ip->hnnode);
++				kfree(hc_ip);
+ 			}
+ 			break;
+ 		}
+ 	}
+-	//rcu_read_unlock_bh();
++	spin_unlock(lockp);
+ 
+ 	/*Clean for wan2lan, this kind will happen in Restricted cone NAT which entry created by us.*/
+ 	if (do_session_clean == 1){
+ 		struct nf_sess_ref_count *hc_ip_wan;
+ 		unsigned int hash_ip_wan = hash_sesscnt(&ct->tuplehash[IP_CT_DIR_REPLY].tuple.src.u3);
+ 
+-		//rcu_read_lock_bh();
+-
++		lockp = &nf_sessctl_locks[hash_ip_wan % SESSCTL_LOCKS];
++		spin_lock(lockp);
+ 		hlist_nulls_for_each_entry_rcu(hc_ip_wan, n, &net->ct.session_control_table[hash_ip_wan], hnnode) {
+ 			if(ct->tuplehash[IP_CT_DIR_REPLY].tuple.src.u3.ip == hc_ip_wan->u3.ip){
+ 				atomic_dec(&hc_ip_wan->sess_Cnt);
+ 				do_session_clean=0;
+ 				if( unlikely(atomic_read(&hc_ip_wan->sess_Cnt) <= 0) ) {
+ 					hlist_nulls_del_rcu(&hc_ip_wan->hnnode);
+-					kfree(&hc_ip_wan->hnnode);
++					kfree(hc_ip_wan);
+ 				}
+ 				break;
+ 			}
+ 		}
+-		//rcu_read_unlock_bh();
++		spin_unlock(lockp);
+ 	}
+ }
+ #endif
+@@ -1142,6 +1145,9 @@ __nf_conntrack_confirm(struct sk_buff *s
+ 		struct nf_sess_ref_count *h_ip, *ila;
+ 		/* look for the match "ip address" in session_control_table which store ila */
+ 		unsigned int hash_ip = hash_sesscnt(&ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple.src.u3);
++		spinlock_t *lockp;
++		lockp = &nf_sessctl_locks[hash_ip % SESSCTL_LOCKS];
++		spin_lock(lockp);
+ 		hlist_nulls_for_each_entry(h_ip, n, &net->ct.session_control_table[hash_ip], hnnode) {
+ 			if(ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple.src.u3.ip == h_ip->u3.ip){
+ 				atomic_inc(&h_ip->sess_Cnt);
+@@ -1158,8 +1164,10 @@ __nf_conntrack_confirm(struct sk_buff *s
+ 		memcpy(&ila->u3, &ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple.src.u3,sizeof(ila->u3));
+ 		atomic_set(&ila->sess_Cnt, 1);
+ 		hlist_nulls_add_head_rcu(&ila->hnnode, &net->ct.session_control_table[hash_ip]);  // reference usage in __nf_conntrack_hash_insert(ct, hash, reply_hash)
++
++keepgoing:
++		spin_unlock(lockp);
+ 	}
+-    keepgoing:
+ #endif
+ 
+ 	/* Since the lookup is lockless, hash insertion must be done after
+@@ -1515,6 +1523,7 @@ __nf_conntrack_alloc(struct net *net,
+ 		//int cone_session_control = 0;
+ 		int known_port;
+ 		struct hlist_nulls_node *n;
++		spinlock_t *lockp;
+ 
+ 
+ 
+@@ -1528,6 +1537,9 @@ __nf_conntrack_alloc(struct net *net,
+ 		//}
+ 
+ 		rcu_read_lock();
++		local_bh_disable();
++		lockp = &nf_sessctl_locks[hash_max % SESSCTL_LOCKS];
++		spin_lock(lockp);
+ 		hlist_nulls_for_each_entry_rcu(h_max, n, &net->ct.session_control_table[hash_max], hnnode){
+ 			if(check_ip.ip == h_max->u3.ip){
+ 
+@@ -1547,6 +1559,8 @@ __nf_conntrack_alloc(struct net *net,
+ 									,NIPQUAD(orig->src.u3.ip)); // Modified nat log for system log
+ 							}
+ 							*/
++							spin_unlock(lockp);
++							local_bh_enable();
+ 							rcu_read_unlock();
+ 							return ERR_PTR(-ENOMEM);
+ 						}
+@@ -1562,8 +1576,10 @@ __nf_conntrack_alloc(struct net *net,
+ 					    atomic_dec(&net->ct.count);
+ 					    net_warn_ratelimited(KERN_WARNING "NAT WARNING: %u.%u.%u.%u exceeds the max. number of session per host!\n"
+ 								,NIPQUAD(orig->src.u3.ip));	/* Modified nat log for system log*/
+-					    rcu_read_unlock();
+-					    return ERR_PTR(-ENOMEM);
++						spin_unlock(lockp);
++						local_bh_enable();
++						rcu_read_unlock();
++						return ERR_PTR(-ENOMEM);
+ 					}
+ 				}
+ 
+@@ -1576,12 +1592,16 @@ __nf_conntrack_alloc(struct net *net,
+ 						net_warn_ratelimited(KERN_WARNING
+ 								"unknown services(port>1024) session full [max=%d], dropping"
+ 								" packet.\n",(nf_session_ctl_max*8/10));
++						spin_unlock(lockp);
++						local_bh_enable();
+ 						rcu_read_unlock();
+ 						return ERR_PTR(-ENOMEM);
+ 					}
+ 				}
+ 			}
+ 		}
++		spin_unlock(lockp);
++		local_bh_enable();
+ 		rcu_read_unlock();
+ 	}
+ 	/*	== ZYXEL, Session_Control max num judgement function. /proc/net/nf_session_ctl ==*/
+@@ -2693,6 +2713,11 @@ int nf_conntrack_init_start(void)
+ 	for (i = 0; i < CONNTRACK_LOCKS; i++)
+ 		spin_lock_init(&nf_conntrack_locks[i]);
+ 
++#ifdef CONFIG_ZYXEL_NF_SESSION_CTL//__ZYXEL__, Chi-Hsiang /proc/net/nf_session_ctl
++	for (i = 0; i < SESSCTL_LOCKS; i++)
++		spin_lock_init(&nf_sessctl_locks[i]);
++#endif
++
+ 	if (!nf_conntrack_htable_size) {
+ 		/* Idea from tcp.c: use 1/16384 of memory.
+ 		 * On i386: 32MB machine has 512 buckets.

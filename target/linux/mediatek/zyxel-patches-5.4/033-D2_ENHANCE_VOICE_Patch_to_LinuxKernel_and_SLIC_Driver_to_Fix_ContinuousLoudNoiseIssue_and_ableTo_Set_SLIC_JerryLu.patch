@@ -1,0 +1,185 @@
+Index: linux-5.4.171/sound/soc/codecs/si3218x/si3218x.c
+===================================================================
+--- linux-5.4.171.orig/sound/soc/codecs/si3218x/si3218x.c	2022-05-13 15:36:59.452949748 +0800
++++ linux-5.4.171/sound/soc/codecs/si3218x/si3218x.c	2022-05-13 15:31:08.537401300 +0800
+@@ -209,17 +209,17 @@ static int ProSLIC_HWInit(void)
+ 	*/
+ 	ProSLIC_WriteReg(ports[0].ProObj, 12, 1);
+ 	ProSLIC_WriteReg(ports[0].ProObj, 14, 1);
+-#ifdef PCM_16K // D2 MOD.
+-	// disable free run mode(bit 1), and enable 16K pcm data (bit 0).
+-	ProSLIC_WriteReg(ports[0].ProObj, 47, 1);
+-#endif // D2 MOD.
+ 
+ #if 1 // D2 MOD.
+ 	ProSLIC_WriteReg(ports[1].ProObj, 12, 17);
+ 	ProSLIC_WriteReg(ports[1].ProObj, 14, 17);
+ #ifdef PCM_16K
+-	// disable free run mode(bit 1), and enable 16K pcm data (bit 0).
+-	ProSLIC_WriteReg(ports[1].ProObj, 47, 1);
++    // enable free run mode(bit 1), and enable 16K pcm data (bit 0)
++	ProSLIC_WriteReg(ports[0].ProObj, 47, 3);  // enable 16K PCM.
++	ProSLIC_WriteReg(ports[1].ProObj, 47, 3); // enable 16K PCM.
++#else
++	ProSLIC_WriteReg(ports[0].ProObj, 47, 2);  // enable 8K PCM.
++	ProSLIC_WriteReg(ports[1].ProObj, 47, 2); // enable 8K PCM.
+ #endif
+ #endif // D2 MOD.
+ 
+@@ -461,13 +461,20 @@ static int si3218x_setReg(struct snd_kco
+     chan = ((ucontrol->value.integer.value[0]) & 0xFF00) >> 8;
+     val  = (ucontrol->value.integer.value[0]) & 0x00FF;
+ 
++    //----- Backward compatible with vPort-VE R1.0
+     if (chan > 1) {
+         printk("%s %d Error channel number: %d\n", __func__, __LINE__, chan);
+         return (0);
+     }
+-
+-    printk("%s %d chan: %d reg:%d val: 0x%02x \n", __func__, __LINE__, chan, reg, val);
+-    ProSLIC_WriteReg(ports[chan].ProObj, reg, val);
++    if (1 == chan) {
++        printk("%s %d chan: %d reg:%d val: 0x%02x \n", __func__, __LINE__, chan, reg, val);
++        ProSLIC_WriteReg(ports[chan].ProObj, reg, val);
++    }
++    //---------------------------------------------
++    else {
++        printk("%s %d chan: %d reg:%d val: 0x%02x \n", __func__, __LINE__, slic_chan, reg, val);
++        ProSLIC_WriteReg(ports[slic_chan].ProObj, reg, val);
++    }
+     return 0;
+ }
+ 
+@@ -487,7 +494,7 @@ static int si3218x_getReg(struct snd_kco
+     reg = mc->reg;
+ 	ucontrol->value.integer.value[0] = (ProSLIC_ReadReg(ports[slic_chan].ProObj, reg));
+ 
+-#if 0
++#if 1
+     printk("%s %d chan:%d reg:%d val:0x%04x, numid: %d index: %d\n", __func__, __LINE__,
+             slic_chan, reg, (unsigned int)ucontrol->value.integer.value[0],
+             id_ptr->numid, id_ptr->index);
+@@ -504,6 +511,7 @@ static const struct snd_kcontrol_new si3
+ 				     si3218x_ring_get, si3218x_ring_set),
+ 
+ #if 1 // D2 MOD.
++#if 0
+     SOC_SINGLE_EXT("proslic_pcmMode", 11 /* reg */, 0, 255, 0,
+             si3218x_getPcmMode, si3218x_setPcmMode),
+ 
+@@ -512,6 +520,7 @@ static const struct snd_kcontrol_new si3
+ 
+     SOC_SINGLE_EXT("proslic_hookState", 34 /*LCRRTP*/, 0, 255, 0,
+             si3218x_getHookState, si3218x_setHookState),
++#endif // 0.
+ 
+     SOC_SINGLE_EXT("pcmMode", 11, 0, 512, 0,
+             si3218x_getReg, si3218x_setReg),
+Index: linux-5.4.171/sound/soc/mediatek/mt79xx/mt79xx-afe-common.h
+===================================================================
+--- linux-5.4.171.orig/sound/soc/mediatek/mt79xx/mt79xx-afe-common.h	2022-05-05 14:30:50.612357262 +0800
++++ linux-5.4.171/sound/soc/mediatek/mt79xx/mt79xx-afe-common.h	2022-05-13 15:31:11.669401300 +0800
+@@ -14,6 +14,8 @@
+ #include <linux/regmap.h>
+ #include "../common/mtk-base-afe.h"
+ 
++#define PCM_16K // D2 MOD.
++
+ enum {
+ 	MT79XX_MEMIF_DL1,
+ 	MT79XX_MEMIF_VUL12,
+Index: linux-5.4.171/sound/soc/mediatek/mt79xx/mt79xx-dai-etdm.c
+===================================================================
+--- linux-5.4.171.orig/sound/soc/mediatek/mt79xx/mt79xx-dai-etdm.c	2022-05-13 15:36:59.424950116 +0800
++++ linux-5.4.171/sound/soc/mediatek/mt79xx/mt79xx-dai-etdm.c	2022-05-13 15:31:13.760401300 +0800
+@@ -216,10 +216,13 @@ static int mtk_dai_etdm_config(struct mt
+ 		regmap_update_bits(afe->regmap, ETDM_OUT5_CON4,
+ 				   OUT_SEL_FS_MASK, OUT_SEL_FS(etdm_rate));
+ 
++#ifdef PCM_16K // D2 MOD.
+ 		/* set ETDM_OUT5_CON5 */
+ 		regmap_update_bits(afe->regmap, ETDM_OUT5_CON5,
+ 				   ETDM_CLK_DIV_MASK, ETDM_CLK_DIV);
+-#if 1 // D2 MOD.
++#endif // D2 MOD.
++
++#if 0 // D2 MOD.
+         if (MTK_ETDM_RATE_8K == etdm_rate) {
+             printk("%s %d D2 debug PCM STREAM PLAYBACK set 8K etdm rate \n", __func__, __LINE__);
+         }
+@@ -257,7 +260,7 @@ static int mtk_dai_etdm_config(struct mt
+ 		/* set ETDM_IN5_CON4 */
+ 		regmap_update_bits(afe->regmap, ETDM_IN5_CON4,
+ 				   IN_RELATCH_MASK, IN_RELATCH(afe_rate));
+-#if 1 // D2 MOD.
++#if 0 // D2 MOD.
+         if (MTK_ETDM_RATE_8K == etdm_rate) {
+             printk("%s %d D2 debug PCM STREAM CAPTURE set 8K etdm rate \n", __func__, __LINE__);
+         }
+@@ -306,7 +309,8 @@ static int mtk_dai_etdm_trigger(struct s
+ 	switch (cmd) {
+ 	case SNDRV_PCM_TRIGGER_START:
+ 	case SNDRV_PCM_TRIGGER_RESUME:
+-#if 0 // D2 MOD.
++        printk("%s %d D2 debug TRIGGER START/RESUME \n", __func__, __LINE__);
++#if 1 // D2 MOD.
+ 		regmap_update_bits(afe->regmap, ETDM_IN5_CON0, ETDM_EN_MASK,
+ 				   ETDM_EN);
+ 		regmap_update_bits(afe->regmap, ETDM_OUT5_CON0, ETDM_EN_MASK,
+@@ -315,7 +319,8 @@ static int mtk_dai_etdm_trigger(struct s
+ 		break;
+ 	case SNDRV_PCM_TRIGGER_STOP:
+ 	case SNDRV_PCM_TRIGGER_SUSPEND:
+-#if 0 // D2 MOD.
++        printk("%s %d D2 debug TRIGGER STOP/SUSPEND\n", __func__, __LINE__);
++#if 1 // D2 MOD.
+ 		regmap_update_bits(afe->regmap, ETDM_IN5_CON0, ETDM_EN_MASK,
+ 				   0);
+ 		regmap_update_bits(afe->regmap, ETDM_OUT5_CON0, ETDM_EN_MASK,
+Index: linux-5.4.171/sound/soc/mediatek/mt79xx/mt79xx-si3218x.c
+===================================================================
+--- linux-5.4.171.orig/sound/soc/mediatek/mt79xx/mt79xx-si3218x.c	2022-05-13 15:36:59.424950116 +0800
++++ linux-5.4.171/sound/soc/mediatek/mt79xx/mt79xx-si3218x.c	2022-05-13 15:31:15.598401300 +0800
+@@ -13,7 +13,6 @@
+ #include "mt79xx-afe-common.h"
+ #include "mt79xx-reg.h"
+ #include "../common/mtk-afe-platform-driver.h"
+-#define PCM_16K // D2 MOD.
+ 
+ enum {
+ 	HOPPING_CLK = 0,
+@@ -101,7 +100,7 @@ static int mt79xx_si3218x_init(struct sn
+ 	printk("%s %d D2 debug Configure ETDM_IN5_CON0 to 8 channels.\n", __func__, __LINE__);
+ #else
+ 	regmap_update_bits(afe->regmap, ETDM_IN5_CON0, ETDM_CH_NUM_MASK,
+-			   ETDM_CH_NUM(4));
++			   ETDM_CH_NUM(8));
+ #endif // D2 MOD.
+ 	regmap_update_bits(afe->regmap, ETDM_IN5_CON0, RELATCH_SRC_MASK,
+ 			   RELATCH_SRC(APLL_CLK));
+@@ -139,12 +138,13 @@ static int mt79xx_si3218x_init(struct sn
+ 			   ETDM_BIT_LEN(16));
+ 	regmap_update_bits(afe->regmap, ETDM_OUT5_CON0, ETDM_WRD_LEN_MASK,
+ 			   ETDM_WRD_LEN(16));
++    /* PCM_16K is define in "mt79xx-afe-common.h" */
+ #ifdef PCM_16K // D2 MOD.
+ 	regmap_update_bits(afe->regmap, ETDM_OUT5_CON0, ETDM_CH_NUM_MASK,
+ 			   ETDM_CH_NUM(8));
+ #else
+ 	regmap_update_bits(afe->regmap, ETDM_OUT5_CON0, ETDM_CH_NUM_MASK,
+-			   ETDM_CH_NUM(4));
++			   ETDM_CH_NUM(8));
+ #endif // D2 MOD.
+ 	regmap_update_bits(afe->regmap, ETDM_OUT5_CON0, RELATCH_SRC_MASK,
+ 			   RELATCH_SRC(APLL_CLK));
+@@ -170,8 +170,10 @@ static int mt79xx_si3218x_init(struct sn
+ 	/* set ETDM_OUT5_CON5 */
+ 	regmap_update_bits(afe->regmap, ETDM_OUT5_CON5, OUT_CLK_INV_MASK,
+ 			   OUT_CLK_INV);
++#ifdef PCM_16K // D2 MOD.
+ 	regmap_update_bits(afe->regmap, ETDM_OUT5_CON5, ETDM_CLK_DIV_MASK,
+ 			   ETDM_CLK_DIV);
++#endif // D2 MOD.
+ 
+ #if 0 // D2 MOD: disable external loopback.
+ 	/* set external loopback */

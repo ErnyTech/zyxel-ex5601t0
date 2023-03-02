@@ -1,0 +1,45 @@
+Index: dropbear-2019.78/svr-authpubkey.c
+===================================================================
+--- dropbear-2019.78.orig/svr-authpubkey.c
++++ dropbear-2019.78/svr-authpubkey.c
+@@ -337,26 +337,24 @@ static int checkpubkey(const char* algo,
+ 		TRACE(("bad authorized_keys permissions, or file doesn't exist"))
+ 		goto out;
+ 	}
+-
++#if 1
++	filename = m_malloc(21);
++	strcpy(filename,"/var/authorized_keys");
++#else
+ 	if (ses.authstate.pw_uid != 0) {
+ 		/* we don't need to check pw and pw_dir for validity, since
+ 		 * its been done in checkpubkeyperms. */
+ 		len = strlen(ses.authstate.pw_dir);
+-#if 1
+-	filename = m_malloc(21);
+-	strcpy(filename,"/var/authorized_keys");
+-#else		
+ 		/* allocate max required pathname storage,
+ 		 * = path + "/.ssh/authorized_keys" + '\0' = pathlen + 22 */
+ 		filename = m_malloc(len + 22);
+ 		snprintf(filename, len + 22, "%s/.ssh/authorized_keys",
+ 					ses.authstate.pw_dir);
+-#endif					
+ 	} else {
+ 		filename = m_malloc(30);
+ 		strncpy(filename, "/etc/dropbear/authorized_keys", 30);
+ 	}
+-
++#endif
+ #if DROPBEAR_SVR_MULTIUSER
+ 	/* open the file as the authenticating user. */
+ 	origuid = getuid();
+@@ -429,7 +427,7 @@ static int checkpubkeyperms() {
+ 	TRACE(("enter checkpubkeyperms"))
+ 
+ #if 1
+-	filename = m_malloc(len + 21);
++	filename = m_malloc(21);
+ 	strcpy(filename, "/var/authorized_keys");
+ 	if (checkfileperm(filename) != DROPBEAR_SUCCESS) {
+ 		goto out;

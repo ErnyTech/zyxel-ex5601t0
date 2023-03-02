@@ -1,0 +1,41 @@
+Index: linux-5.4.171/net/core/skbuff.c
+===================================================================
+--- linux-5.4.171.orig/net/core/skbuff.c
++++ linux-5.4.171/net/core/skbuff.c
+@@ -5181,9 +5181,6 @@ void skb_scrub_packet(struct sk_buff *sk
+ 	skb->offload_fwd_mark = 0;
+ 	skb->offload_l3_fwd_mark = 0;
+ #endif
+-#if 1 /* Kide@zyxel: Zyxel QoS vtag */
+-    skb->vtag_word = 0;
+-#endif
+ 
+ 	if (!xnet)
+ 		return;
+@@ -5191,6 +5188,9 @@ void skb_scrub_packet(struct sk_buff *sk
+ 	ipvs_reset(skb);
+ 	skb->mark = 0;
+ 	skb->tstamp = 0;
++#if 1 /* Kide@zyxel: Zyxel QoS vtag */
++    skb->vtag_word = 0;
++#endif
+ }
+ EXPORT_SYMBOL_GPL(skb_scrub_packet);
+ 
+Index: linux-5.4.171/drivers/net/ethernet/mediatek/mtk_hnat/hnat_nf_hook.c
+===================================================================
+--- linux-5.4.171.orig/drivers/net/ethernet/mediatek/mtk_hnat/hnat_nf_hook.c
++++ linux-5.4.171/drivers/net/ethernet/mediatek/mtk_hnat/hnat_nf_hook.c
+@@ -1971,7 +1971,11 @@ static unsigned int mtk_hnat_nf_post_rou
+ 
+ 	if (out->netdev_ops->ndo_flow_offload_check) {
+ 		out->netdev_ops->ndo_flow_offload_check(&hw_path);
+-		out = (IS_GMAC1_MODE) ? hw_path.virt_dev : hw_path.dev;
++        /* Kide@zyxel: should get correct vlan-tag including p-bit */
++        if (hw_path.virt_dev && (hw_path.virt_dev->priv_flags & IFF_802_1Q_VLAN))
++            hw_path.vlan_id |= vlan_dev_get_egress_qos_mask(hw_path.virt_dev, skb->priority);
++        /*---*/
++        out = (IS_GMAC1_MODE) ? hw_path.virt_dev : hw_path.dev;
+ 	}
+ 
+ 	if (!IS_LAN(out) && !IS_WAN(out) && !IS_EXT(out))

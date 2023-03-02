@@ -1,0 +1,12 @@
+diff -urN mediatek.org/mtk_eth_soc.h mediatek/mtk_eth_soc.h
+--- linux-5.4.171/drivers/net/ethernet/mediatek.org/mtk_eth_soc.h	2022-05-04 10:52:58.672023586 +0800
++++ linux-5.4.171/drivers/net/ethernet/mediatek/mtk_eth_soc.h	2022-05-04 10:53:50.003876851 +0800
+@@ -443,7 +443,7 @@
+ #define MTK_STAT_OFFSET		0x40
+ 
+ /* QDMA TX NUM */
+-#define MTK_QDMA_TX_NUM		16
++#define MTK_QDMA_TX_NUM		32
+ #define MTK_QDMA_TX_MASK	((MTK_QDMA_TX_NUM) - 1)
+ #define QID_LOW_BITS(x)         ((x) & 0xf)
+ #define QID_HIGH_BITS(x)        ((((x) >> 4) & 0x3) << 20)

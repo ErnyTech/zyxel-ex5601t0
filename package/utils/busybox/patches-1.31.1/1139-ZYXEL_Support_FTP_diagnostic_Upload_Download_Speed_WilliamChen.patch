@@ -1,0 +1,242 @@
+Index: busybox-1.31.1/networking/ftpgetput.c
+===================================================================
+--- busybox-1.31.1.orig/networking/ftpgetput.c
++++ busybox-1.31.1/networking/ftpgetput.c
+@@ -134,6 +134,11 @@ static unsigned long long ifBytesSentEnd
+ static void outputDiagUlData(int);
+ extern unsigned long long getReceiveByte(const char *ifName);
+ extern unsigned long long getSentByte(const char *ifName);
++
++#ifdef ZYXEL_TR143_DIAG_ENHANCEMENT
++static unsigned long BOMTimeMs = 0;
++static unsigned long EOMTimeMs = 0;
++#endif
+ #endif
+ 
+ 
+@@ -260,25 +265,34 @@ static int xconnect_ftpdata(void)
+ #ifdef ZCFG_SUPPORT
+ #define DUMMY_DATA_UNIT_SIZE  5120
+ #define TIME_STAMP_DATA_SIZE 32
+-
++#ifdef ZYXEL_TR143_DIAG_ENHANCEMENT
++static unsigned long makeTimeStamp(char *timeStamp, unsigned int timeStampSz)
++#else
+ static void makeTimeStamp(char *timeStamp, unsigned int timeStampSz)
++#endif
+ {
+ 	struct tm *localtm = NULL;
+ 	struct timeval tv;
+ 	unsigned int outputTmSpLen = 0;
+ 	char tmsp[TIME_STAMP_DATA_SIZE+10] = {0};
+-
++	
++#ifdef ZYXEL_TR143_DIAG_ENHANCEMENT
++	if(!timeStamp) return 0;
++	if(!timeStampSz) return 0;
++#else
+ 	if(!timeStamp) return;
+-
+ 	if(!timeStampSz) return;
++#endif
+ 
+ 	gettimeofday(&tv, NULL);
+ 	localtm = localtime((const time_t *)&tv.tv_sec);
+-	sprintf(tmsp, "%d-%02d-%02dT%02d:%02d:%02d.%ld", (localtm->tm_year+1900), (localtm->tm_mon+1),
+-       localtm->tm_mday, localtm->tm_hour, localtm->tm_min, localtm->tm_sec, (long)tv.tv_usec);
++	sprintf(tmsp, "%d-%02d-%02dT%02d:%02d:%02d.%06ld", (localtm->tm_year+1900), (localtm->tm_mon+1), localtm->tm_mday, localtm->tm_hour, localtm->tm_min, localtm->tm_sec, (long)tv.tv_usec);
+ 	outputTmSpLen = ((timeStampSz-1) < strlen(tmsp)) ? (timeStampSz-1) : strlen(tmsp);
+ 	strncpy(timeStamp, tmsp, outputTmSpLen);
+ 	timeStamp[outputTmSpLen] = '\0';
++#ifdef ZYXEL_TR143_DIAG_ENHANCEMENT
++	return (tv.tv_sec * 1000 + tv.tv_usec / 1000);
++#endif	
+ }
+ 
+ static int sendEsmdMsg(const char *data, unsigned int dataLen)
+@@ -311,6 +325,7 @@ static void outputDiagUlData(int rt)
+ 	zcfgRet_t rst;
+ 	struct json_object *ulDiagObjParams;
+ 	const char *ulDiagObjParamsStr;
++	char tmpBuf[21] = {0};
+ 
+ 	if(rt == EXIT_SUCCESS) {
+ 		strcpy(ipDiagUlObj->DiagnosticsState, "Completed");
+@@ -362,7 +377,7 @@ static void outputDiagUlData(int rt)
+ 		json_object_object_add(ulDiagObjParams, "TotalBytesReceived", json_object_new_int(ipDiagUlObj->TotalBytesReceived));
+ 		json_object_object_add(ulDiagObjParams, "TotalBytesSent", json_object_new_int(ipDiagUlObj->TotalBytesSent));
+ 	}
+-
++	printf("--------------------UL RESULT--------------------\n");
+ 	printf("DiagnosticsState: %s\n", ipDiagUlObj->DiagnosticsState);
+ 	printf("Interface: %s\n", ipDiagUlObj->Interface);
+ 	printf("UploadURL: %s\n", ipDiagUlObj->UploadURL);
+@@ -378,6 +393,36 @@ static void outputDiagUlData(int rt)
+ 	printf("TotalBytesSent: %u\n", ipDiagUlObj->TotalBytesSent);
+ 	printf("TCPOpenRequestTime: %s\n", ipDiagUlObj->TCPOpenRequestTime);
+ 	printf("TCPOpenResponseTime: %s\n", ipDiagUlObj->TCPOpenResponseTime);
++	printf("-------------------------------------------------\n");
++
++#ifdef ZYXEL_TR143_DIAG_ENHANCEMENT
++	FILE *fPtr = NULL;
++	float time_interval = 0, ul_speed = 0;
++
++	time_interval = (float)(EOMTimeMs - BOMTimeMs) / 1000;
++	if(ipDiagUlObj->TotalBytesSent > 0) {
++		ul_speed = (float) ipDiagUlObj->TotalBytesSent * 8 / time_interval / 1024 / 1024;
++	}
++
++	fPtr = fopen("/tmp/UploadTR143info", "w");
++	if(fPtr != NULL) {
++		fprintf(fPtr, "DiagnosticsState : %s\n", ipDiagUlObj->DiagnosticsState);
++		if(!strcmp(ipDiagUlObj->DiagnosticsState, "Completed")) {
++			fprintf(fPtr, "RoundTripTime    : %.4f Secs\n", time_interval);
++			fprintf(fPtr, "TestFileLength   : %u\n", ipDiagUlObj->TestFileLength);
++			fprintf(fPtr, "TotalBytesSent   : %llu\n", ipDiagUlObj->TotalBytesSent);
++			fprintf(fPtr, "TestBytesSent    : %llu\n", ipDiagUlObj->TestBytesSent);
++			fprintf(fPtr, "UploadSpeed      : %.4f Mbps\n", ul_speed);
++		}
++		fclose(fPtr);
++		fPtr = NULL;
++	}
++
++	sprintf(tmpBuf, "%.4f", time_interval);
++	json_object_object_add(ulDiagObjParams, "X_ZYXEL_RoundTripTime", json_object_new_string(tmpBuf));
++	sprintf(tmpBuf, "%.4f", ul_speed);
++	json_object_object_add(ulDiagObjParams, "X_ZYXEL_UploadSpeed", json_object_new_string(tmpBuf));
++#endif	
+ 
+ 	ulDiagObjParamsStr = json_object_to_json_string(ulDiagObjParams);
+ 	rst = sendEsmdMsg(ulDiagObjParamsStr, strlen(ulDiagObjParamsStr));
+@@ -466,8 +511,11 @@ complete:
+ 	if (ftpcmd(NULL, NULL) != 226) {
+ 		ftp_die(NULL);
+ 	}else {
++#ifdef ZYXEL_TR143_DIAG_ENHANCEMENT
++		EOMTimeMs = makeTimeStamp(ipDiagUlObj->EOMTime, sizeof(ipDiagUlObj->EOMTime));
++#else
+ 		makeTimeStamp(ipDiagUlObj->EOMTime, sizeof(ipDiagUlObj->EOMTime));
+-
++#endif
+ 		ifBytesReceivedEnd = getReceiveByte((char *)intf);
+ 		ipDiagUlObj->TotalBytesReceived = (ifBytesReceivedEnd > ifBytesReceivedStart) ?
+ 			(unsigned int)(ifBytesReceivedEnd - ifBytesReceivedStart) : 0;
+@@ -623,9 +671,11 @@ int ftp_send(const char *server_path, ch
+ 		if(setsockopt(fd_data, IPPROTO_IP, IP_TOS, &ipDscp, sizeof(ipDscp)) != 0) {
+ 			printf("Set ftp ip dscp failed!\n");
+ 		}
+-
++#ifdef ZYXEL_TR143_DIAG_ENHANCEMENT
++		BOMTimeMs = makeTimeStamp(ipDiagUlObj->BOMTime, sizeof(ipDiagUlObj->BOMTime));
++#else
+ 		makeTimeStamp(ipDiagUlObj->BOMTime, sizeof(ipDiagUlObj->BOMTime));
+-
++#endif
+ 		ifBytesReceivedStart = getReceiveByte((char *)intf);
+ 		//printf("%s : Receive data start: %ld\n", __FUNCTION__, ifBytesReceivedStart);
+ 		ifBytesSentStart = getSentByte((char *)intf);
+Index: busybox-1.31.1/networking/wget.c
+===================================================================
+--- busybox-1.31.1.orig/networking/wget.c
++++ busybox-1.31.1/networking/wget.c
+@@ -297,9 +297,9 @@ static char EOMTime[64] = DEFAULT_DATETI
+ static char TCPOpenRequestTime[64] = DEFAULT_DATETIME;
+ static char TCPOpenResponseTime[64] = DEFAULT_DATETIME;
+ //static char DownloadURL[260] = {0};
+-static unsigned long TotalBytesReceived = 0;
+-static unsigned long TotalBytesSent = 0;
+-static unsigned long TestBytesReceived = 0;
++static unsigned long long TotalBytesReceived = 0;
++static unsigned long long TestBytesReceived = 0;
++static unsigned long long TotalBytesSent = 0;
+ #ifdef ZYXEL_DL_DIAG_CALCULATION
+ char Latency[33] = {0};
+ static unsigned long BOMTimeMs = 0;
+@@ -423,6 +423,12 @@ static void outputDiagDlData(void)
+ 	char totalByteSent[21] = {0};
+ #ifdef ZYXEL_DL_DIAG_CALCULATION
+ 	char tmpBuf[21] = {0};
++	float time_interval = 0, dl_speed = 0;
++	
++	time_interval = (float)(EOMTimeMs - BOMTimeMs) / 1000;
++	if(TotalBytesReceived > 0) {
++		dl_speed = (float) TotalBytesReceived * 8 / time_interval / 1024 / 1024;
++	}
+ #endif
+ 
+ 	if(!strcmp(DiagnosticsState, "Requested")) {
+@@ -431,6 +437,38 @@ static void outputDiagDlData(void)
+ 		DiagnosticsState[strlen("None")] = '\0';
+ 	}
+ 
++	printf("--------------------DL RESULT--------------------\n");
++	printf("DiagnosticsState    : %s\n", DiagnosticsState);
++	printf("ROMTime             : %s\n", ROMTime);
++	printf("BOMTime             : %s\n", BOMTime);
++	printf("EOMTime             : %s\n", EOMTime);
++	printf("TotalBytesReceived  : %llu\n", TotalBytesReceived);
++	printf("TestBytesReceived   : %llu\n", TestBytesReceived);
++#ifdef ZYXEL_DL_DIAG_CALCULATION
++	printf("X_ZYXEL_Latency     : %s \n", Latency);
++	printf("RoundTripTime       : %.4f Secs\n", time_interval);
++	printf("DownloadSpeed       : %.4f Mbps\n", dl_speed);
++#endif
++	printf("TCPOpenRequestTime  : %s\n", TCPOpenRequestTime);
++	printf("TCPOpenResponseTime : %s\n", TCPOpenResponseTime);
++	printf("-------------------------------------------------\n");
++
++#ifdef ZYXEL_TR143_DIAG_ENHANCEMENT
++	FILE *fPtr = NULL;
++	fPtr = fopen("/tmp/DownloadTR143info", "w");
++	if(fPtr != NULL) {
++		fprintf(fPtr, "DiagnosticsState   : %s\n", DiagnosticsState);
++		if(!strcmp(DiagnosticsState, "Completed")) {
++			fprintf(fPtr, "RoundTripTime      : %.4f Secs\n", time_interval);
++			fprintf(fPtr, "TotalBytesReceived : %llu\n", TotalBytesReceived);
++			fprintf(fPtr, "TestBytesReceived  : %llu\n", TestBytesReceived);
++			fprintf(fPtr, "DownloadSpeed      : %.4f Mbps\n", dl_speed);
++		}
++		fclose(fPtr);
++		fPtr = NULL;
++	}
++#endif
++
+ 	diag_result = json_object_new_object();
+ 	json_object_object_add(diag_result, "DiagnosticsState", json_object_new_string(DiagnosticsState));
+ 	json_object_object_add(diag_result, "ROMTime", json_object_new_string(ROMTime));
+@@ -438,19 +476,21 @@ static void outputDiagDlData(void)
+ 	json_object_object_add(diag_result, "EOMTime", json_object_new_string(EOMTime));
+ 
+ 	// 20160705 Max fix
+-	sprintf(totalByteRecv, "%lu", TotalBytesReceived);
++	sprintf(totalByteRecv, "%llu", TotalBytesReceived);
+ 	json_object_object_add(diag_result, "TotalBytesReceived", json_object_new_string(totalByteRecv));
+-	sprintf(testByteRecv, "%lu", TestBytesReceived);
++	sprintf(testByteRecv, "%llu", TestBytesReceived);
+ 	json_object_object_add(diag_result, "TestBytesReceived", json_object_new_string(testByteRecv));
+ 
+-	sprintf(totalByteSent, "%lu", TotalBytesSent);
++	sprintf(totalByteSent, "%llu", TotalBytesSent);
+ 	json_object_object_add(diag_result, "TotalBytesSent", json_object_new_string(totalByteSent));
+ 
+ #ifdef ZYXEL_DL_DIAG_CALCULATION
+ 	json_object_object_add(diag_result, "X_ZYXEL_Latency", json_object_new_string(Latency));
+-	sprintf(tmpBuf, "%lu", EOMTimeMs - BOMTimeMs);
++	//sprintf(tmpBuf, "%lu", EOMTimeMs - BOMTimeMs);
++	sprintf(tmpBuf, "%.4f", time_interval);
+ 	json_object_object_add(diag_result, "X_ZYXEL_RoundTripTime", json_object_new_string(tmpBuf));
+-	sprintf(tmpBuf, "%.3f", ( (TotalBytesReceived > 0) ? ( (double)(TotalBytesReceived * 8) / 1024 / 1024 ) / ( (double)(EOMTimeMs - BOMTimeMs) / 1000000 ) : 0 ) );
++	//sprintf(tmpBuf, "%.3f", ( (TotalBytesReceived > 0) ? ( (double)(TotalBytesReceived * 8) / 1024 / 1024 ) / ( (double)(EOMTimeMs - BOMTimeMs) / 1000000 ) : 0 ) );
++	sprintf(tmpBuf, "%.4f", dl_speed);
+ 	json_object_object_add(diag_result, "X_ZYXEL_DownloadSpeed", json_object_new_string(tmpBuf));
+ #endif
+ 
+@@ -576,7 +616,7 @@ void getDateTime(char *buf)
+ 	p = localtime(&c_tv.tv_sec);
+ 	sprintf(buf, "%d-%02d-%02dT%02d:%02d:%02d.%06ld", (1900+p->tm_year), (1+p->tm_mon), p->tm_mday, p->tm_hour, p->tm_min, p->tm_sec, c_tv.tv_usec);
+ #ifdef ZYXEL_DL_DIAG_CALCULATION
+-	return (1000000 * c_tv.tv_sec + c_tv.tv_usec);
++	return (c_tv.tv_sec * 1000 + c_tv.tv_usec / 1000);
+ #else
+ 	return;
+ #endif

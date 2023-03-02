@@ -1,0 +1,21 @@
+Index: busybox-1.31.1/networking/traceroute.c
+===================================================================
+--- busybox-1.31.1.orig/networking/traceroute.c	2021-03-18 10:34:25.182543564 +0800
++++ busybox-1.31.1/networking/traceroute.c	2021-03-18 10:34:43.018543650 +0800
+@@ -1088,9 +1088,15 @@
+ 	dest_lsa = xhost2sockaddr(argv[0], port);
+ #endif
+ #endif
++
+ 	packlen = minpacket;
++
+ #ifdef ZCFG_SUPPORT
+-	if (argv[1])
++	if (argv[1] && af == AF_INET6){
++		uint32_t mindatalen = minpacket - sizeof(struct ip6_hdr) - sizeof(struct udphdr);
++		uint32_t datalength = xatoul_range(argv[1], mindatalen, 65535);
++		packlen = datalength + sizeof(struct ip6_hdr) + sizeof(struct udphdr);
++	}else if (argv[1])
+ 		packlen = xatoul_range(argv[1], minpacket, 65535);
+ #else
+ 	if (argv[1])

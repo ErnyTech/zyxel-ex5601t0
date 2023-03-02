@@ -1,0 +1,137 @@
+Index: json-c-0.15/arraylist.c
+===================================================================
+--- json-c-0.15.orig/arraylist.c
++++ json-c-0.15/arraylist.c
+@@ -91,6 +91,20 @@ extern void array_list_free(struct array
+ 	free(arr);
+ }
+ 
++
++void *array_list_pull_idx(struct array_list *arr, int i)
++{
++	void *arrayidx = NULL;
++
++	if(0 > i || (size_t)i >= arr->length)
++		return NULL;
++
++	arrayidx = arr->array[i];
++	arr->array[i] = NULL;
++
++	return arrayidx;
++}
++
+ void *array_list_get_idx(struct array_list *arr, size_t i)
+ {
+ 	if (i >= arr->length)
+Index: json-c-0.15/arraylist.h
+===================================================================
+--- json-c-0.15.orig/arraylist.h
++++ json-c-0.15/arraylist.h
+@@ -66,6 +66,8 @@ extern void *array_list_get_idx(struct a
+ 
+ extern int array_list_put_idx(struct array_list *al, size_t i, void *data);
+ 
++extern void *array_list_pull_idx(struct array_list *, int);
++
+ extern int array_list_add(struct array_list *al, void *data);
+ 
+ extern size_t array_list_length(struct array_list *al);
+Index: json-c-0.15/json_object.c
+===================================================================
+--- json-c-0.15.orig/json_object.c
++++ json-c-0.15/json_object.c
+@@ -638,6 +638,35 @@ int json_object_object_add_ex(struct jso
+ 	return 0;
+ }
+ 
++struct json_object *json_object_object_pull(struct json_object *j, const char *k)
++{
++	struct lh_entry *e = j ? lh_table_lookup_entry(JC_OBJECT(j)->c_object, k) : NULL;
++	struct json_object *v = NULL;
++
++	if(e){
++		v = lh_entry_v(e);
++		e->v = NULL;
++		return v;
++	}
++	else{
++		return NULL;
++	}
++}
++
++struct json_object *json_object_object_pull_and_empty(struct json_object *j, const char *k)
++{
++	struct lh_entry *e = j ? lh_table_lookup_entry(JC_OBJECT(j)->c_object, k) : NULL;
++	struct json_object *v = NULL;
++
++	if(e){
++		v = lh_entry_v(e);
++		e->v = NULL;
++		lh_table_delete_entry(JC_OBJECT(j)->c_object, e);
++	}
++
++	return v;
++}
++
+ int json_object_object_add(struct json_object *jso, const char *key, struct json_object *val)
+ {
+ 	return json_object_object_add_ex(jso, key, val, 0);
+@@ -1569,6 +1598,11 @@ int json_object_array_del_idx(struct jso
+ 	return array_list_del_idx(JC_ARRAY(jso)->c_array, idx, count);
+ }
+ 
++struct json_object *json_object_array_pull_idx(struct json_object *jso, int idx)
++{
++	return array_list_pull_idx(JC_ARRAY(jso)->c_array, idx);
++}
++
+ struct json_object *json_object_array_get_idx(const struct json_object *jso, size_t idx)
+ {
+ 	assert(json_object_get_type(jso) == json_type_array);
+Index: json-c-0.15/json_object.h
+===================================================================
+--- json-c-0.15.orig/json_object.h
++++ json-c-0.15/json_object.h
+@@ -366,6 +366,12 @@ JSON_EXPORT int json_object_object_lengt
+  */
+ JSON_C_CONST_FUNCTION(JSON_EXPORT size_t json_c_object_sizeof(void));
+ 
++
++JSON_EXPORT struct json_object *json_object_object_pull(struct json_object *j, const char *k);
++
++JSON_EXPORT struct json_object *json_object_object_pull_and_empty(struct json_object *j, const char *k);
++
++
+ /** Add an object field to a json_object of type json_type_object
+  *
+  * The reference count of `val` will *not* be incremented, in effect
+@@ -619,6 +625,8 @@ JSON_EXPORT int json_object_array_add(st
+ JSON_EXPORT int json_object_array_put_idx(struct json_object *obj, size_t idx,
+                                           struct json_object *val);
+ 
++JSON_EXPORT struct json_object *json_object_array_pull_idx(struct json_object *obj, int idx);
++
+ /** Get the element at specified index of array `obj` (which must be a json_object of type json_type_array)
+  *
+  * *No* reference counts will be changed, and ownership of the returned
+Index: json-c-0.15/json-c.sym
+===================================================================
+--- json-c-0.15.orig/json-c.sym
++++ json-c-0.15/json-c.sym
+@@ -64,6 +64,7 @@ JSONC_0.14 {
+     json_object_array_length;
+     json_object_array_delete_idx;
+     json_object_array_put_idx;
++    json_object_array_pull_idx;
+     json_object_array_sort;
+     json_object_deep_copy;
+     json_object_double_to_json_string;
+@@ -113,6 +114,8 @@ JSONC_0.14 {
+     json_object_object_get_ex;
+     json_object_object_length;
+     json_object_put;
++    json_object_object_pull;
++    json_object_object_pull_and_empty;
+     json_object_set_boolean;
+     json_object_set_double;
+     json_object_set_int64;

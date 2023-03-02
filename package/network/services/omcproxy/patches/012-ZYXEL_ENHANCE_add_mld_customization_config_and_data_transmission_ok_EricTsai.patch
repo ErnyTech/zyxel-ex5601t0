@@ -1,0 +1,161 @@
+Index: omcproxy-2018-12-14-722151f0/src/groups.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/groups.c
++++ omcproxy-2018-12-14-722151f0/src/groups.c
+@@ -632,6 +632,7 @@ void groups_update_state(struct groups *
+ 		changed = true;
+ 
+ #ifdef ZYXEL_OMCPROXY
++	bool gpu = IN6_IS_ADDR_V4MAPPED(&group->addr) ? false : true;
+ 	if(len && omcpzcfg_fl()) {
+ 		bool creat;
+ 		group_retrieve_host(group->sshosts, &group->addr, host, &creat);
+@@ -673,8 +674,10 @@ void groups_update_state(struct groups *
+ 					L_DEBUG("%s: receiving report, step exclude and add a record", __FUNCTION__);
+ 				}
+ 				if(h)
+-					h->until = (omcpzcfg_app_igmp()) ? (now + (groups->cfg_v4.query_response_interval / 2) +
+-						(groups->cfg_v4.robustness * groups->cfg_v4.query_interval)) : (now + groups->cfg_v6.query_interval);
++					//h->until = (omcpzcfg_app_igmp()) ? (now + (groups->cfg_v4.query_response_interval / 2) +
++						//(groups->cfg_v4.robustness * groups->cfg_v4.query_interval)) : (now + groups->cfg_v6.query_interval);
++					h->until = now + (cfg->query_response_interval / 2) + (cfg->robustness * cfg->query_interval);
++
+ 			}
+ 			update = (update == UPDATE_DONE) ? UPDATE_TO_IN : (creat ? UPDATE_TO_EX : UPDATE_IS_EXCLUDE);
+ 		}else
+@@ -690,8 +693,9 @@ void groups_update_state(struct groups *
+ 		struct group_host *h;
+ 		h = group_retrieve_host(group->hosts, &group->addr, host, NULL);
+ 		if(h)
+-			h->until = (omcpzcfg_app_igmp()) ? (now + (groups->cfg_v4.query_response_interval / 2) +
+-				(groups->cfg_v4.robustness * groups->cfg_v4.query_interval)) : (now + groups->cfg_v6.query_interval);
++			//h->until = (omcpzcfg_app_igmp()) ? (now + (groups->cfg_v4.query_response_interval / 2) +
++				//(groups->cfg_v4.robustness * groups->cfg_v4.query_interval)) : (now + groups->cfg_v6.query_interval);
++			h->until = now + (cfg->query_response_interval / 2) + (cfg->robustness * cfg->query_interval);
+ 	}
+ #endif
+ 
+@@ -839,8 +843,9 @@ void groups_update_state(struct groups *
+ 		if(creat) {
+ 			L_DEBUG("%s: step exclude and add a record", __FUNCTION__);
+ 			if(h)
+-				h->until = (omcpzcfg_app_igmp()) ? (now + (groups->cfg_v4.query_response_interval / 2) +
+-				(groups->cfg_v4.robustness * groups->cfg_v4.query_interval)) : (now + groups->cfg_v6.query_interval);
++				//h->until = (omcpzcfg_app_igmp()) ? (now + (groups->cfg_v4.query_response_interval / 2) +
++				//(groups->cfg_v4.robustness * groups->cfg_v4.query_interval)) : (now + groups->cfg_v6.query_interval);
++				h->until = now + (cfg->query_response_interval / 2) + (cfg->robustness * cfg->query_interval);
+ 		}
+ 	}
+ 	else if(!len && update == UPDATE_TO_IN && omcpzcfg_fl()) {
+@@ -871,7 +876,8 @@ void groups_update_state(struct groups *
+ 
+ 	}
+ #endif
+-	if (changed && groups->cb_update)
++
++	if ((changed || gpu) && groups->cb_update)
+ #ifndef ZYXEL_OMCPROXY
+ 		groups->cb_update(groups, group, now);
+ #else
+Index: omcproxy-2018-12-14-722151f0/src/omcproxy.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/omcproxy.c
++++ omcproxy-2018-12-14-722151f0/src/omcproxy.c
+@@ -153,7 +153,7 @@ int main(int argc, char **argv) {
+ 		const char *scope = NULL;
+ 		struct blob_buf b = {NULL, NULL, 0, NULL};
+ 
+-		if (!strcmp(argv[i], "-h")) {
++		if (!strncmp(argv[i], "-h", strlen("-h"))) {
+ 			usage(argv[0]);
+ 			return 1;
+ 		} else if (!strncmp(argv[i], "-v", 2)) {
+Index: omcproxy-2018-12-14-722151f0/src/mld.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/mld.c
++++ omcproxy-2018-12-14-722151f0/src/mld.c
+@@ -84,15 +84,30 @@ void mld_handle(struct mrib_querier *mri
+ 	char addrbuf[INET_ADDRSTRLEN];
+ 	omgp_time_t now = omgp_time();
+ 	inet_ntop(AF_INET6, &hdr->mld_addr, addrbuf, sizeof(addrbuf));
++#ifdef ZYXEL_OMCPROXY
++	int mldv = omcpzcfg_mldv();
++#endif
+ 
+ 	struct querier_iface *q = container_of(mrib, struct querier_iface, mrib);
+ 	if (hdr->mld_icmp6_hdr.icmp6_type == ICMPV6_MGM_QUERY) {
+ 		struct mld_query *query = (struct mld_query*)hdr;
+ 
++#ifdef ZYXEL_OMCPROXY
++		if(mldv == 2) {
++
++			if (len != 24 && ((size_t)len < sizeof(*query) ||
++					(size_t)len < sizeof(*query) + ntohs(query->nsrc) * sizeof(struct in6_addr)))
++				return;
++
++		}else {
++			if (len > 24 && ((size_t)len < sizeof(*query) + ntohs(query->nsrc) * sizeof(struct in6_addr)))
++				return;
++		}
++#else
+ 		if (len != 24 && ((size_t)len < sizeof(*query) ||
+ 				(size_t)len < sizeof(*query) + ntohs(query->nsrc) * sizeof(struct in6_addr)))
+ 			return;
+-
++#endif
+ 		if (!IN6_IS_ADDR_UNSPECIFIED(&query->mld.mld_addr) &&
+ 				!mld_is_valid_group(&query->mld.mld_addr))
+ 			return;
+@@ -126,10 +141,25 @@ void mld_handle(struct mrib_querier *mri
+ 		int election = memcmp(&from->sin6_addr, &addr, sizeof(from->sin6_addr));
+ 		L_INFO("%s: detected other querier %s with priority %d on %d",
+ 				__FUNCTION__, addrbuf, election, q->ifindex);
++#ifdef ZYXEL_OMCPROXY
++		bool valid = false;
++
++		if(mldv == 2) {
++			// TODO: we ignore MLDv1 queriers for now, since a lot of them are dumb switches
+ 
++			if (election < 0 && IN6_IS_ADDR_UNSPECIFIED(&query->mld.mld_addr) && len > 24)
++				valid = true;
++		}else {
++			if (election < 0 && IN6_IS_ADDR_UNSPECIFIED(&query->mld.mld_addr))
++				valid = true;
++		}
++
++		if(valid) {
++#else
+ 		// TODO: we ignore MLDv1 queriers for now, since a lot of them are dumb switches
+ 
+ 		if (election < 0 && IN6_IS_ADDR_UNSPECIFIED(&query->mld.mld_addr) && len > 24) {
++#endif
+ 			groups_update_config(&q->groups, true, mrd, query_interval, robustness);
+ 
+ 			q->mld_other_querier = true;
+@@ -177,6 +207,10 @@ void mld_handle(struct mrib_querier *mri
+ ssize_t mld_send_query(struct querier_iface *q, const struct in6_addr *group,
+ 		const struct list_head *sources, bool suppress)
+ {
++#ifdef ZYXEL_OMCPROXY
++	int mldv = omcpzcfg_mldv();
++#endif
++
+ 	uint16_t mrc = querier_mrc((group) ? q->groups.cfg_v6.last_listener_query_interval :
+ 			q->groups.cfg_v6.query_response_interval);
+ 	struct {
+@@ -205,6 +239,15 @@ ssize_t mld_send_query(struct querier_if
+ 	if (group)
+ 		query.q.mld.mld_addr = dest.sin6_addr = *group;
+ 
++#ifdef ZYXEL_OMCPROXY
++	int rst = (mldv == 2) ?
++			mrib_send_mld(&q->mrib, &query.q.mld,
++			sizeof(query.q) + cnt * sizeof(query.addrs[0]), &dest)
++			:
++			mrib_send_mld(&q->mrib, &query.q.mld, sizeof(struct mld_hdr), &dest);
++	return rst;
++#else
+ 	return mrib_send_mld(&q->mrib, &query.q.mld,
+ 			sizeof(query.q) + cnt * sizeof(query.addrs[0]), &dest);
++#endif
+ }

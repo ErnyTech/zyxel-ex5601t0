@@ -1,0 +1,34 @@
+Index: dnsmasq-2.85/src/forward.c
+===================================================================
+--- dnsmasq-2.85.orig/src/forward.c	2021-04-22 11:12:16.236453327 +0800
++++ dnsmasq-2.85/src/forward.c	2021-04-22 11:12:26.512453031 +0800
+@@ -306,6 +306,10 @@
+   unsigned int flags = 0;
+   unsigned int fwd_flags = 0;
+   struct server *start = NULL;
++#ifdef ZYXEL_PATCH
++  char if_name[IFNAMSIZ] = { 0 };
++#endif
++
+   void *hash = hash_questions (header, plen, daemon->namebuff);
+ #ifdef HAVE_DNSSEC
+   int do_dnssec = 0;
+@@ -605,6 +609,18 @@
+           start->queries++;
+           forwarded = 1;
+           forward->sentto = start;
++
++#ifdef ZYXEL_PATCH
++          /*if the query-interface is "lo", forward to all servers */
++          /*Because "lo" interface always send-query with different port and header->id,
++           *the query is always forwarded to the first dns server.
++           *Hence, we force the query to all dns servers as the interface is "lo".*/
++          if (indextoname(udpfd, dst_iface, if_name)) {
++            if (!strncmp(if_name, "lo", 2))
++              forward->forwardall = 1;
++          }
++#endif
++
+           if (!forward->forwardall)
+             break;
+           forward->forwardall++;

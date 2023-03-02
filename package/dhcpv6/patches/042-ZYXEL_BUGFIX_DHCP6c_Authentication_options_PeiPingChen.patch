@@ -1,0 +1,15 @@
+Index: wide-dhcpv6-20080615/auth.c
+===================================================================
+--- wide-dhcpv6-20080615.orig/auth.c
++++ wide-dhcpv6-20080615/auth.c
+@@ -129,6 +129,10 @@ dhcp6_calc_mac(buf, len, proto, alg, off
+ 	hmacmd5_t ctx;
+ 	unsigned char digest[MD5_DIGESTLENGTH];
+ 
++	/*Ignore the authentication if proto is undefined*/
++	if (proto == DHCP6_AUTHPROTO_UNDEF)
++		return (0);
++
+ 	/* right now, we don't care about the protocol */
+ 
+ 	if (alg != DHCP6_AUTHALG_HMACMD5)

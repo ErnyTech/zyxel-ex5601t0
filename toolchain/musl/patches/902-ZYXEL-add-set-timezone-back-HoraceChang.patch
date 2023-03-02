@@ -1,0 +1,18 @@
+Index: musl-1.1.24/src/linux/settimeofday.c
+===================================================================
+--- musl-1.1.24.orig/src/linux/settimeofday.c
++++ musl-1.1.24/src/linux/settimeofday.c
+@@ -6,6 +6,13 @@
+ 
+ int settimeofday(const struct timeval *tv, const struct timezone *tz)
+ {
++	if ( tz ) {
++#ifdef __NR_settimeofday
++		return syscall(__NR_settimeofday, tv, tz);
++#endif
++		errno = ENOSYS;
++		return -1;
++	}
+ 	if (!tv) return 0;
+ 	if (tv->tv_usec >= 1000000ULL) return __syscall_ret(-EINVAL);
+ 	return clock_settime(CLOCK_REALTIME, &((struct timespec){

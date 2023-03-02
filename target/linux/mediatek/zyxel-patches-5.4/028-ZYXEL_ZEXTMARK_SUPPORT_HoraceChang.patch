@@ -1,0 +1,1896 @@
+Index: linux-5.4.171/include/linux/skbuff.h
+===================================================================
+--- linux-5.4.171.orig/include/linux/skbuff.h
++++ linux-5.4.171/include/linux/skbuff.h
+@@ -857,6 +857,7 @@ struct sk_buff {
+ 		__u32		reserved_tailroom;
+ 	};
+ 
++	__u32 zextmark;
+ 	union {
+ 		__be16		inner_protocol;
+ 		__u8		inner_ipproto;
+Index: linux-5.4.171/net/bridge/netfilter/ebt_zextmark.c
+===================================================================
+--- /dev/null
++++ linux-5.4.171/net/bridge/netfilter/ebt_zextmark.c
+@@ -0,0 +1,110 @@
++/*
++ *  ebt_mark
++ *
++ *	Authors:
++ *	Bart De Schuymer <bdschuym@pandora.be>
++ *
++ *  July, 2002
++ *
++ */
++
++/* The mark target can be used in any chain,
++ * I believe adding a mangle table just for marking is total overkill.
++ * Marking a frame doesn't really change anything in the frame anyway.
++ */
++
++#include <linux/module.h>
++#include <linux/netfilter/x_tables.h>
++#include <linux/netfilter_bridge/ebtables.h>
++#include <linux/netfilter_bridge/ebt_mark_t.h>
++
++static unsigned int
++ebt_mark_tg(struct sk_buff *skb, const struct xt_action_param *par)
++{
++	const struct ebt_mark_t_info *info = par->targinfo;
++	int action = info->target & -16;
++
++	if (action == MARK_SET_VALUE)
++		skb->zextmark = info->mark;
++	else if (action == MARK_OR_VALUE)
++		skb->zextmark |= info->mark;
++	else if (action == MARK_AND_VALUE)
++		skb->zextmark &= info->mark;
++	else
++		skb->zextmark ^= info->mark;
++
++	return info->target | ~EBT_VERDICT_BITS;
++}
++
++static int ebt_mark_tg_check(const struct xt_tgchk_param *par)
++{
++	const struct ebt_mark_t_info *info = par->targinfo;
++	int tmp;
++
++	tmp = info->target | ~EBT_VERDICT_BITS;
++	if (BASE_CHAIN && tmp == EBT_RETURN)
++		return -EINVAL;
++	if (ebt_invalid_target(tmp))
++		return -EINVAL;
++	tmp = info->target & ~EBT_VERDICT_BITS;
++	if (tmp != MARK_SET_VALUE && tmp != MARK_OR_VALUE &&
++	    tmp != MARK_AND_VALUE && tmp != MARK_XOR_VALUE)
++		return -EINVAL;
++	return 0;
++}
++#ifdef CONFIG_COMPAT
++struct compat_ebt_mark_t_info {
++	compat_ulong_t mark;
++	compat_uint_t target;
++};
++
++static void mark_tg_compat_from_user(void *dst, const void *src)
++{
++	const struct compat_ebt_mark_t_info *user = src;
++	struct ebt_mark_t_info *kern = dst;
++
++	kern->mark = user->mark;
++	kern->target = user->target;
++}
++
++static int mark_tg_compat_to_user(void __user *dst, const void *src)
++{
++	struct compat_ebt_mark_t_info __user *user = dst;
++	const struct ebt_mark_t_info *kern = src;
++
++	if (put_user(kern->mark, &user->mark) ||
++	    put_user(kern->target, &user->target))
++		return -EFAULT;
++	return 0;
++}
++#endif
++
++static struct xt_target ebt_mark_tg_reg __read_mostly = {
++	.name		= "zextmark",
++	.revision	= 0,
++	.family		= NFPROTO_BRIDGE,
++	.target		= ebt_mark_tg,
++	.checkentry	= ebt_mark_tg_check,
++	.targetsize	= sizeof(struct ebt_mark_t_info),
++#ifdef CONFIG_COMPAT
++	.compatsize	= sizeof(struct compat_ebt_mark_t_info),
++	.compat_from_user = mark_tg_compat_from_user,
++	.compat_to_user	= mark_tg_compat_to_user,
++#endif
++	.me		= THIS_MODULE,
++};
++
++static int __init ebt_mark_init(void)
++{
++	return xt_register_target(&ebt_mark_tg_reg);
++}
++
++static void __exit ebt_mark_fini(void)
++{
++	xt_unregister_target(&ebt_mark_tg_reg);
++}
++
++module_init(ebt_mark_init);
++module_exit(ebt_mark_fini);
++MODULE_DESCRIPTION("Ebtables: Packet zextmark modification");
++MODULE_LICENSE("GPL");
+Index: linux-5.4.171/net/bridge/netfilter/ebt_zextmark_m.c
+===================================================================
+--- /dev/null
++++ linux-5.4.171/net/bridge/netfilter/ebt_zextmark_m.c
+@@ -0,0 +1,98 @@
++/*
++ *  ebt_mark_m
++ *
++ *	Authors:
++ *	Bart De Schuymer <bdschuym@pandora.be>
++ *
++ *  July, 2002
++ *
++ */
++#include <linux/module.h>
++#include <linux/netfilter/x_tables.h>
++#include <linux/netfilter_bridge/ebtables.h>
++#include <linux/netfilter_bridge/ebt_mark_m.h>
++
++static bool
++ebt_mark_mt(const struct sk_buff *skb, struct xt_action_param *par)
++{
++	const struct ebt_mark_m_info *info = par->matchinfo;
++
++	if (info->bitmask & EBT_MARK_OR)
++		return !!(skb->zextmark & info->mask) ^ info->invert;
++	return ((skb->zextmark & info->mask) == info->mark) ^ info->invert;
++}
++
++static int ebt_mark_mt_check(const struct xt_mtchk_param *par)
++{
++	const struct ebt_mark_m_info *info = par->matchinfo;
++
++	if (info->bitmask & ~EBT_MARK_MASK)
++		return -EINVAL;
++	if ((info->bitmask & EBT_MARK_OR) && (info->bitmask & EBT_MARK_AND))
++		return -EINVAL;
++	if (!info->bitmask)
++		return -EINVAL;
++	return 0;
++}
++
++
++#ifdef CONFIG_COMPAT
++struct compat_ebt_mark_m_info {
++	compat_ulong_t mark, mask;
++	uint8_t invert, bitmask;
++};
++
++static void mark_mt_compat_from_user(void *dst, const void *src)
++{
++	const struct compat_ebt_mark_m_info *user = src;
++	struct ebt_mark_m_info *kern = dst;
++
++	kern->mark = user->mark;
++	kern->mask = user->mask;
++	kern->invert = user->invert;
++	kern->bitmask = user->bitmask;
++}
++
++static int mark_mt_compat_to_user(void __user *dst, const void *src)
++{
++	struct compat_ebt_mark_m_info __user *user = dst;
++	const struct ebt_mark_m_info *kern = src;
++
++	if (put_user(kern->mark, &user->mark) ||
++	    put_user(kern->mask, &user->mask) ||
++	    put_user(kern->invert, &user->invert) ||
++	    put_user(kern->bitmask, &user->bitmask))
++		return -EFAULT;
++	return 0;
++}
++#endif
++
++static struct xt_match ebt_mark_mt_reg __read_mostly = {
++	.name		= "zextmark_m",
++	.revision	= 0,
++	.family		= NFPROTO_BRIDGE,
++	.match		= ebt_mark_mt,
++	.checkentry	= ebt_mark_mt_check,
++	.matchsize	= sizeof(struct ebt_mark_m_info),
++#ifdef CONFIG_COMPAT
++	.compatsize	= sizeof(struct compat_ebt_mark_m_info),
++	.compat_from_user = mark_mt_compat_from_user,
++	.compat_to_user	= mark_mt_compat_to_user,
++#endif
++	.me		= THIS_MODULE,
++};
++
++static int __init ebt_mark_m_init(void)
++{
++	return xt_register_match(&ebt_mark_mt_reg);
++}
++
++static void __exit ebt_mark_m_fini(void)
++{
++	xt_unregister_match(&ebt_mark_mt_reg);
++}
++
++module_init(ebt_mark_m_init);
++module_exit(ebt_mark_m_fini);
++MODULE_DESCRIPTION("Ebtables: Packet zextmark match");
++MODULE_LICENSE("GPL");
+Index: linux-5.4.171/net/bridge/netfilter/Makefile
+===================================================================
+--- linux-5.4.171.orig/net/bridge/netfilter/Makefile
++++ linux-5.4.171/net/bridge/netfilter/Makefile
+@@ -27,6 +27,7 @@ obj-$(CONFIG_BRIDGE_EBT_IP) += ebt_ip.o
+ obj-$(CONFIG_BRIDGE_EBT_IP6) += ebt_ip6.o
+ obj-$(CONFIG_BRIDGE_EBT_LIMIT) += ebt_limit.o
+ obj-$(CONFIG_BRIDGE_EBT_MARK) += ebt_mark_m.o
++obj-$(CONFIG_BRIDGE_EBT_ZEXTMARK) += ebt_zextmark_m.o
+ obj-$(CONFIG_BRIDGE_EBT_PKTTYPE) += ebt_pkttype.o
+ obj-$(CONFIG_BRIDGE_EBT_STP) += ebt_stp.o
+ obj-$(CONFIG_BRIDGE_EBT_VLAN) += ebt_vlan.o
+@@ -34,6 +35,7 @@ obj-$(CONFIG_BRIDGE_EBT_VLAN) += ebt_vla
+ # targets
+ obj-$(CONFIG_BRIDGE_EBT_ARPREPLY) += ebt_arpreply.o
+ obj-$(CONFIG_BRIDGE_EBT_MARK_T) += ebt_mark.o
++obj-$(CONFIG_BRIDGE_EBT_ZEXTMARK_T) += ebt_zextmark.o
+ obj-$(CONFIG_BRIDGE_EBT_DNAT) += ebt_dnat.o
+ obj-$(CONFIG_BRIDGE_EBT_REDIRECT) += ebt_redirect.o
+ obj-$(CONFIG_BRIDGE_EBT_SNAT) += ebt_snat.o
+Index: linux-5.4.171/net/netfilter/Makefile
+===================================================================
+--- linux-5.4.171.orig/net/netfilter/Makefile
++++ linux-5.4.171/net/netfilter/Makefile
+@@ -131,6 +131,9 @@ obj-$(CONFIG_NETFILTER_XTABLES) += x_tab
+ # combos
+ obj-$(CONFIG_NETFILTER_XT_MARK) += xt_mark.o
+ obj-$(CONFIG_NETFILTER_XT_CONNMARK) += xt_connmark.o
++obj-$(CONFIG_NETFILTER_XT_ZEXTMARK) += xt_zextmark.o
++obj-$(CONFIG_NETFILTER_XT_CONNZEXTMARK) += xt_connzextmark.o
++
+ obj-$(CONFIG_NETFILTER_XT_SET) += xt_set.o
+ obj-$(CONFIG_NETFILTER_XT_NAT) += xt_nat.o
+ 
+Index: linux-5.4.171/net/netfilter/xt_connzextmark.c
+===================================================================
+--- /dev/null
++++ linux-5.4.171/net/netfilter/xt_connzextmark.c
+@@ -0,0 +1,218 @@
++/*
++ *	xt_connmark - Netfilter module to operate on connection marks
++ *
++ *	Copyright (C) 2002,2004 MARA Systems AB <http://www.marasystems.com>
++ *	by Henrik Nordstrom <hno@marasystems.com>
++ *	Copyright © CC Computer Consultants GmbH, 2007 - 2008
++ *	Jan Engelhardt <jengelh@medozas.de>
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, see <http://www.gnu.org/licenses/>.
++ */
++
++#include <linux/module.h>
++#include <linux/skbuff.h>
++#include <net/netfilter/nf_conntrack.h>
++#include <net/netfilter/nf_conntrack_ecache.h>
++#include <linux/netfilter/x_tables.h>
++#include <linux/netfilter/xt_connmark.h>
++
++MODULE_AUTHOR("Henrik Nordstrom <hno@marasystems.com>");
++MODULE_DESCRIPTION("Xtables: connection mark operations");
++MODULE_LICENSE("GPL");
++MODULE_ALIAS("ipt_CONNZEXTMARK");
++MODULE_ALIAS("ip6t_CONNZEXTMARK");
++MODULE_ALIAS("ipt_connzextmark");
++MODULE_ALIAS("ip6t_connzextmark");
++
++static unsigned int
++connmark_tg_shift(struct sk_buff *skb, const struct xt_connmark_tginfo2 *info)
++{
++	enum ip_conntrack_info ctinfo;
++	u_int32_t new_targetmark;
++	struct nf_conn *ct;
++	u_int32_t newmark;
++
++	ct = nf_ct_get(skb, &ctinfo);
++	if (ct == NULL)
++		return XT_CONTINUE;
++
++	switch (info->mode) {
++	case XT_CONNMARK_SET:
++		newmark = (ct->zextmark & ~info->ctmask) ^ info->ctmark;
++		if (info->shift_dir == D_SHIFT_RIGHT)
++			newmark >>= info->shift_bits;
++		else
++			newmark <<= info->shift_bits;
++
++		if (ct->zextmark != newmark) {
++			ct->zextmark = newmark;
++			nf_conntrack_event_cache(IPCT_MARK, ct);
++		}
++		break;
++	case XT_CONNMARK_SAVE:
++		new_targetmark = (skb->zextmark & info->nfmask);
++		if (info->shift_dir == D_SHIFT_RIGHT)
++			new_targetmark >>= info->shift_bits;
++		else
++			new_targetmark <<= info->shift_bits;
++
++		newmark = (ct->zextmark & ~info->ctmask) ^
++			  new_targetmark;
++		if (ct->zextmark != newmark) {
++			ct->zextmark = newmark;
++			nf_conntrack_event_cache(IPCT_MARK, ct);
++		}
++		break;
++	case XT_CONNMARK_RESTORE:
++		new_targetmark = (ct->zextmark & info->ctmask);
++		if (info->shift_dir == D_SHIFT_RIGHT)
++			new_targetmark >>= info->shift_bits;
++		else
++			new_targetmark <<= info->shift_bits;
++
++		newmark = (skb->zextmark & ~info->nfmask) ^
++			  new_targetmark;
++		skb->zextmark = newmark;
++		break;
++	}
++	return XT_CONTINUE;
++}
++
++static unsigned int
++connmark_tg(struct sk_buff *skb, const struct xt_action_param *par)
++{
++	const struct xt_connmark_tginfo1 *info = par->targinfo;
++	const struct xt_connmark_tginfo2 info2 = {
++		.ctmark	= info->ctmark,
++		.ctmask	= info->ctmask,
++		.nfmask	= info->nfmask,
++		.mode	= info->mode,
++	};
++
++	return connmark_tg_shift(skb, &info2);
++}
++
++static unsigned int
++connmark_tg_v2(struct sk_buff *skb, const struct xt_action_param *par)
++{
++	const struct xt_connmark_tginfo2 *info = par->targinfo;
++
++	return connmark_tg_shift(skb, info);
++}
++
++static int connmark_tg_check(const struct xt_tgchk_param *par)
++{
++	int ret;
++
++	ret = nf_ct_netns_get(par->net, par->family);
++	if (ret < 0)
++		pr_info_ratelimited("cannot load conntrack support for proto=%u\n",
++				    par->family);
++	return ret;
++}
++
++static void connmark_tg_destroy(const struct xt_tgdtor_param *par)
++{
++	nf_ct_netns_put(par->net, par->family);
++}
++
++static bool
++connmark_mt(const struct sk_buff *skb, struct xt_action_param *par)
++{
++	const struct xt_connmark_mtinfo1 *info = par->matchinfo;
++	enum ip_conntrack_info ctinfo;
++	const struct nf_conn *ct;
++
++	ct = nf_ct_get(skb, &ctinfo);
++	if (ct == NULL)
++		return false;
++
++	return ((ct->zextmark & info->mask) == info->mark) ^ info->invert;
++}
++
++static int connmark_mt_check(const struct xt_mtchk_param *par)
++{
++	int ret;
++
++	ret = nf_ct_netns_get(par->net, par->family);
++	if (ret < 0)
++		pr_info_ratelimited("cannot load conntrack support for proto=%u\n",
++				    par->family);
++	return ret;
++}
++
++static void connmark_mt_destroy(const struct xt_mtdtor_param *par)
++{
++	nf_ct_netns_put(par->net, par->family);
++}
++
++static struct xt_target connmark_tg_reg[] __read_mostly = {
++	{
++		.name           = "CONNZEXTMARK",
++		.revision       = 1,
++		.family         = NFPROTO_UNSPEC,
++		.checkentry     = connmark_tg_check,
++		.target         = connmark_tg,
++		.targetsize     = sizeof(struct xt_connmark_tginfo1),
++		.destroy        = connmark_tg_destroy,
++		.me             = THIS_MODULE,
++	},
++	{
++		.name           = "CONNZEXTMARK",
++		.revision       = 2,
++		.family         = NFPROTO_UNSPEC,
++		.checkentry     = connmark_tg_check,
++		.target         = connmark_tg_v2,
++		.targetsize     = sizeof(struct xt_connmark_tginfo2),
++		.destroy        = connmark_tg_destroy,
++		.me             = THIS_MODULE,
++	}
++};
++
++static struct xt_match connmark_mt_reg __read_mostly = {
++	.name           = "connzextmark",
++	.revision       = 1,
++	.family         = NFPROTO_UNSPEC,
++	.checkentry     = connmark_mt_check,
++	.match          = connmark_mt,
++	.matchsize      = sizeof(struct xt_connmark_mtinfo1),
++	.destroy        = connmark_mt_destroy,
++	.me             = THIS_MODULE,
++};
++
++static int __init connmark_mt_init(void)
++{
++	int ret;
++
++	ret = xt_register_targets(connmark_tg_reg,
++				  ARRAY_SIZE(connmark_tg_reg));
++	if (ret < 0)
++		return ret;
++	ret = xt_register_match(&connmark_mt_reg);
++	if (ret < 0) {
++		xt_unregister_targets(connmark_tg_reg,
++				      ARRAY_SIZE(connmark_tg_reg));
++		return ret;
++	}
++	return 0;
++}
++
++static void __exit connmark_mt_exit(void)
++{
++	xt_unregister_match(&connmark_mt_reg);
++	xt_unregister_targets(connmark_tg_reg, ARRAY_SIZE(connmark_tg_reg));
++}
++
++module_init(connmark_mt_init);
++module_exit(connmark_mt_exit);
+Index: linux-5.4.171/net/netfilter/xt_zextmark.c
+===================================================================
+--- /dev/null
++++ linux-5.4.171/net/netfilter/xt_zextmark.c
+@@ -0,0 +1,130 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ *	xt_mark - Netfilter module to match NFMARK value
++ *
++ *	(C) 1999-2001 Marc Boucher <marc@mbsi.ca>
++ *	Copyright © CC Computer Consultants GmbH, 2007 - 2008
++ *	Jan Engelhardt <jengelh@medozas.de>
++ */
++
++#include <linux/module.h>
++#include <linux/skbuff.h>
++
++#include <linux/netfilter/xt_mark.h>
++#include <linux/netfilter/x_tables.h>
++
++MODULE_LICENSE("GPL");
++MODULE_AUTHOR("Marc Boucher <marc@mbsi.ca>");
++MODULE_DESCRIPTION("Xtables: packet mark operations");
++MODULE_ALIAS("ipt_zextmark");
++MODULE_ALIAS("ip6t_zextmark");
++MODULE_ALIAS("ipt_ZEXTMARK");
++MODULE_ALIAS("ip6t_ZEXTMARK");
++MODULE_ALIAS("arpt_ZEXTMARK");
++
++#if 1 /* ZyXEL QoS, John (porting from MSTC) */
++//#include "skb_defines.h"
++#endif
++
++#if 1 /* ZyXEL QoS, John */
++static unsigned int
++mark_tg(struct sk_buff *skb, const struct xt_action_param *par)
++{
++    const struct xt_mark_tginfo2 *markinfo = par->targinfo;
++	int mark = 0;
++#if 0
++    printk("[%s %d]markinfo->mode(0x%x) markinfo->mark=(0x%x), skb->zextmark(0x%x)\n",
++            __FUNCTION__,__LINE__,
++            markinfo->mode,markinfo->mark, skb->zextmark);
++#endif
++	switch (markinfo->mode) {
++                case XT_MARK_SET:
++                        mark = markinfo->mark;
++                        break;
++
++                case XT_MARK_AND:
++                        mark = skb->zextmark & markinfo->mark;
++                        break;
++
++                case XT_MARK_OR:
++                        mark = skb->zextmark | markinfo->mark;
++                        break;
++
++                case XT_MARK_VTAG_SET:
++                        mark = skb->zextmark;
++//                        skb->vtag = (unsigned short)(markinfo->mark);
++                        break;
++        }
++#if 0
++//#if defined(CONFIG_BCM_KF_BLOG) && defined(CONFIG_BLOG_FEATURE)
++        skb->ipt_check |= IPT_TARGET_MARK;
++        skb->ipt_log.u32[BLOG_ORIGINAL_MARK_INDEX] = skb->zextmark;
++	skb->ipt_log.u32[BLOG_TARGET_MARK_INDEX] = mark;
++        if ( skb->ipt_check & IPT_TARGET_CHECK )
++                return XT_CONTINUE;
++#endif
++
++        skb->zextmark = mark;
++        return XT_CONTINUE;
++}
++
++#else
++static unsigned int
++mark_tg(struct sk_buff *skb, const struct xt_action_param *par)
++{
++	const struct xt_mark_tginfo2 *info = par->targinfo;
++
++	skb->zextmark = (skb->zextmark & ~info->mask) ^ info->mark;
++	return XT_CONTINUE;
++}
++#endif
++
++static bool
++mark_mt(const struct sk_buff *skb, struct xt_action_param *par)
++{
++	const struct xt_mark_mtinfo1 *info = par->matchinfo;
++
++	return ((skb->zextmark & info->mask) == info->mark) ^ info->invert;
++}
++
++static struct xt_target mark_tg_reg __read_mostly = {
++	.name           = "ZEXTMARK",
++	.revision       = 2,
++	.family         = NFPROTO_UNSPEC,
++	.target         = mark_tg,
++	.targetsize     = sizeof(struct xt_mark_tginfo2),
++	.me             = THIS_MODULE,
++};
++
++static struct xt_match mark_mt_reg __read_mostly = {
++	.name           = "zextmark",
++	.revision       = 1,
++	.family         = NFPROTO_UNSPEC,
++	.match          = mark_mt,
++	.matchsize      = sizeof(struct xt_mark_mtinfo1),
++	.me             = THIS_MODULE,
++};
++
++static int __init mark_mt_init(void)
++{
++	int ret;
++
++	ret = xt_register_target(&mark_tg_reg);
++	if (ret < 0)
++		return ret;
++	ret = xt_register_match(&mark_mt_reg);
++	if (ret < 0) {
++		xt_unregister_target(&mark_tg_reg);
++		return ret;
++	}
++	return 0;
++}
++
++static void __exit mark_mt_exit(void)
++{
++	xt_unregister_match(&mark_mt_reg);
++	xt_unregister_target(&mark_tg_reg);
++}
++
++module_init(mark_mt_init);
++module_exit(mark_mt_exit);
+Index: linux-5.4.171/include/linux/netfilter_ipv4.h
+===================================================================
+--- linux-5.4.171.orig/include/linux/netfilter_ipv4.h
++++ linux-5.4.171/include/linux/netfilter_ipv4.h
+@@ -14,6 +14,9 @@ struct ip_rt_info {
+ 	__be32 saddr;
+ 	u_int8_t tos;
+ 	u_int32_t mark;
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	u_int32_t zextmark;
++#endif
+ };
+ 
+ int ip_route_me_harder(struct net *net, struct sock *sk, struct sk_buff *skb, unsigned addr_type);
+Index: linux-5.4.171/include/linux/netfilter_ipv6.h
+===================================================================
+--- linux-5.4.171.orig/include/linux/netfilter_ipv6.h
++++ linux-5.4.171/include/linux/netfilter_ipv6.h
+@@ -29,6 +29,9 @@ struct ip6_rt_info {
+ 	struct in6_addr daddr;
+ 	struct in6_addr saddr;
+ 	u_int32_t mark;
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	u_int32_t zextmark;
++#endif
+ };
+ 
+ struct nf_queue_entry;
+Index: linux-5.4.171/include/net/fib_rules.h
+===================================================================
+--- linux-5.4.171.orig/include/net/fib_rules.h
++++ linux-5.4.171/include/net/fib_rules.h
+@@ -22,6 +22,10 @@ struct fib_rule {
+ 	int			oifindex;
+ 	u32			mark;
+ 	u32			mark_mask;
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	u32			zextmark;
++	u32			zextmark_mask;
++#endif /* CONFIG_ZYXEL_EXT_MARK */
+ 	u32			flags;
+ 	u32			table;
+ 	u8			action;
+@@ -101,7 +105,28 @@ struct fib_rule_notifier_info {
+ 	struct fib_notifier_info info; /* must be first */
+ 	struct fib_rule *rule;
+ };
+-
++#ifdef CONFIG_NETFILTER_XT_ZEXTMARK
++#define FRA_GENERIC_POLICY \
++	[FRA_UNSPEC]	= { .strict_start_type = FRA_DPORT_RANGE + 1 }, \
++	[FRA_IIFNAME]	= { .type = NLA_STRING, .len = IFNAMSIZ - 1 }, \
++	[FRA_OIFNAME]	= { .type = NLA_STRING, .len = IFNAMSIZ - 1 }, \
++	[FRA_PRIORITY]	= { .type = NLA_U32 }, \
++	[FRA_FWMARK]	= { .type = NLA_U32 }, \
++	[FRA_TUN_ID]	= { .type = NLA_U64 }, \
++	[FRA_FWMASK]	= { .type = NLA_U32 }, \
++	[FRA_ZEXTMARK]	= { .type = NLA_U32 }, \
++	[FRA_ZEXTMASK]	= { .type = NLA_U32 }, \
++	[FRA_TABLE]     = { .type = NLA_U32 }, \
++	[FRA_SUPPRESS_PREFIXLEN] = { .type = NLA_U32 }, \
++	[FRA_SUPPRESS_IFGROUP] = { .type = NLA_U32 }, \
++	[FRA_GOTO]	= { .type = NLA_U32 }, \
++	[FRA_L3MDEV]	= { .type = NLA_U8 }, \
++	[FRA_UID_RANGE]	= { .len = sizeof(struct fib_rule_uid_range) }, \
++	[FRA_PROTOCOL]  = { .type = NLA_U8 }, \
++	[FRA_IP_PROTO]  = { .type = NLA_U8 }, \
++	[FRA_SPORT_RANGE] = { .len = sizeof(struct fib_rule_port_range) }, \
++	[FRA_DPORT_RANGE] = { .len = sizeof(struct fib_rule_port_range) }
++#else
+ #define FRA_GENERIC_POLICY \
+ 	[FRA_UNSPEC]	= { .strict_start_type = FRA_DPORT_RANGE + 1 }, \
+ 	[FRA_IIFNAME]	= { .type = NLA_STRING, .len = IFNAMSIZ - 1 }, \
+@@ -120,6 +145,7 @@ struct fib_rule_notifier_info {
+ 	[FRA_IP_PROTO]  = { .type = NLA_U8 }, \
+ 	[FRA_SPORT_RANGE] = { .len = sizeof(struct fib_rule_port_range) }, \
+ 	[FRA_DPORT_RANGE] = { .len = sizeof(struct fib_rule_port_range) }
++#endif
+ 
+ 
+ static inline void fib_rule_get(struct fib_rule *rule)
+Index: linux-5.4.171/include/net/flow.h
+===================================================================
+--- linux-5.4.171.orig/include/net/flow.h
++++ linux-5.4.171/include/net/flow.h
+@@ -30,6 +30,9 @@ struct flowi_common {
+ 	int	flowic_oif;
+ 	int	flowic_iif;
+ 	__u32	flowic_mark;
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	__u32	flowic_zextmark;
++#endif
+ 	__u8	flowic_tos;
+ 	__u8	flowic_scope;
+ 	__u8	flowic_proto;
+@@ -72,6 +75,9 @@ struct flowi4 {
+ #define flowi4_oif		__fl_common.flowic_oif
+ #define flowi4_iif		__fl_common.flowic_iif
+ #define flowi4_mark		__fl_common.flowic_mark
++#ifdef CONFIG_ZYXEL_EXT_MARK
++#define flowi4_zextmark	__fl_common.flowic_zextmark
++#endif
+ #define flowi4_tos		__fl_common.flowic_tos
+ #define flowi4_scope		__fl_common.flowic_scope
+ #define flowi4_proto		__fl_common.flowic_proto
+@@ -96,7 +102,11 @@ struct flowi4 {
+ } __attribute__((__aligned__(BITS_PER_LONG/8)));
+ 
+ static inline void flowi4_init_output(struct flowi4 *fl4, int oif,
++#ifdef CONFIG_ZYXEL_EXT_MARK
++				      __u32 mark, __u32 zextmark, __u8 tos, __u8 scope,
++#else
+ 				      __u32 mark, __u8 tos, __u8 scope,
++#endif
+ 				      __u8 proto, __u8 flags,
+ 				      __be32 daddr, __be32 saddr,
+ 				      __be16 dport, __be16 sport,
+@@ -105,6 +115,9 @@ static inline void flowi4_init_output(st
+ 	fl4->flowi4_oif = oif;
+ 	fl4->flowi4_iif = LOOPBACK_IFINDEX;
+ 	fl4->flowi4_mark = mark;
++#ifdef CONFIG_ZYXEL_EXT_MARK
++//	fl4->flowi4_zextmark = zextmark;
++#endif /* CONFIG_ZYXEL_EXT_MARK */
+ 	fl4->flowi4_tos = tos;
+ 	fl4->flowi4_scope = scope;
+ 	fl4->flowi4_proto = proto;
+@@ -135,6 +148,9 @@ struct flowi6 {
+ #define flowi6_oif		__fl_common.flowic_oif
+ #define flowi6_iif		__fl_common.flowic_iif
+ #define flowi6_mark		__fl_common.flowic_mark
++#ifdef CONFIG_ZYXEL_EXT_MARK
++#define flowi6_zextmark		__fl_common.flowic_zextmark
++#endif /* CONFIG_ZYXEL_EXT_MARK */
+ #define flowi6_scope		__fl_common.flowic_scope
+ #define flowi6_proto		__fl_common.flowic_proto
+ #define flowi6_flags		__fl_common.flowic_flags
+@@ -161,6 +177,9 @@ struct flowidn {
+ #define flowidn_oif		__fl_common.flowic_oif
+ #define flowidn_iif		__fl_common.flowic_iif
+ #define flowidn_mark		__fl_common.flowic_mark
++#ifdef CONFIG_ZYXEL_EXT_MARK
++#define flowidn_zextmark		__fl_common.flowic_zextmark
++#endif /* CONFIG_ZYXEL_EXT_MARK */
+ #define flowidn_scope		__fl_common.flowic_scope
+ #define flowidn_proto		__fl_common.flowic_proto
+ #define flowidn_flags		__fl_common.flowic_flags
+@@ -181,6 +200,9 @@ struct flowi {
+ #define flowi_oif	u.__fl_common.flowic_oif
+ #define flowi_iif	u.__fl_common.flowic_iif
+ #define flowi_mark	u.__fl_common.flowic_mark
++#ifdef CONFIG_ZYXEL_EXT_MARK
++#define flowi_zextmark	u.__fl_common.flowic_zextmark
++#endif /* CONFIG_ZYXEL_EXT_MARK */
+ #define flowi_tos	u.__fl_common.flowic_tos
+ #define flowi_scope	u.__fl_common.flowic_scope
+ #define flowi_proto	u.__fl_common.flowic_proto
+Index: linux-5.4.171/include/net/ip_fib.h
+===================================================================
+--- linux-5.4.171.orig/include/net/ip_fib.h
++++ linux-5.4.171/include/net/ip_fib.h
+@@ -178,6 +178,9 @@ struct fib_result {
+ struct fib_result_nl {
+ 	__be32		fl_addr;   /* To be looked up*/
+ 	u32		fl_mark;
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	u32		fl_zextmark;
++#endif
+ 	unsigned char	fl_tos;
+ 	unsigned char   fl_scope;
+ 	unsigned char   tb_id_in;
+Index: linux-5.4.171/include/net/netfilter/nf_conntrack.h
+===================================================================
+--- linux-5.4.171.orig/include/net/netfilter/nf_conntrack.h
++++ linux-5.4.171/include/net/netfilter/nf_conntrack.h
+@@ -96,6 +96,9 @@ struct nf_conn {
+ 	u_int32_t mark;
+ #endif
+ 
++#if defined(CONFIG_ZYXEL_EXT_MARK)
++	u_int32_t zextmark;
++#endif
+ #ifdef CONFIG_NF_CONNTRACK_SECMARK
+ 	u_int32_t secmark;
+ #endif
+Index: linux-5.4.171/include/uapi/linux/fib_rules.h
+===================================================================
+--- linux-5.4.171.orig/include/uapi/linux/fib_rules.h
++++ linux-5.4.171/include/uapi/linux/fib_rules.h
+@@ -60,6 +60,8 @@ enum {
+ 	FRA_TABLE,	/* Extended table id */
+ 	FRA_FWMASK,	/* mask for netfilter mark */
+ 	FRA_OIFNAME,
++	FRA_ZEXTMARK,	/* zextmark */
++	FRA_ZEXTMASK,	/* mask for netfilter zextmark */
+ 	FRA_PAD,
+ 	FRA_L3MDEV,	/* iif or oif is l3mdev goto its table */
+ 	FRA_UID_RANGE,	/* UID range */
+Index: linux-5.4.171/include/uapi/linux/netfilter_bridge/ebt_mark_m.h
+===================================================================
+--- linux-5.4.171.orig/include/uapi/linux/netfilter_bridge/ebt_mark_m.h
++++ linux-5.4.171/include/uapi/linux/netfilter_bridge/ebt_mark_m.h
+@@ -13,5 +13,6 @@ struct ebt_mark_m_info {
+ 	__u8 bitmask;
+ };
+ #define EBT_MARK_MATCH "mark_m"
++#define EBT_ZEXTMARK_MATCH "zextmark_m"
+ 
+ #endif
+Index: linux-5.4.171/include/uapi/linux/netfilter_bridge/ebt_mark_t.h
+===================================================================
+--- linux-5.4.171.orig/include/uapi/linux/netfilter_bridge/ebt_mark_t.h
++++ linux-5.4.171/include/uapi/linux/netfilter_bridge/ebt_mark_t.h
+@@ -20,5 +20,6 @@ struct ebt_mark_t_info {
+ 	int target;
+ };
+ #define EBT_MARK_TARGET "mark"
++#define EBT_ZEXTMARK_TARGET "zextmark"
+ 
+ #endif
+Index: linux-5.4.171/include/uapi/linux/netfilter/nfnetlink_conntrack.h
+===================================================================
+--- linux-5.4.171.orig/include/uapi/linux/netfilter/nfnetlink_conntrack.h
++++ linux-5.4.171/include/uapi/linux/netfilter/nfnetlink_conntrack.h
+@@ -52,6 +52,8 @@ enum ctattr_type {
+ 	CTA_SECCTX,
+ 	CTA_TIMESTAMP,
+ 	CTA_MARK_MASK,
++	CTA_ZEXTMARK,  // zyxel jessy 20180621
++	CTA_ZEXTMARK_MASK,  // zyxel jessy 20180621
+ 	CTA_LABELS,
+ 	CTA_LABELS_MASK,
+ 	CTA_SYNPROXY,
+Index: linux-5.4.171/include/uapi/linux/netfilter/nfnetlink_log.h
+===================================================================
+--- linux-5.4.171.orig/include/uapi/linux/netfilter/nfnetlink_log.h
++++ linux-5.4.171/include/uapi/linux/netfilter/nfnetlink_log.h
+@@ -46,6 +46,7 @@ enum nfulnl_attr_type {
+ 	NFULA_UNSPEC,
+ 	NFULA_PACKET_HDR,
+ 	NFULA_MARK,			/* __u32 nfmark */
++	NFULA_ZEXTMARK,			/* u_int32_t nfzextmark */
+ 	NFULA_TIMESTAMP,		/* nfulnl_msg_packet_timestamp */
+ 	NFULA_IFINDEX_INDEV,		/* __u32 ifindex */
+ 	NFULA_IFINDEX_OUTDEV,		/* __u32 ifindex */
+Index: linux-5.4.171/include/uapi/linux/netfilter/nfnetlink_queue.h
+===================================================================
+--- linux-5.4.171.orig/include/uapi/linux/netfilter/nfnetlink_queue.h
++++ linux-5.4.171/include/uapi/linux/netfilter/nfnetlink_queue.h
+@@ -44,6 +44,7 @@ enum nfqnl_attr_type {
+ 	NFQA_PACKET_HDR,
+ 	NFQA_VERDICT_HDR,		/* nfqnl_msg_verdict_hrd */
+ 	NFQA_MARK,			/* __u32 nfmark */
++	NFQA_ZEXTMARK,			/* __u32 nfmark */
+ 	NFQA_TIMESTAMP,			/* nfqnl_msg_packet_timestamp */
+ 	NFQA_IFINDEX_INDEV,		/* __u32 ifindex */
+ 	NFQA_IFINDEX_OUTDEV,		/* __u32 ifindex */
+Index: linux-5.4.171/include/uapi/linux/rtnetlink.h
+===================================================================
+--- linux-5.4.171.orig/include/uapi/linux/rtnetlink.h
++++ linux-5.4.171/include/uapi/linux/rtnetlink.h
+@@ -339,6 +339,7 @@ enum rtattr_type_t {
+ 	RTA_MP_ALGO, /* no longer used */
+ 	RTA_TABLE,
+ 	RTA_MARK,
++	RTA_ZEXTMARK,
+ 	RTA_MFC_STATS,
+ 	RTA_VIA,
+ 	RTA_NEWDST,
+Index: linux-5.4.171/net/core/fib_rules.c
+===================================================================
+--- linux-5.4.171.orig/net/core/fib_rules.c
++++ linux-5.4.171/net/core/fib_rules.c
+@@ -256,6 +256,11 @@ static int fib_rule_match(struct fib_rul
+ 
+ 	if ((rule->mark ^ fl->flowi_mark) & rule->mark_mask)
+ 		goto out;
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	if ((rule->zextmark ^ fl->flowi_zextmark) & rule->zextmark_mask)
++		goto out;
++#endif
++
+ 
+ 	if (rule->tun_id && (rule->tun_id != fl->flowi_tun_key.tun_id))
+ 		goto out;
+@@ -424,6 +429,14 @@ static struct fib_rule *rule_find(struct
+ 		if (rule->mark_mask && r->mark_mask != rule->mark_mask)
+ 			continue;
+ 
++#ifdef CONFIG_ZYXEL_EXT_MARK
++		if (rule->zextmark && r->zextmark != rule->zextmark)
++			continue;
++
++		if (rule->zextmark_mask && r->zextmark_mask != rule->zextmark_mask)
++			continue;
++#endif
++
+ 		if (rule->tun_id && r->tun_id != rule->tun_id)
+ 			continue;
+ 
+@@ -560,7 +573,19 @@ static int fib_nl2rule(struct sk_buff *s
+ 
+ 	if (tb[FRA_FWMASK])
+ 		nlrule->mark_mask = nla_get_u32(tb[FRA_FWMASK]);
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	if (tb[FRA_ZEXTMARK]) {
++		nlrule->zextmark = nla_get_u32(tb[FRA_ZEXTMARK]);
++		if (nlrule->zextmark)
++			/* compatibility: if the mark value is non-zero all bits
++			 * are compared unless a mask is explicitly specified.
++			 */
++			nlrule->zextmark_mask = 0xFFFFFFFF;
++	}
+ 
++	if (tb[FRA_ZEXTMASK])
++		nlrule->zextmark_mask = nla_get_u32(tb[FRA_ZEXTMASK]);
++#endif
+ 	if (tb[FRA_TUN_ID])
+ 		nlrule->tun_id = nla_get_be64(tb[FRA_TUN_ID]);
+ 
+@@ -939,6 +964,10 @@ static inline size_t fib_rule_nlmsg_size
+ 			 + nla_total_size(4) /* FRA_TABLE */
+ 			 + nla_total_size(4) /* FRA_SUPPRESS_PREFIXLEN */
+ 			 + nla_total_size(4) /* FRA_SUPPRESS_IFGROUP */
++//#ifdef CONFIG_ZYXEL_EXT_MARK
++			 + nla_total_size(4) /* FRA_ZEXTMARK */
++			 + nla_total_size(4) /* FRA_ZEXTMASK */
++//#endif
+ 			 + nla_total_size(4) /* FRA_FWMARK */
+ 			 + nla_total_size(4) /* FRA_FWMASK */
+ 			 + nla_total_size_64bit(8) /* FRA_TUN_ID */
+@@ -1004,6 +1033,12 @@ static int fib_nl_fill_rule(struct sk_bu
+ 	     nla_put_u32(skb, FRA_FWMARK, rule->mark)) ||
+ 	    ((rule->mark_mask || rule->mark) &&
+ 	     nla_put_u32(skb, FRA_FWMASK, rule->mark_mask)) ||
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	    (rule->zextmark &&
++	     nla_put_u32(skb, FRA_ZEXTMARK, rule->zextmark)) ||
++	    ((rule->zextmark_mask || rule->zextmark) &&
++	     nla_put_u32(skb, FRA_ZEXTMASK, rule->zextmark_mask)) ||
++#endif
+ 	    (rule->target &&
+ 	     nla_put_u32(skb, FRA_GOTO, rule->target)) ||
+ 	    (rule->tun_id &&
+Index: linux-5.4.171/net/ipv4/fib_frontend.c
+===================================================================
+--- linux-5.4.171.orig/net/ipv4/fib_frontend.c
++++ linux-5.4.171/net/ipv4/fib_frontend.c
+@@ -305,6 +305,9 @@ __be32 fib_compute_spec_dst(struct sk_bu
+ 			.flowi4_tos = ip_hdr(skb)->tos & IPTOS_RT_MASK,
+ 			.flowi4_scope = scope,
+ 			.flowi4_mark = vmark ? skb->mark : 0,
++#ifdef CONFIG_ZYXEL_EXT_MARK
++		    .flowi4_zextmark = vmark ? skb->zextmark : 0,
++#endif
+ 		};
+ 		if (!fib_lookup(net, &fl4, &res, 0))
+ 			return fib_result_prefsrc(net, &res);
+@@ -377,6 +380,9 @@ static int __fib_validate_source(struct
+ 	no_addr = idev->ifa_list == NULL;
+ 
+ 	fl4.flowi4_mark = IN_DEV_SRC_VMARK(idev) ? skb->mark : 0;
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	fl4.flowi4_zextmark = IN_DEV_SRC_VMARK(idev) ? skb->zextmark : 0;
++#endif
+ 	if (!fib4_rules_early_flow_dissect(net, skb, &fl4, &flkeys)) {
+ 		fl4.flowi4_proto = 0;
+ 		fl4.fl4_sport = 0;
+@@ -1334,6 +1340,9 @@ static void nl_fib_lookup(struct net *ne
+ 	struct fib_result       res;
+ 	struct flowi4           fl4 = {
+ 		.flowi4_mark = frn->fl_mark,
++#ifdef CONFIG_ZYXEL_EXT_MARK
++		.flowi4_zextmark = frn->fl_zextmark,
++#endif
+ 		.daddr = frn->fl_addr,
+ 		.flowi4_tos = frn->fl_tos,
+ 		.flowi4_scope = frn->fl_scope,
+Index: linux-5.4.171/net/ipv4/inet_connection_sock.c
+===================================================================
+--- linux-5.4.171.orig/net/ipv4/inet_connection_sock.c
++++ linux-5.4.171/net/ipv4/inet_connection_sock.c
+@@ -585,6 +585,9 @@ struct dst_entry *inet_csk_route_req(con
+ 	opt = rcu_dereference(ireq->ireq_opt);
+ 
+ 	flowi4_init_output(fl4, ireq->ir_iif, ireq->ir_mark,
++#ifdef CONFIG_ZYXEL_EXT_MARK
++			0,
++#endif
+ 			   RT_CONN_FLAGS(sk), RT_SCOPE_UNIVERSE,
+ 			   sk->sk_protocol, inet_sk_flowi_flags(sk),
+ 			   (opt && opt->opt.srr) ? opt->opt.faddr : ireq->ir_rmt_addr,
+@@ -623,6 +626,9 @@ struct dst_entry *inet_csk_route_child_s
+ 	fl4 = &newinet->cork.fl.u.ip4;
+ 
+ 	flowi4_init_output(fl4, ireq->ir_iif, ireq->ir_mark,
++#ifdef CONFIG_ZYXEL_EXT_MARK
++			0,
++#endif
+ 			   RT_CONN_FLAGS(sk), RT_SCOPE_UNIVERSE,
+ 			   sk->sk_protocol, inet_sk_flowi_flags(sk),
+ 			   (opt && opt->opt.srr) ? opt->opt.faddr : ireq->ir_rmt_addr,
+Index: linux-5.4.171/net/ipv4/ipmr.c
+===================================================================
+--- linux-5.4.171.orig/net/ipv4/ipmr.c
++++ linux-5.4.171/net/ipv4/ipmr.c
+@@ -524,6 +524,9 @@ static netdev_tx_t reg_vif_xmit(struct s
+ 		.flowi4_oif	= dev->ifindex,
+ 		.flowi4_iif	= skb->skb_iif ? : LOOPBACK_IFINDEX,
+ 		.flowi4_mark	= skb->mark,
++#ifdef CONFIG_ZYXEL_EXT_MARK
++		.flowi4_zextmark = skb->zextmark,
++#endif
+ 	};
+ 	int err;
+ 
+@@ -2081,6 +2084,9 @@ static struct mr_table *ipmr_rt_fib_look
+ 			       LOOPBACK_IFINDEX :
+ 			       skb->dev->ifindex),
+ 		.flowi4_mark = skb->mark,
++#ifdef CONFIG_ZYXEL_EXT_MARK
++		.flowi4_zextmark = skb->zextmark,
++#endif
+ 	};
+ 	struct mr_table *mrt;
+ 	int err;
+Index: linux-5.4.171/net/ipv4/ip_output.c
+===================================================================
+--- linux-5.4.171.orig/net/ipv4/ip_output.c
++++ linux-5.4.171/net/ipv4/ip_output.c
+@@ -554,6 +554,9 @@ static void ip_copy_metadata(struct sk_b
+ 	to->dev = from->dev;
+ 	to->mark = from->mark;
+ 
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	to->zextmark = from->zextmark;
++#endif
+ 	skb_copy_hash(to, from);
+ 
+ #ifdef CONFIG_NET_SCHED
+@@ -1694,6 +1697,9 @@ void ip_send_unicast_reply(struct sock *
+ 
+ 	flowi4_init_output(&fl4, oif,
+ 			   IP4_REPLY_MARK(net, skb->mark) ?: sk->sk_mark,
++#ifdef CONFIG_ZYXEL_EXT_MARK
++			   IP4_REPLY_MARK(net, skb->zextmark),
++#endif
+ 			   RT_TOS(arg->tos),
+ 			   RT_SCOPE_UNIVERSE, ip_hdr(skb)->protocol,
+ 			   ip_reply_arg_flowi_flags(arg),
+Index: linux-5.4.171/net/ipv4/netfilter.c
+===================================================================
+--- linux-5.4.171.orig/net/ipv4/netfilter.c
++++ linux-5.4.171/net/ipv4/netfilter.c
+@@ -47,6 +47,9 @@ int ip_route_me_harder(struct net *net,
+ 	if (!fl4.flowi4_oif)
+ 		fl4.flowi4_oif = l3mdev_master_ifindex(dev);
+ 	fl4.flowi4_mark = skb->mark;
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	fl4.flowi4_zextmark = skb->zextmark;
++#endif /* CONFIG_ZYXEL_EXT_MARK */
+ 	fl4.flowi4_flags = flags;
+ 	rt = ip_route_output_key(net, &fl4);
+ 	if (IS_ERR(rt))
+Index: linux-5.4.171/net/ipv4/netfilter/ipt_rpfilter.c
+===================================================================
+--- linux-5.4.171.orig/net/ipv4/netfilter/ipt_rpfilter.c
++++ linux-5.4.171/net/ipv4/netfilter/ipt_rpfilter.c
+@@ -76,6 +76,9 @@ static bool rpfilter_mt(const struct sk_
+ 	flow.daddr = iph->saddr;
+ 	flow.saddr = rpfilter_get_saddr(iph->daddr);
+ 	flow.flowi4_mark = info->flags & XT_RPFILTER_VALID_MARK ? skb->mark : 0;
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	flow.flowi4_zextmark = info->flags & XT_RPFILTER_VALID_MARK ? skb->zextmark : 0;
++#endif /* CONFIG_ZYXEL_EXT_MARK */
+ 	flow.flowi4_tos = iph->tos & IPTOS_RT_MASK;
+ 	flow.flowi4_scope = RT_SCOPE_UNIVERSE;
+ 	flow.flowi4_oif = l3mdev_master_ifindex_rcu(xt_in(par));
+Index: linux-5.4.171/net/ipv4/netfilter/nf_log_ipv4.c
+===================================================================
+--- linux-5.4.171.orig/net/ipv4/netfilter/nf_log_ipv4.c
++++ linux-5.4.171/net/ipv4/netfilter/nf_log_ipv4.c
+@@ -254,6 +254,11 @@ static void dump_ipv4_packet(struct net
+ 	if (!iphoff && skb->mark)
+ 		nf_log_buf_add(m, "MARK=0x%x ", skb->mark);
+ 
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	/* Max length: 20 "ZEXTMARK=0xFFFFFFFF " */
++	if (!iphoff && skb->zextmark)
++		nf_log_buf_add(m, "ZEXTMARK=0x%x ", skb->zextmark);
++#endif
+ 	/* Proto    Max log string length */
+ 	/* IP:	    40+46+6+11+127 = 230 */
+ 	/* TCP:     10+max(25,20+30+13+9+32+11+127) = 252 */
+Index: linux-5.4.171/net/ipv4/ping.c
+===================================================================
+--- linux-5.4.171.orig/net/ipv4/ping.c
++++ linux-5.4.171/net/ipv4/ping.c
+@@ -781,7 +781,14 @@ static int ping_v4_sendmsg(struct sock *
+ 	} else if (!ipc.oif)
+ 		ipc.oif = inet->uc_index;
+ 
+-	flowi4_init_output(&fl4, ipc.oif, ipc.sockc.mark, tos,
++	flowi4_init_output(&fl4, ipc.oif, ipc.sockc.mark,
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	/* FIXME: Horace.
++	     We don't support zextmark in socket.
++	*/
++			  0,
++#endif
++			   tos,
+ 			   RT_SCOPE_UNIVERSE, sk->sk_protocol,
+ 			   inet_sk_flowi_flags(sk), faddr, saddr, 0, 0,
+ 			   sk->sk_uid);
+Index: linux-5.4.171/net/ipv4/raw.c
+===================================================================
+--- linux-5.4.171.orig/net/ipv4/raw.c
++++ linux-5.4.171/net/ipv4/raw.c
+@@ -623,7 +623,14 @@ static int raw_sendmsg(struct sock *sk,
+ 		}
+ 	}
+ 
+-	flowi4_init_output(&fl4, ipc.oif, ipc.sockc.mark, tos,
++	flowi4_init_output(&fl4, ipc.oif, ipc.sockc.mark,
++#ifdef CONFIG_ZYXEL_EXT_MARK
++/* FIXME: Horace
++    Socket don't support extension mark bit now
++*/
++			 0,
++#endif
++			   tos,
+ 			   RT_SCOPE_UNIVERSE,
+ 			   hdrincl ? IPPROTO_RAW : sk->sk_protocol,
+ 			   inet_sk_flowi_flags(sk) |
+Index: linux-5.4.171/net/ipv4/route.c
+===================================================================
+--- linux-5.4.171.orig/net/ipv4/route.c
++++ linux-5.4.171/net/ipv4/route.c
+@@ -536,7 +536,11 @@ static void __build_flow_key(const struc
+ 			     const struct sock *sk,
+ 			     const struct iphdr *iph,
+ 			     int oif, u8 tos,
+-			     u8 prot, u32 mark, int flow_flags)
++			     u8 prot, u32 mark,
++#ifdef CONFIG_ZYXEL_EXT_MARK
++				 u32 zextmark,
++#endif
++				 int flow_flags)
+ {
+ 	if (sk) {
+ 		const struct inet_sock *inet = inet_sk(sk);
+@@ -546,7 +550,11 @@ static void __build_flow_key(const struc
+ 		tos = RT_CONN_FLAGS(sk);
+ 		prot = inet->hdrincl ? IPPROTO_RAW : sk->sk_protocol;
+ 	}
+-	flowi4_init_output(fl4, oif, mark, tos,
++	flowi4_init_output(fl4, oif, mark,
++#ifdef CONFIG_ZYXEL_EXT_MARK
++			   zextmark,
++#endif
++			   tos,
+ 			   RT_SCOPE_UNIVERSE, prot,
+ 			   flow_flags,
+ 			   iph->daddr, iph->saddr, 0, 0,
+@@ -562,8 +570,12 @@ static void build_skb_flow_key(struct fl
+ 	u8 tos = RT_TOS(iph->tos);
+ 	u8 prot = iph->protocol;
+ 	u32 mark = skb->mark;
+-
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	u32 zextmark = skb->zextmark;
++	__build_flow_key(net, fl4, sk, iph, oif, tos, prot, mark, zextmark, 0);
++#else
+ 	__build_flow_key(net, fl4, sk, iph, oif, tos, prot, mark, 0);
++#endif /* CONFIG_ZYXEL_EXT_MARK */
+ }
+ 
+ static void build_sk_flow_key(struct flowi4 *fl4, const struct sock *sk)
+@@ -577,6 +589,9 @@ static void build_sk_flow_key(struct flo
+ 	if (inet_opt && inet_opt->opt.srr)
+ 		daddr = inet_opt->opt.faddr;
+ 	flowi4_init_output(fl4, sk->sk_bound_dev_if, sk->sk_mark,
++#ifdef CONFIG_ZYXEL_EXT_MARK
++			  0,
++#endif
+ 			   RT_CONN_FLAGS(sk), RT_SCOPE_UNIVERSE,
+ 			   inet->hdrincl ? IPPROTO_RAW : sk->sk_protocol,
+ 			   inet_sk_flowi_flags(sk),
+@@ -852,10 +867,16 @@ static void ip_do_redirect(struct dst_en
+ 	u8 tos = RT_TOS(iph->tos);
+ 	u8 prot = iph->protocol;
+ 	u32 mark = skb->mark;
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	u32 zextmark = skb->zextmark;
++#endif
+ 
+ 	rt = (struct rtable *) dst;
+-
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	__build_flow_key(net, &fl4, sk, iph, oif, tos, prot, mark, zextmark, 0);
++#else
+ 	__build_flow_key(net, &fl4, sk, iph, oif, tos, prot, mark, 0);
++#endif /* CONFIG_ZYXEL_EXT_MARK */
+ 	__ip_do_redirect(rt, skb, &fl4, true);
+ }
+ 
+@@ -1090,8 +1111,15 @@ void ipv4_update_pmtu(struct sk_buff *sk
+ 	struct rtable *rt;
+ 	u32 mark = IP4_REPLY_MARK(net, skb->mark);
+ 
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	u32 zextmark = IP4_REPLY_MARK(net, skb->zextmark);
++	__build_flow_key(net, &fl4, NULL, iph, oif,
++			 RT_TOS(iph->tos), protocol, mark, zextmark, 0);
++#else
+ 	__build_flow_key(net, &fl4, NULL, iph, oif,
+ 			 RT_TOS(iph->tos), protocol, mark, 0);
++#endif
++
+ 	rt = __ip_route_output_key(net, &fl4);
+ 	if (!IS_ERR(rt)) {
+ 		__ip_rt_update_pmtu(rt, &fl4, mtu);
+@@ -1106,7 +1134,14 @@ static void __ipv4_sk_update_pmtu(struct
+ 	struct flowi4 fl4;
+ 	struct rtable *rt;
+ 
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	__build_flow_key(sock_net(sk), &fl4, sk, iph, 0, 0, 0, 0, 0, 0);
++	if (!fl4.flowi4_zextmark)
++		fl4.flowi4_zextmark = IP4_REPLY_MARK(sock_net(sk), skb->zextmark);
++#else
+ 	__build_flow_key(sock_net(sk), &fl4, sk, iph, 0, 0, 0, 0, 0);
++#endif /* CONFIG_ZYXEL_EXT_MARK */
++
+ 
+ 	if (!fl4.flowi4_mark)
+ 		fl4.flowi4_mark = IP4_REPLY_MARK(sock_net(sk), skb->mark);
+@@ -1139,7 +1174,13 @@ void ipv4_sk_update_pmtu(struct sk_buff
+ 		goto out;
+ 	}
+ 
++
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	__build_flow_key(net, &fl4, sk, iph, 0, 0, 0, 0, 0, 0);
++#else
+ 	__build_flow_key(net, &fl4, sk, iph, 0, 0, 0, 0, 0);
++#endif /* CONFIG_ZYXEL_EXT_MARK */
++
+ 
+ 	rt = (struct rtable *)odst;
+ 	if (odst->obsolete && !odst->ops->check(odst, 0)) {
+@@ -1178,9 +1219,13 @@ void ipv4_redirect(struct sk_buff *skb,
+ 	const struct iphdr *iph = (const struct iphdr *) skb->data;
+ 	struct flowi4 fl4;
+ 	struct rtable *rt;
+-
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	__build_flow_key(net, &fl4, NULL, iph, oif,
++			 RT_TOS(iph->tos), protocol, 0, 0, 0);
++#else
+ 	__build_flow_key(net, &fl4, NULL, iph, oif,
+ 			 RT_TOS(iph->tos), protocol, 0, 0);
++#endif /* CONFIG_ZYXEL_EXT_MARK */
+ 	rt = __ip_route_output_key(net, &fl4);
+ 	if (!IS_ERR(rt)) {
+ 		__ip_do_redirect(rt, skb, &fl4, false);
+@@ -1195,8 +1240,11 @@ void ipv4_sk_redirect(struct sk_buff *sk
+ 	struct flowi4 fl4;
+ 	struct rtable *rt;
+ 	struct net *net = sock_net(sk);
+-
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	__build_flow_key(net, &fl4, sk, iph, 0, 0, 0, 0, 0, 0);
++#else
+ 	__build_flow_key(net, &fl4, sk, iph, 0, 0, 0, 0, 0);
++#endif
+ 	rt = __ip_route_output_key(net, &fl4);
+ 	if (!IS_ERR(rt)) {
+ 		__ip_do_redirect(rt, skb, &fl4, false);
+@@ -1296,6 +1344,9 @@ void ip_rt_get_source(u8 *addr, struct s
+ 			.flowi4_oif = rt->dst.dev->ifindex,
+ 			.flowi4_iif = skb->dev->ifindex,
+ 			.flowi4_mark = skb->mark,
++#ifdef CONFIG_ZYXEL_EXT_MARK
++			.flowi4_zextmark = skb->zextmark,
++#endif /* CONFIG_ZYXEL_EXT_MARK */
+ 		};
+ 
+ 		rcu_read_lock();
+@@ -2129,6 +2180,9 @@ static int ip_route_input_slow(struct sk
+ 	fl4.flowi4_oif = 0;
+ 	fl4.flowi4_iif = dev->ifindex;
+ 	fl4.flowi4_mark = skb->mark;
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	fl4.flowi4_zextmark = skb->zextmark;
++#endif /* CONFIG_ZYXEL_EXT_MARK */
+ 	fl4.flowi4_tos = tos;
+ 	fl4.flowi4_scope = RT_SCOPE_UNIVERSE;
+ 	fl4.flowi4_flags = 0;
+@@ -2858,6 +2912,11 @@ static int rt_fill_info(struct net *net,
+ 		if (fl4->flowi4_mark &&
+ 		    nla_put_u32(skb, RTA_MARK, fl4->flowi4_mark))
+ 			goto nla_put_failure;
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	if (fl4->flowi4_zextmark &&
++	    nla_put_u32(skb, RTA_ZEXTMARK, fl4->flowi4_zextmark))
++		goto nla_put_failure;
++#endif /* CONFIG_ZYXEL_EXT_MARK */
+ 
+ 		if (!uid_eq(fl4->flowi4_uid, INVALID_UID) &&
+ 		    nla_put_u32(skb, RTA_UID,
+@@ -3123,7 +3182,9 @@ static int inet_rtm_getroute(struct sk_b
+ 	u32 iif;
+ 	int err;
+ 	int mark;
+-
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	u32 zextmark;
++#endif
+ 	err = inet_rtm_valid_getroute_req(in_skb, nlh, tb, extack);
+ 	if (err < 0)
+ 		return err;
+@@ -3133,6 +3194,9 @@ static int inet_rtm_getroute(struct sk_b
+ 	dst = tb[RTA_DST] ? nla_get_in_addr(tb[RTA_DST]) : 0;
+ 	iif = tb[RTA_IIF] ? nla_get_u32(tb[RTA_IIF]) : 0;
+ 	mark = tb[RTA_MARK] ? nla_get_u32(tb[RTA_MARK]) : 0;
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	zextmark = tb[RTA_ZEXTMARK] ? nla_get_u32(tb[RTA_ZEXTMARK]) : 0;
++#endif
+ 	if (tb[RTA_UID])
+ 		uid = make_kuid(current_user_ns(), nla_get_u32(tb[RTA_UID]));
+ 	else
+@@ -3181,6 +3245,9 @@ static int inet_rtm_getroute(struct sk_b
+ 		fl4.flowi4_iif = iif; /* for rt_fill_info */
+ 		skb->dev	= dev;
+ 		skb->mark	= mark;
++#ifdef CONFIG_ZYXEL_EXT_MARK
++		skb->zextmark = zextmark;
++#endif
+ 		err = ip_route_input_rcu(skb, dst, src,
+ 					 rtm->rtm_tos & IPTOS_RT_MASK, dev,
+ 					 &res);
+Index: linux-5.4.171/net/ipv4/syncookies.c
+===================================================================
+--- linux-5.4.171.orig/net/ipv4/syncookies.c
++++ linux-5.4.171/net/ipv4/syncookies.c
+@@ -373,6 +373,9 @@ struct sock *cookie_v4_check(struct sock
+ 	 * no easy way to do this.
+ 	 */
+ 	flowi4_init_output(&fl4, ireq->ir_iif, ireq->ir_mark,
++#ifdef CONFIG_ZYXEL_EXT_MARK
++			 0,
++#endif
+ 			   RT_CONN_FLAGS(sk), RT_SCOPE_UNIVERSE, IPPROTO_TCP,
+ 			   inet_sk_flowi_flags(sk),
+ 			   opt->srr ? opt->faddr : ireq->ir_rmt_addr,
+Index: linux-5.4.171/net/ipv4/udp.c
+===================================================================
+--- linux-5.4.171.orig/net/ipv4/udp.c
++++ linux-5.4.171/net/ipv4/udp.c
+@@ -1138,7 +1138,11 @@ int udp_sendmsg(struct sock *sk, struct
+ 
+ 		fl4 = &fl4_stack;
+ 
+-		flowi4_init_output(fl4, ipc.oif, ipc.sockc.mark, tos,
++		flowi4_init_output(fl4, ipc.oif, ipc.sockc.mark,
++#ifdef CONFIG_ZYXEL_EXT_MARK
++			  0,
++#endif
++				   tos,
+ 				   RT_SCOPE_UNIVERSE, sk->sk_protocol,
+ 				   flow_flags,
+ 				   faddr, saddr, dport, inet->inet_sport,
+Index: linux-5.4.171/net/ipv6/ip6mr.c
+===================================================================
+--- linux-5.4.171.orig/net/ipv6/ip6mr.c
++++ linux-5.4.171/net/ipv6/ip6mr.c
+@@ -526,6 +526,9 @@ static int pim6_rcv(struct sk_buff *skb)
+ 	struct flowi6 fl6 = {
+ 		.flowi6_iif	= skb->dev->ifindex,
+ 		.flowi6_mark	= skb->mark,
++#ifdef CONFIG_ZYXEL_EXT_MARK
++		.flowi6_zextmark = skb->zextmark,
++#endif
+ 	};
+ 	int reg_vif_num;
+ 
+@@ -596,6 +599,9 @@ static netdev_tx_t reg_vif_xmit(struct s
+ 		.flowi6_oif	= dev->ifindex,
+ 		.flowi6_iif	= skb->skb_iif ? : LOOPBACK_IFINDEX,
+ 		.flowi6_mark	= skb->mark,
++#ifdef CONFIG_ZYXEL_EXT_MARK
++		.flowi6_zextmark = skb->zextmark,
++#endif
+ 	};
+ 
+ 	if (!pskb_inet_may_pull(skb))
+@@ -1610,6 +1616,9 @@ bool mroute6_is_socket(struct net *net,
+ 		.flowi6_iif	= skb->skb_iif ? : LOOPBACK_IFINDEX,
+ 		.flowi6_oif	= skb->dev->ifindex,
+ 		.flowi6_mark	= skb->mark,
++#ifdef CONFIG_ZYXEL_EXT_MARK
++		.flowi6_zextmark = skb->zextmark,
++#endif
+ 	};
+ 
+ 	if (ip6mr_fib_lookup(net, &fl6, &mrt) < 0)
+@@ -2190,6 +2199,9 @@ int ip6_mr_input(struct sk_buff *skb)
+ 	struct flowi6 fl6 = {
+ 		.flowi6_iif	= skb->dev->ifindex,
+ 		.flowi6_mark	= skb->mark,
++#ifdef CONFIG_ZYXEL_EXT_MARK
++		.flowi6_zextmark = skb->zextmark,
++#endif
+ 	};
+ 	int err;
+ 	struct net_device *dev;
+Index: linux-5.4.171/net/ipv6/netfilter.c
+===================================================================
+--- linux-5.4.171.orig/net/ipv6/netfilter.c
++++ linux-5.4.171/net/ipv6/netfilter.c
+@@ -32,6 +32,9 @@ int ip6_route_me_harder(struct net *net,
+ 		.flowi6_oif = sk && sk->sk_bound_dev_if ? sk->sk_bound_dev_if :
+ 			strict ? skb_dst(skb)->dev->ifindex : 0,
+ 		.flowi6_mark = skb->mark,
++#ifdef CONFIG_ZYXEL_EXT_MARK
++		.flowi6_zextmark = skb->zextmark,
++#endif
+ 		.flowi6_uid = sock_net_uid(net, sk),
+ 		.daddr = iph->daddr,
+ 		.saddr = iph->saddr,
+@@ -83,7 +86,11 @@ static int nf_ip6_reroute(struct sk_buff
+ 		const struct ipv6hdr *iph = ipv6_hdr(skb);
+ 		if (!ipv6_addr_equal(&iph->daddr, &rt_info->daddr) ||
+ 		    !ipv6_addr_equal(&iph->saddr, &rt_info->saddr) ||
+-		    skb->mark != rt_info->mark)
++		    skb->mark != rt_info->mark
++#ifdef CONFIG_ZYXEL_EXT_MARK
++			|| skb->zextmark != rt_info->zextmark
++#endif
++		    )
+ 			return ip6_route_me_harder(entry->state.net, entry->state.sk, skb);
+ 	}
+ 	return 0;
+Index: linux-5.4.171/net/ipv6/netfilter/nf_log_ipv6.c
+===================================================================
+--- linux-5.4.171.orig/net/ipv6/netfilter/nf_log_ipv6.c
++++ linux-5.4.171/net/ipv6/netfilter/nf_log_ipv6.c
+@@ -280,6 +280,12 @@ static void dump_ipv6_packet(struct net
+ 	/* Max length: 16 "MARK=0xFFFFFFFF " */
+ 	if (recurse && skb->mark)
+ 		nf_log_buf_add(m, "MARK=0x%x ", skb->mark);
++
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	/* Max length: 20 "ZEXTMARK=0xFFFFFFFF " */
++	if (recurse && skb->zextmark)
++		nf_log_buf_add(m, "ZEXTMARK=0x%x ", skb->zextmark);
++#endif
+ }
+ 
+ static void dump_ipv6_mac_header(struct nf_log_buf *m,
+Index: linux-5.4.171/net/ipv6/route.c
+===================================================================
+--- linux-5.4.171.orig/net/ipv6/route.c
++++ linux-5.4.171/net/ipv6/route.c
+@@ -2486,6 +2486,9 @@ void ip6_route_input(struct sk_buff *skb
+ 		.saddr = iph->saddr,
+ 		.flowlabel = ip6_flowinfo(iph),
+ 		.flowi6_mark = skb->mark,
++#ifdef CONFIG_ZYXEL_EXT_MARK
++		.flowi6_zextmark = skb->zextmark,
++#endif
+ 		.flowi6_proto = iph->nexthdr,
+ 	};
+ 	struct flow_keys *flkeys = NULL, _flkeys;
+Index: linux-5.4.171/net/ipv6/sit.c
+===================================================================
+--- linux-5.4.171.orig/net/ipv6/sit.c
++++ linux-5.4.171/net/ipv6/sit.c
+@@ -900,6 +900,9 @@ static netdev_tx_t ipip6_tunnel_xmit(str
+ 	}
+ 
+ 	flowi4_init_output(&fl4, tunnel->parms.link, tunnel->fwmark,
++#ifdef CONFIG_ZYXEL_EXT_MARK
++			 0,
++#endif
+ 			   RT_TOS(tos), RT_SCOPE_UNIVERSE, IPPROTO_IPV6,
+ 			   0, dst, tiph->saddr, 0, 0,
+ 			   sock_net_uid(tunnel->net, NULL));
+Index: linux-5.4.171/net/netfilter/nf_conntrack_core.c
+===================================================================
+--- linux-5.4.171.orig/net/netfilter/nf_conntrack_core.c
++++ linux-5.4.171/net/netfilter/nf_conntrack_core.c
+@@ -1693,6 +1693,9 @@ init_conntrack(struct net *net, struct n
+ #ifdef CONFIG_NF_CONNTRACK_MARK
+ 			ct->mark = exp->master->mark;
+ #endif
++#ifdef CONFIG_ZYXEL_EXT_MARK
++			ct->zextmark = exp->master->zextmark; // 20180621 jessy zyxel
++#endif
+ #ifdef CONFIG_NF_CONNTRACK_SECMARK
+ 			ct->secmark = exp->master->secmark;
+ #endif
+Index: linux-5.4.171/net/netfilter/nf_conntrack_netlink.c
+===================================================================
+--- linux-5.4.171.orig/net/netfilter/nf_conntrack_netlink.c
++++ linux-5.4.171/net/netfilter/nf_conntrack_netlink.c
+@@ -317,6 +317,9 @@ nla_put_failure:
+ #ifdef CONFIG_NF_CONNTRACK_MARK
+ static int ctnetlink_dump_mark(struct sk_buff *skb, const struct nf_conn *ct)
+ {
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	nla_put_be32(skb, CTA_ZEXTMARK, htonl(ct->zextmark));// 20180621 jessy zyxel
++#endif
+ 	if (nla_put_be32(skb, CTA_MARK, htonl(ct->mark)))
+ 		goto nla_put_failure;
+ 	return 0;
+@@ -670,6 +673,9 @@ static size_t ctnetlink_nlmsg_size(const
+ #endif
+ #ifdef CONFIG_NF_CONNTRACK_MARK
+ 	       + nla_total_size(sizeof(u_int32_t)) /* CTA_MARK */
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	       + nla_total_size(sizeof(u_int32_t)) /* CTA_ZEXTMARK 20180621 jessy zyxel*/
++#endif
+ #endif
+ #ifdef CONFIG_NF_CONNTRACK_ZONES
+ 	       + nla_total_size(sizeof(u_int16_t)) /* CTA_ZONE|CTA_TUPLE_ZONE */
+@@ -795,7 +801,11 @@ ctnetlink_conntrack_event(unsigned int e
+ 	}
+ 
+ #ifdef CONFIG_NF_CONNTRACK_MARK
+-	if ((events & (1 << IPCT_MARK) || ct->mark)
++#ifndef CONFIG_ZYXEL_EXT_MARK
++    if ((events & (1 << IPCT_MARK) || ct->mark)
++#else
++    if ((events & (1 << IPCT_MARK) || ct->mark || ct->zextmark) /* jessy 20180621 zyxel*/
++#endif
+ 	    && ctnetlink_dump_mark(skb, ct) < 0)
+ 		goto nla_put_failure;
+ #endif
+@@ -833,6 +843,12 @@ struct ctnetlink_filter {
+ 		u_int32_t val;
+ 		u_int32_t mask;
+ 	} mark;
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	struct { // 20180621 jessy zyxel
++		u_int32_t val;
++		u_int32_t mask;
++	} zextmark;
++#endif
+ };
+ 
+ static struct ctnetlink_filter *
+@@ -856,6 +872,12 @@ ctnetlink_alloc_filter(const struct nlat
+ 		filter->mark.val = ntohl(nla_get_be32(cda[CTA_MARK]));
+ 		filter->mark.mask = ntohl(nla_get_be32(cda[CTA_MARK_MASK]));
+ 	}
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	if (cda[CTA_ZEXTMARK]&& cda[CTA_ZEXTMARK_MASK]) {
++		filter->zextmark.val = ntohl(nla_get_be32(cda[CTA_ZEXTMARK]));
++		filter->zextmark.mask = ntohl(nla_get_be32(cda[CTA_ZEXTMARK_MASK]));
++	}
++#endif
+ #endif
+ 	return filter;
+ }
+@@ -867,7 +889,11 @@ static int ctnetlink_start(struct netlin
+ 	struct nfgenmsg *nfmsg = nlmsg_data(cb->nlh);
+ 	u8 family = nfmsg->nfgen_family;
+ 
++#ifndef CONFIG_ZYXEL_EXT_MARK
+ 	if (family || (cda[CTA_MARK] && cda[CTA_MARK_MASK])) {
++#else
++	if (family || (cda[CTA_MARK] && cda[CTA_MARK_MASK]) || (cda[CTA_ZEXTMARK] && cda[CTA_ZEXTMARK_MASK])) {  // 20180620 jessy zyxel
++#endif
+ 		filter = ctnetlink_alloc_filter(cda, family);
+ 		if (IS_ERR(filter))
+ 			return PTR_ERR(filter);
+@@ -894,6 +920,11 @@ static int ctnetlink_filter_match(struct
+ #ifdef CONFIG_NF_CONNTRACK_MARK
+ 	if ((ct->mark & filter->mark.mask) != filter->mark.val)
+ 		goto ignore_entry;
++#ifdef CONFIG_ZYXEL_EXT_MARK			// 20180621 jessy zyxel
++	if ((ct->zextmark & filter->zextmark.mask) != filter->zextmark.val ) {
++		goto ignore_entry;
++	}
++#endif
+ #endif
+ 
+ out:
+@@ -1221,6 +1252,10 @@ static const struct nla_policy ct_nla_po
+ 	[CTA_NAT_SEQ_ADJ_REPLY] = { .type = NLA_NESTED },
+ 	[CTA_ZONE]		= { .type = NLA_U16 },
+ 	[CTA_MARK_MASK]		= { .type = NLA_U32 },
++//#ifdef CONFIG_ZYXEL_EXT_MARK
++	[CTA_ZEXTMARK]		= { .type = NLA_U32 }, // 20180620 jessy zyxel
++	[CTA_ZEXTMARK_MASK]		= { .type = NLA_U32 }, // 20180620 jessy zyxel
++//#endif
+ 	[CTA_LABELS]		= { .type = NLA_BINARY,
+ 				    .len = NF_CT_LABELS_MAX_SIZE },
+ 	[CTA_LABELS_MASK]	= { .type = NLA_BINARY,
+@@ -1241,7 +1276,11 @@ static int ctnetlink_flush_conntrack(str
+ {
+ 	struct ctnetlink_filter *filter = NULL;
+ 
++#ifndef CONFIG_ZYXEL_EXT_MARK
+ 	if (family || (cda[CTA_MARK] && cda[CTA_MARK_MASK])) {
++#else
++	if (family || (cda[CTA_MARK] && cda[CTA_MARK_MASK]) || (cda[CTA_ZEXTMARK] && cda[CTA_ZEXTMARK_MASK])) {  // 20180620 jessy zyxel
++#endif
+ 		filter = ctnetlink_alloc_filter(cda, family);
+ 		if (IS_ERR(filter))
+ 			return PTR_ERR(filter);
+@@ -1715,6 +1754,17 @@ static void ctnetlink_change_mark(struct
+ 	newmark = (ct->mark & mask) ^ mark;
+ 	if (newmark != ct->mark)
+ 		ct->mark = newmark;
++
++#if defined(CONFIG_ZYXEL_EXT_MARK)
++	if (cda[CTA_ZEXTMARK_MASK])
++		mask = ~ntohl(nla_get_be32(cda[CTA_ZEXTMARK_MASK]));
++
++	mark = ntohl(nla_get_be32(cda[CTA_ZEXTMARK]));
++	newmark = (ct->zextmark & mask) ^ mark;
++	if (newmark != ct->zextmark)
++		ct->zextmark = newmark;
++#endif
++
+ }
+ #endif
+ 
+@@ -2393,6 +2443,9 @@ ctnetlink_glue_build_size(const struct n
+ #ifdef CONFIG_NF_CONNTRACK_MARK
+ 	       + nla_total_size(sizeof(u_int32_t)) /* CTA_MARK */
+ #endif
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	       + nla_total_size(sizeof(u_int32_t)) /* CTA_ZEXTMARK */
++#endif
+ #ifdef CONFIG_NF_CONNTRACK_ZONES
+ 	       + nla_total_size(sizeof(u_int16_t)) /* CTA_ZONE|CTA_TUPLE_ZONE */
+ #endif
+@@ -2467,7 +2520,11 @@ static int __ctnetlink_glue_build(struct
+ 		goto nla_put_failure;
+ 
+ #ifdef CONFIG_NF_CONNTRACK_MARK
++#ifndef CONFIG_ZYXEL_EXT_MARK
+ 	if (ct->mark && ctnetlink_dump_mark(skb, ct) < 0)
++#else
++	if ( ( ct->mark || ct->zextmark ) && ctnetlink_dump_mark(skb, ct) < 0)
++#endif
+ 		goto nla_put_failure;
+ #endif
+ 	if (ctnetlink_dump_labels(skb, ct) < 0)
+Index: linux-5.4.171/net/netfilter/nf_conntrack_standalone.c
+===================================================================
+--- linux-5.4.171.orig/net/netfilter/nf_conntrack_standalone.c
++++ linux-5.4.171/net/netfilter/nf_conntrack_standalone.c
+@@ -372,6 +372,9 @@ static int ct_seq_show(struct seq_file *
+ 
+ #if defined(CONFIG_NF_CONNTRACK_MARK)
+ 	seq_printf(s, "mark=%u ", ct->mark);
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	seq_printf(s, "zextmark=%u ", ct->zextmark); // 20180621 jessy zyxel
++#endif
+ #endif
+ 
+ 	ct_show_secctx(s, ct);
+Index: linux-5.4.171/net/netfilter/nfnetlink_log.c
+===================================================================
+--- linux-5.4.171.orig/net/netfilter/nfnetlink_log.c
++++ linux-5.4.171/net/netfilter/nfnetlink_log.c
+@@ -555,6 +555,11 @@ __build_packet_message(struct nfnl_log_n
+ 	if (skb->mark &&
+ 	    nla_put_be32(inst->skb, NFULA_MARK, htonl(skb->mark)))
+ 		goto nla_put_failure;
++#if defined(CONFIG_ZYXEL_EXT_MARK)//jessy
++	if (skb->zextmark &&
++		nla_put_be32(inst->skb, NFULA_ZEXTMARK, htonl(skb->zextmark)))
++		goto nla_put_failure;
++#endif
+ 
+ 	if (indev && skb->dev &&
+ 	    skb_mac_header_was_set(skb) &&
+@@ -715,6 +720,9 @@ nfulnl_log_packet(struct net *net,
+ 		+ nla_total_size(sizeof(u_int32_t))	/* ifindex */
+ #endif
+ 		+ nla_total_size(sizeof(u_int32_t))	/* mark */
++//#ifdef CONFIG_ZYXEL_EXT_MARK
++		+ nla_total_size(sizeof(u_int32_t))	/* zextmark */
++//#endif
+ 		+ nla_total_size(sizeof(u_int32_t))	/* uid */
+ 		+ nla_total_size(sizeof(u_int32_t))	/* gid */
+ 		+ nla_total_size(plen)			/* prefix */
+Index: linux-5.4.171/net/netfilter/nfnetlink_queue.c
+===================================================================
+--- linux-5.4.171.orig/net/netfilter/nfnetlink_queue.c
++++ linux-5.4.171/net/netfilter/nfnetlink_queue.c
+@@ -561,6 +561,10 @@ nfqnl_build_packet_message(struct net *n
+ 	    nla_put_be32(skb, NFQA_MARK, htonl(entskb->mark)))
+ 		goto nla_put_failure;
+ 
++#ifdef CONFIG_ZYXEL_EXT_MARK
++	if (entskb->zextmark)
++		nla_put_be32(skb, NFQA_ZEXTMARK, htonl(entskb->zextmark));
++#endif
+ 	if (indev && entskb->dev &&
+ 	    skb_mac_header_was_set(entskb) &&
+ 	    skb_mac_header_len(entskb) != 0) {
+@@ -1010,6 +1014,9 @@ static const struct nla_policy nfqa_vlan
+ static const struct nla_policy nfqa_verdict_policy[NFQA_MAX+1] = {
+ 	[NFQA_VERDICT_HDR]	= { .len = sizeof(struct nfqnl_msg_verdict_hdr) },
+ 	[NFQA_MARK]		= { .type = NLA_U32 },
++//#ifdef CONFIG_ZYXEL_EXT_MARK
++	[NFQA_ZEXTMARK]		= { .type = NLA_U32 },
++//#endif
+ 	[NFQA_PAYLOAD]		= { .type = NLA_UNSPEC },
+ 	[NFQA_CT]		= { .type = NLA_UNSPEC },
+ 	[NFQA_EXP]		= { .type = NLA_UNSPEC },
+@@ -1019,6 +1026,9 @@ static const struct nla_policy nfqa_verd
+ static const struct nla_policy nfqa_verdict_batch_policy[NFQA_MAX+1] = {
+ 	[NFQA_VERDICT_HDR]	= { .len = sizeof(struct nfqnl_msg_verdict_hdr) },
+ 	[NFQA_MARK]		= { .type = NLA_U32 },
++//#ifdef CONFIG_ZYXEL_EXT_MARK
++	[NFQA_ZEXTMARK]		= { .type = NLA_U32 },
++//#endif
+ };
+ 
+ static struct nfqnl_instance *
+@@ -1102,6 +1112,10 @@ static int nfqnl_recv_verdict_batch(stru
+ 		if (nfqa[NFQA_MARK])
+ 			entry->skb->mark = ntohl(nla_get_be32(nfqa[NFQA_MARK]));
+ 
++#if defined(CONFIG_ZYXEL_EXT_MARK)//jessy
++		if (nfqa[NFQA_ZEXTMARK])
++			entry->skb->zextmark = ntohl(nla_get_be32(nfqa[NFQA_ZEXTMARK]));
++#endif
+ 		nfqnl_reinject(entry, verdict);
+ 	}
+ 	return 0;
+@@ -1226,7 +1240,10 @@ static int nfqnl_recv_verdict(struct net
+ 
+ 	if (nfqa[NFQA_MARK])
+ 		entry->skb->mark = ntohl(nla_get_be32(nfqa[NFQA_MARK]));
+-
++#if defined(CONFIG_ZYXEL_EXT_MARK)//jessy
++	if (nfqa[NFQA_ZEXTMARK])
++			entry->skb->zextmark = ntohl(nla_get_be32(nfqa[NFQA_ZEXTMARK]));
++#endif
+ 	nfqnl_reinject(entry, verdict);
+ 	return 0;
+ }
+Index: linux-5.4.171/net/netfilter/nf_queue.c
+===================================================================
+--- linux-5.4.171.orig/net/netfilter/nf_queue.c
++++ linux-5.4.171/net/netfilter/nf_queue.c
+@@ -152,6 +152,9 @@ static void nf_ip6_saveroute(const struc
+ 		rt_info->daddr = iph->daddr;
+ 		rt_info->saddr = iph->saddr;
+ 		rt_info->mark = skb->mark;
++#ifdef CONFIG_ZYXEL_EXT_MARK
++		rt_info->zextmark = skb->zextmark;
++#endif
+ 	}
+ }
+ 
+Index: linux-5.4.171/include/net/route.h
+===================================================================
+--- linux-5.4.171.orig/include/net/route.h
++++ linux-5.4.171/include/net/route.h
+@@ -154,7 +154,11 @@ static inline struct rtable *ip_route_ou
+ 						   __be16 dport, __be16 sport,
+ 						   __u8 proto, __u8 tos, int oif)
+ {
+-	flowi4_init_output(fl4, oif, sk ? sk->sk_mark : 0, tos,
++	flowi4_init_output(fl4, oif, sk ? sk->sk_mark : 0,
++#ifdef CONFIG_ZYXEL_EXT_MARK
++			   0,
++#endif
++			   tos,
+ 			   RT_SCOPE_UNIVERSE, proto,
+ 			   sk ? inet_sk_flowi_flags(sk) : 0,
+ 			   daddr, saddr, dport, sport, sock_net_uid(net, sk));
+@@ -288,7 +292,11 @@ static inline void ip_route_connect_init
+ 	if (inet_sk(sk)->transparent)
+ 		flow_flags |= FLOWI_FLAG_ANYSRC;
+ 
+-	flowi4_init_output(fl4, oif, sk->sk_mark, tos, RT_SCOPE_UNIVERSE,
++	flowi4_init_output(fl4, oif, sk->sk_mark,
++#ifdef CONFIG_ZYXEL_EXT_MARK
++				  0,
++#endif
++	tos, RT_SCOPE_UNIVERSE,
+ 			   protocol, flow_flags, dst, src, dport, sport,
+ 			   sk->sk_uid);
+ }
+Index: linux-5.4.171/Kconfig.zyxel
+===================================================================
+--- linux-5.4.171.orig/Kconfig.zyxel
++++ linux-5.4.171/Kconfig.zyxel
+@@ -10,3 +10,48 @@ config ZYXEL_NF_GUEST_AP_SESSION_CTL
+ 
+ config ZYXEL_NF_SESSION_RSV
+ 	bool "ZyXEL feature - netfilter session reserve"
++
++config ZYXEL_EXT_MARK
++	bool "Support Extension Mark"
++	default n
++
++config NETFILTER_XT_CONNZEXTMARK
++	tristate 'ctmark target and match support'
++	depends on NF_CONNTRACK
++	depends on NETFILTER_ADVANCED
++	select NF_CONNTRACK_MARK
++	---help---
++	This option adds the "SBGCONNMARK" target and "sbgconnmark" match.
++
++	Netfilter allows you to store a mark value per connection (a.k.a.
++	ctmark), similarly to the packet mark (nfmark). Using this
++	target and match, you can set and match on this mark.
++
++config NETFILTER_XT_ZEXTMARK
++	tristate '"zextmark" match support'
++	depends on NETFILTER_ADVANCED
++	---help---
++	  SBG private mark in skb
++
++	  To compile it as a module, choose M here.  If unsure, say N.
++
++
++config BRIDGE_EBT_ZEXTMARK
++	tristate "ebt: zextmark filter support"
++	help
++	  This option adds the zextmark match, which allows matching frames based on
++	  the 'nfmark' value in the frame. This can be set by the zextmark target.
++	  This value is the same as the one used in the iptables zextmark match and
++	  target.
++
++	  To compile it as a module, choose M here.  If unsure, say N.
++
++config BRIDGE_EBT_ZEXTMARK_T
++	tristate "ebt: zextmark target support"
++	help
++	  This option adds the zextmark target, which allows marking frames by
++	  setting the 'nfmark' value in the frame.
++	  This value is the same as the one used in the iptables zextmark match and
++	  target.
++
++	  To compile it as a module, choose M here.  If unsure, say N.
+Index: linux-5.4.171/include/uapi/linux/netfilter/xt_mark.h
+===================================================================
+--- linux-5.4.171.orig/include/uapi/linux/netfilter/xt_mark.h
++++ linux-5.4.171/include/uapi/linux/netfilter/xt_mark.h
+@@ -4,8 +4,21 @@
+ 
+ #include <linux/types.h>
+ 
++/* Version 1 */
++#if 1 /* ZyXEL QoS, John (porting from MSTC) */
++enum {
++        XT_MARK_SET=0,
++        XT_MARK_AND,
++        XT_MARK_OR,
++        XT_MARK_VTAG_SET
++};
++#endif
++
+ struct xt_mark_tginfo2 {
+ 	__u32 mark, mask;
++#if 1 /* ZyXEL QoS, John */
++        __u8 mode;
++#endif
+ };
+ 
+ struct xt_mark_mtinfo1 {

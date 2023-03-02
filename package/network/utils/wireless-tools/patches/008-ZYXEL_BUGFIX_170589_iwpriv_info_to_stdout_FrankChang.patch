@@ -1,0 +1,48 @@
+diff -ruN b/iwpriv.c c/iwpriv.c
+--- b/iwpriv.c	2022-07-22 10:46:27.208910274 +0800
++++ c/iwpriv.c	2022-07-26 13:16:36.956875190 +0800
+@@ -920,6 +920,25 @@
+ {
+   int skfd;		/* generic raw socket desc.	*/
+   int goterr = 0;
++  char filename[128];
++  int ret;
++  FILE *fp;
++  char	buf[256];
++
++  if(argv[3] != NULL)
++  {
++	if((!strcmp(argv[3],"stainfo")) || (!strcmp(argv[3],"stacountinfo")) || (!strcmp(argv[3],"MibBucket")) )
++	{
++		memset(filename , 0 , sizeof(filename));
++		snprintf(filename, 128, "/tmp/iwpriv_%s", argv[3]);
++		ret = remove(filename);
++	}
++	else if(strstr(argv[3],"set_enable_nf")!= NULL)
++	{
++		// system("dmesg -c > /dev/null");
++	}
++  }
++
+ 
+   /* Create a channel to the NET kernel. */
+   if((skfd = iw_sockets_open()) < 0)
+@@ -973,5 +992,18 @@
+   /* Close the socket. */
+   iw_sockets_close(skfd);
+ 
++  if(argv[3] != NULL)
++  {
++	if((!strcmp(argv[3],"stainfo")) || (!strcmp(argv[3],"stacountinfo")) || (!strcmp(argv[3],"MibBucket")) )
++	{
++		if((fp=fopen(filename,"r"))!=NULL){
++			while(fgets(buf,255,fp)){
++				printf("%s",buf);
++			}
++			fclose(fp);
++		}
++	}
++  }
++
+   return(goterr);
+ }

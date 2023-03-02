@@ -1,0 +1,30 @@
+Index: pure-ftpd-1.0.30/src/ftp_parser.c
+===================================================================
+--- pure-ftpd-1.0.30.orig/src/ftp_parser.c
++++ pure-ftpd-1.0.30/src/ftp_parser.c
+@@ -364,6 +364,11 @@ void parser(void)
+             dopass(arg);
+ #endif
+         } else if (!strcmp(cmd, "quit")) {
++#ifdef ZYXEL_TT_CUSTOMIZATION
++			char hostip[64] = {0};
++			getnameinfo((struct sockaddr *) &peer, STORAGE_LEN(peer), hostip, sizeof hostip, NULL, (size_t) 0U, NI_NUMERICHOST);
++        	syslog(LOG_INFO, "Account: User '%s' logout from the host(%s) by ftp.",account,hostip);
++#endif
+             addreply(221, MSG_GOODBYE,
+                      (unsigned long long) ((uploaded + 1023ULL) / 1024ULL),
+                      (unsigned long long) ((downloaded + 1023ULL) / 1024ULL));
+Index: pure-ftpd-1.0.30/src/ftpd.c
+===================================================================
+--- pure-ftpd-1.0.30.orig/src/ftpd.c
++++ pure-ftpd-1.0.30/src/ftpd.c
+@@ -2455,6 +2455,9 @@ void dopass(char *password)
+ 		}
+ #endif	/*_MSTC_, Linda, CPE User Definitions and Rights_END.*/
+     reset_authorize_fail_cnt(cur_user_idx);
++#ifdef ZYXEL_TT_CUSTOMIZATION
++	syslog(LOG_INFO, "Account: User '%s' login from the host(%s) by ftp.",account,hostip);
++#endif
+ #ifdef PER_USER_LIMITS
+     if (per_user_max > 0U && ftpwho_read_count(account) >= per_user_max) {
+         addreply(421, MSG_PERUSER_MAX, (unsigned long) per_user_max);

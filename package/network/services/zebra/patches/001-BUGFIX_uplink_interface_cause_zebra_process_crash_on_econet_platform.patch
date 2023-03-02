@@ -1,0 +1,13 @@
+Index: zebra-0.95a/zebra/rt_netlink.c
+===================================================================
+--- zebra-0.95a.orig/zebra/rt_netlink.c
++++ zebra-0.95a/zebra/rt_netlink.c
+@@ -770,7 +770,7 @@ netlink_link_change (struct sockaddr_nl
+   name = (char *)RTA_DATA(tb[IFLA_IFNAME]);
+ 
+   /*Skip ra0~ra3 in Econet PMG Project, because WIFI interfaces causes zebra process crash and WIFI does not need Routing RIP*/
+-  if (strstr(name,"ra") != NULL)
++  if ((strstr(name,"ra") != NULL) || (strstr(name,"apcli") != NULL))
+ 	  return 0;
+ 
+   /* Add interface. */

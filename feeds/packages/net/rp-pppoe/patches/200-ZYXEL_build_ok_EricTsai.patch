@@ -1,0 +1,148 @@
+Index: rp-pppoe-3.14/src/configure
+===================================================================
+--- rp-pppoe-3.14.orig/src/configure
++++ rp-pppoe-3.14/src/configure
+@@ -3720,6 +3720,7 @@ do :
+ #include<net/ethernet.h>
+ #include<linux/if.h>
+ #include<linux/in.h>
++#include<linux/in6.h>
+ 
+ "
+ if test "x$ac_cv_header_linux_if_pppox_h" = xyes; then :
+Index: rp-pppoe-3.14/src/if.c
+===================================================================
+--- rp-pppoe-3.14.orig/src/if.c
++++ rp-pppoe-3.14/src/if.c
+@@ -532,12 +532,18 @@ openInterface(char const *ifname, UINT16
+ int
+ sendPacket(PPPoEConnection *conn, int sock, PPPoEPacket *pkt, int size)
+ {
++    int foelen = sizeof(struct SkbFoeInfo_Ppp);
+ #if defined(USE_BPF)
+     if (write(sock, pkt, size) < 0) {
+ 	sysErr("write (sendPacket)");
+ 	return -1;
+     }
+ #elif defined(HAVE_STRUCT_SOCKADDR_LL)
++    if (setsockopt(sock, SOL_PACKET, PACKET_SKB_FOE_INFO, &skbfoeinfo, &foelen)) {
++        /* dbg_info */
++        //tcdbg_printf("%s,getsockopt error\n", __FUNCTION__);
++    }
++
+     if (send(sock, pkt, size, 0) < 0 && (errno != ENOBUFS)) {
+ 	sysErr("send (sendPacket)");
+ 	return -1;
+@@ -587,6 +593,12 @@ sendPacket(PPPoEConnection *conn, int so
+ 	rp_fatal("relay and server not supported on Linux 2.0 kernels");
+     }
+     strcpy(sa.sa_data, conn->ifName);
++
++    if (setsockopt(sock, SOL_PACKET, PACKET_SKB_FOE_INFO, &skbfoeinfo, &foelen)) {
++        /* dbg_info */
++        //tcdbg_printf("%s,getsockopt error\n", __FUNCTION__);
++    }
++
+     if (sendto(sock, pkt, size, 0, &sa, sizeof(sa)) < 0) {
+ 	sysErr("sendto (sendPacket)");
+ 	return -1;
+Index: rp-pppoe-3.14/src/pppoe.h
+===================================================================
+--- rp-pppoe-3.14.orig/src/pppoe.h
++++ rp-pppoe-3.14/src/pppoe.h
+@@ -20,6 +20,20 @@
+ 
+ extern int IsSetID;
+ 
++#ifndef TCSUPPORT_3_18_21_KERNEL
++#define PACKET_SKB_FOE_INFO 18
++#else
++#define PACKET_SKB_FOE_INFO 21
++#endif
++
++struct SkbFoeInfo_Ppp{
++    unsigned short ppe_magic;
++    unsigned short ppe_foe_entry;
++    unsigned char ppe_ai;
++};
++struct SkbFoeInfo_Ppp skbfoeinfo;
++
++
+ #if defined(HAVE_NETPACKET_PACKET_H) || defined(HAVE_LINUX_IF_PACKET_H)
+ #define _POSIX_SOURCE 1 /* For sigaction defines */
+ #endif
+Index: rp-pppoe-3.14/src/relay.c
+===================================================================
+--- rp-pppoe-3.14.orig/src/relay.c
++++ rp-pppoe-3.14/src/relay.c
+@@ -210,6 +210,7 @@ usage(char const *argv0)
+     fprintf(stderr, "   -n nsess       -- Maxmimum number of sessions to relay\n");
+     fprintf(stderr, "   -i timeout     -- Idle timeout in seconds (0 = no timeout)\n");
+     fprintf(stderr, "   -F             -- Do not fork into background\n");
++    fprintf(stderr, "   -P file_name   -- Record pppoe-relay pid in the file\n");
+     fprintf(stderr, "   -h             -- Print this help message\n");
+ 
+     fprintf(stderr, "\nPPPoE Version %s, Copyright (C) 2001-2006 Roaring Penguin Software Inc.\n", RP_VERSION);
+@@ -242,6 +243,9 @@ main(int argc, char *argv[])
+     struct sigaction sa;
+     int beDaemon = 1;
+ 
++    FILE *fp = NULL;
++    char *pidFile = NULL;
++
+     if (getuid() != geteuid() ||
+ 	getgid() != getegid()) {
+ 	fprintf(stderr, "SECURITY WARNING: pppoe-relay will NOT run suid or sgid.  Fix your installation.\n");
+@@ -251,7 +255,7 @@ main(int argc, char *argv[])
+ 
+     openlog("pppoe-relay", LOG_PID, LOG_DAEMON);
+ 
+-    while((opt = getopt(argc, argv, "hC:S:B:n:i:F")) != -1) {
++    while((opt = getopt(argc, argv, "hC:S:B:n:i:F:P:")) != -1) {
+ 	switch(opt) {
+ 	case 'h':
+ 	    usage(argv[0]);
+@@ -286,6 +290,9 @@ main(int argc, char *argv[])
+ 		exit(EXIT_FAILURE);
+ 	    }
+ 	    break;
++        case 'P':
++            pidFile = strdup(optarg);
++            break;
+ 	default:
+ 	    usage(argv[0]);
+ 	}
+@@ -354,6 +361,12 @@ main(int argc, char *argv[])
+     /* Kick off SIGALRM if there is an idle timeout */
+     if (IdleTimeout) alarm(1);
+ 
++    /* write pid into pid file */
++    if((fp = fopen(pidFile, "w")) != NULL){
++        fprintf(fp, "%d", getpid());
++        fclose(fp);
++    }
++
+     /* Enter the relay loop */
+     relayLoop();
+ 
+@@ -882,11 +895,20 @@ relayGotSessionPacket(PPPoEInterface con
+     int size;
+     SessionHash *sh;
+     PPPoESession *ses;
++    int foelen;
++
+ 
+     if (receivePacket(iface->sessionSock, &packet, &size) < 0) {
+ 	return;
+     }
+ 
++    foelen = sizeof(struct SkbFoeInfo_Ppp);
++    memset(&skbfoeinfo,0,sizeof(struct SkbFoeInfo_Ppp));
++    if (getsockopt(iface->sessionSock, SOL_PACKET, PACKET_SKB_FOE_INFO, &skbfoeinfo, &foelen)) {
++        /* dbg_info */
++        //fprintf(stderr, "%s,getsockopt error\n", __FUNCTION__);
++    }
++
+     /* Ignore unknown code/version */
+     if (PPPOE_VER(packet.vertype) != 1 || PPPOE_TYPE(packet.vertype) != 1) {
+ 	return;

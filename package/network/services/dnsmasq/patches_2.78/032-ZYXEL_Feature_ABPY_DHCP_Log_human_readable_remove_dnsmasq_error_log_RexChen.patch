@@ -1,0 +1,78 @@
+Index: dnsmasq-2.78/src/dhcp.c
+===================================================================
+--- dnsmasq-2.78.orig/src/dhcp.c
++++ dnsmasq-2.78/src/dhcp.c
+@@ -789,8 +789,10 @@ void dhcp_read_ethers(void)
+   addr.s_addr = 0;              /* eliminate warning */
+ 
+   if (!f) {
++#ifndef ABPY_CUSTOMIZATION
+     my_syslog(MS_DHCP | LOG_ERR, _("failed to read %s: %s"), ETHERSFILE,
+               strerror(errno));
++#endif
+     return;
+   }
+ 
+Index: dnsmasq-2.78/src/extern.c
+===================================================================
+--- dnsmasq-2.78.orig/src/extern.c
++++ dnsmasq-2.78/src/extern.c
+@@ -317,7 +317,7 @@ void sendLeaseMessageToESMD(int action,
+ {
+   zcfgRet_t ret = 0;
+   char buf[2048] = { 0 }, *bufPtr, tmp[256] = {
+-  0}, *tmpPtr;
++  0}, *tmpPtr, tmpBuf[2048] = { 0 };
+   char *actionStr = NULL;
+   int i;
+   my_syslog(MS_DHCP | LOG_INFO, "%s ", __func__);
+@@ -325,9 +325,6 @@ void sendLeaseMessageToESMD(int action,
+   if (lease <= 0)
+     return;
+ 
+-  bufPtr = buf;
+-  bufPtr += sprintf(bufPtr, "{");
+-
+   switch (action) {
+   case ACTION_ADD:
+     actionStr = "add";
+@@ -340,6 +337,26 @@ void sendLeaseMessageToESMD(int action,
+     actionStr = "up";
+     break;
+   }
++#ifdef ABPY_CUSTOMIZATION
++	  // dnsmasq-dhcp: ip lease: xxx.xxx.xxx.x given to mac: xxxxxxxxxxx with hostname: xxxxxxxx Lease time of xxxxxx
++	  bufPtr = tmpBuf;
++	  bufPtr +=
++		  sprintf(bufPtr, "ip lease:%s, ",
++				  inet_ntop(AF_INET, &lease->addr, tmp, ADDRSTRLEN));
++	  bufPtr +=
++		sprintf(bufPtr, "given to MAC:%s, ",
++				print_mac(tmp, lease->hwaddr, lease->hwaddr_len));
++	  if (lease->hostname != NULL)
++		  bufPtr += sprintf(bufPtr, "with hostname:%s, ", lease->hostname);
++	  else
++		  bufPtr += sprintf(bufPtr, "with hostname:*, ");
++	  bufPtr += sprintf(bufPtr, "Lease time:%lu", lease->expires);
++  
++	  bufPtr = '\0';
++  
++#endif
++	bufPtr = buf;
++	bufPtr += sprintf(bufPtr, "{");
+   if (actionStr)
+     bufPtr += sprintf(bufPtr, "\"ac\":\"%s\",", actionStr);
+ 
+@@ -402,8 +419,11 @@ void sendLeaseMessageToESMD(int action,
+   bufPtr += sprintf(bufPtr, "}");
+ 
+   bufPtr = '\0';
+-
++#ifdef ABPY_CUSTOMIZATION
++  my_syslog(MS_DHCP | LOG_DEBUG, "%s", tmpBuf);
++#else
+   my_syslog(MS_DHCP | LOG_DEBUG, "%s send to esmd buf = %s", __func__, buf);
++#endif
+   ret = dnsmasq_msg_send(ZCFG_MSG_DHCPD_OPTION, strlen(buf), buf, NULL);
+   if (ret != ZCFG_SUCCESS || ret != ZCFG_SUCCESS_AND_NO_REPLY)
+     my_syslog(MS_DHCP | LOG_DEBUG, "%s esmd ret=%d", __func__, ret);

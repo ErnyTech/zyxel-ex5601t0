@@ -1,0 +1,33 @@
+From 1f1988d5256c9705a4f296ed48cdb7e463525ba4 Mon Sep 17 00:00:00 2001
+From: Michal Kazior <michal@plume.com>
+Date: Wed, 25 Sep 2019 14:03:13 +0200
+Subject: [PATCH] udhcpc: fix segmentation fault on empty bin opt
+
+The following caused udhcpc to segfault:
+  busybox udhcpc -i lo -s /dev/null -x 0x3d:
+
+function                                             old     new   delta
+udhcp_str2optset                                     629     641     +12
+
+Signed-off-by: Michal Kazior <michal@plume.com>
+Signed-off-by: Denys Vlasenko <vda.linux@googlemail.com>
+---
+ networking/udhcp/common.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/networking/udhcp/common.c b/networking/udhcp/common.c
+index 4a452cdb9..9ec752dfc 100644
+--- a/networking/udhcp/common.c
++++ b/networking/udhcp/common.c
+@@ -539,7 +539,7 @@ int FAST_FUNC udhcp_str2optset(const char *const_str, void *arg,
+ 
+ 		if (optflag->flags == OPTION_BIN) {
+ 			val = strtok(NULL, ""); /* do not split "'q w e'" */
+-			trim(val);
++			if (val) trim(val);
+ 		} else
+ 			val = strtok(NULL, ", \t");
+ 		if (!val)
+-- 
+2.22.0
+

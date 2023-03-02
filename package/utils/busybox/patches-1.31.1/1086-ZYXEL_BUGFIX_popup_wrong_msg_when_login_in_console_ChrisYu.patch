@@ -1,0 +1,20 @@
+Index: busybox-1.31.1/loginutils/login.c
+===================================================================
+--- busybox-1.31.1.orig/loginutils/login.c	2021-03-22 20:42:43.596390319 +0800
++++ busybox-1.31.1/loginutils/login.c	2021-03-22 20:18:22.276780300 +0800
+@@ -882,10 +882,11 @@
+ 				free(logGpObj);
+ 			}
+ #ifdef ZYXEL_REMOMGMT_ONLY_HTTPS_ALLOWS_FOR_WLAN_CONNECT
+-
+-			if (ipComeFromWiFi(addr) == 1){ // Check WLAN
+-				syslog(LOG_INFO, "TELNET permission denied with WLAN connection." );
+-				return EXIT_FAILURE;
++			if (ipType(addr) == AF_INET){
++				if (ipComeFromWiFi(addr) == 1){ // Check WLAN
++					syslog(LOG_INFO, "TELNET permission denied with WLAN connection." );
++					return EXIT_FAILURE;
++				}
+ 			}
+ #endif //ZYXEL_REMOMGMT_ONLY_HTTPS_ALLOWS_FOR_WLAN_CONNECT
+ 

@@ -1,0 +1,331 @@
+
+menu "ZyXEL WEB GUI"
+	config ZyXEL_HTTP_CGI_ENC
+		bool "Zyxel encrypted JSON data for CGI's response on GUI 1.1"
+		default n
+
+	config ZyXEL_WEB_GUI_HIDE_802_1x
+		bool "Zyxel Web Gui hide 802.1x related pages and options"
+		default n
+
+	config ZyXEL_WEB_GUI_HIDE_CFM
+		bool "Zyxel Web Gui hide CFM related pages and options"
+		default n
+
+	config ZyXEL_WEB_GUI_HIDE_DSL
+		bool "Zyxel Web Gui hide DSL related pages and options"
+		default n
+
+    config ZyXEL_WEB_GUI_HIDE_ETHWAN
+		bool "Zyxel Web Gui hide ETHWAN related pages and options"
+		default n
+
+	config ZyXEL_WEB_GUI_HIDE_IGMP_MLD
+		bool "Zyxel Web Gui hide IGMP_MLD related pages and options"
+		default n
+
+	config ZyXEL_WEB_GUI_SHOW_IGMP_VERSION
+		bool "Zyxel Web Gui show IGMP_VERSION related pages and options"
+		default n
+		
+	config ZyXEL_WEB_GUI_HIDE_Mcast
+		bool "Zyxel Web Gui hide Multicast related pages and options"
+		default n
+
+	config ZyXEL_WEB_GUI_HIDE_OAM
+		bool "Zyxel Web Gui hide OAM related pages and options"
+		default n
+
+	config ZYXEL_WEB_GUI_HIDE_FIREWALL
+		bool "Zyxel Web Gui hide firewall pages"
+		default n
+
+	config ZyXEL_WEB_GUI_SHOW_WWAN
+		bool "Zyxel Web Gui show WWAN backup related pages and options"
+		default n
+
+	config ZyXEL_WEB_GUI_SHOW_PON
+		bool "Zyxel Web Gui show PON related pages and options"
+		default n
+
+	config ZyXEL_WEB_GUI_SHOW_ONU_SETUP
+		bool "Zyxel Web Gui show ONU setup related pages and options"
+		default n
+
+	config ZyXEL_WEB_GUI_SHOW_CCWAN
+		bool "Zyxel Web Gui show con-current WAN related pages and options"
+		default n
+
+	config ZyXEL_WEB_GUI_SHOW_XDSL_PROFILE
+		bool "Zyxel Web Gui show xDSL profile on xDSL Statistics pages"
+		default n
+
+	config ZyXEL_WEB_GUI_SHOW_GPON_STATUS
+		bool "Zyxel Web Gui show GPON status pages"
+		default n
+
+	config ZYXEL_WEB_GUI_SHOW_SKIP_CHANGE_PASSWD
+		bool "Change password page show skip button"
+		default n
+
+	config ZyXEL_WEB_GUI_SHOW_CCWAN_WITHOUT_DEFGW
+		bool "Zyxel Web Gui show con-current WAN without default GW"
+		default n
+		depends on ZyXEL_WEB_GUI_SHOW_CCWAN
+
+	config ZyXEL_WEB_GUI_SINGLE_IGMP_MLD
+		bool "Set Zyxel Web Gui to single IGMP_MLD Proxy or not"
+		default n
+
+	config ZyXEL_WEB_GUI_HIDE_VLAN_GROUP
+		bool "Zyxel Web Gui hide VLAN GROUP related pages and options"
+		default n
+
+	config ZyXEL_WEB_GUI_HIDE_STB_VENDOR_ID
+		bool "Zyxel Web Gui hide STB VENDOR ID related pages and options"
+		default n
+
+	config ZyXEL_WEB_GUI_HIDE_WAKE_ON_LAN
+		bool "Zyxel Web Gui hide WAKE ON LAN related pages and options"
+		default n
+
+        config ZYXEL_WEB_GUI_HIDE_FULLCONE_NAT
+                bool "Zyxel Web Gui hide fullcone NAT options"
+                default n
+
+	config ZyXEL_WEB_GUI_SHOW_IGMP_MLD_SNOOPING
+		bool "Set Zyxel Web Gui to show IGMP/MLD snooping option in Home Networking page"
+		default n
+
+	config ZYXEL_WEB_GUI_SHOW_ENABLE_ONLINE_FW_UPGRADE
+		bool "Set Zyxel Web Gui to show Firmware Upgrade online enable option in firmware upgrade page"
+		default n
+		
+	config ZyXEL_WEB_GUI_WLAN_DFS_CHAN_CTL
+		bool "Zyxel Web Gui control DFS channel enable/disable"
+		default n
+
+	config ZYXEL_SHOW_QOS_MONITOR
+		bool "Show QoS Monitor"
+		default n
+
+	config ZYXEL_WEB_GUI_SYS_INFO_PAGE_SHOW_VOIP_INFO
+		 bool "Zyxel Web Gui System Info (Card) Page shows VoIP Information."
+		default n
+
+	config ZYXEL_WEB_GUI_ETH_UNI
+		bool "Zyxel Web Gui Ethernet UNI page"
+		default n
+	
+	config ZYXEL_WEB_GUI_ECONET_QoS_STYLE
+		bool "Zyxel Web Gui Set and hide QoS Queue page objects for ECONET project"
+		default n
+
+	config ZYXEL_WEB_GUI_TRAFFIC_STATUS_FOR_ECONET
+		bool "Zyxel Web Gui Traffic Status for ECONET project"
+		default n
+		
+    config ZYXEL_WEB_GUI_SHOW_ZYEE
+		bool "Zyxel Web Gui to show ZYEE related pages"
+		default n
+
+	config ZYXEL_SUPPORT_PPPOE_MTU_1500
+		bool "Support PPPoE MTU to 1500"
+		default n
+		
+	config ZYXEL_LED_SWITCH_ACTIVE
+		bool "Led switch control"
+		default n
+		
+	config ZYXEL_WEB_GUI_WLAN_HIDE_RATE_LIMIT
+		bool "Zyxel Web Gui hide Wireless Max. Upstream/Download Bandwidth"
+		default n
+
+	config ZyXEL_WEB_GUI_HIDE_SP_DOMAIN
+		bool "Zyxel Web Gui hide SP Domain page"
+		default n
+		
+	config ZYXEL_WEB_GUI_SUPPORT_PAGE_SUBJECT_PATH
+		bool "Zyxel Web Gui support page subject path"
+		default n
+		help
+		  New GUI support page title with page subject path.
+		  (ex.Network > Broadband > Add New WAN Interface) 
+		  Last position will show with bold font.
+
+	config ZYXEL_WEB_GUI_NUM_OF_WAN_INTF
+		int "Maximum number of WAN interfaces"
+		default 8
+
+	config ZYXEL_WEB_GUI_SHOW_QOS_CLS_TARGET_INTF
+		bool "Show target interface option on QoS class page"
+		default n
+
+	config ZYXEL_WEB_GUI_SHOW_SAVE_PASSWORD_DIALOGUE
+		bool "Allow show save password dialogue of browser while login"
+		default n
+
+	config ZYXEL_WEB_GUI_SHOW_MAC_ADDR_TABLE
+		bool "Enable show mac address table list"
+		default n
+
+	config ZYXEL_WEB_GUI_WEP_ENABLE
+		bool "Enable WiFi WEP security setting in Web Gui"
+		default y if NN_FLOWER_SPECIFIC_CAPABILITY
+		default n
+
+	config ZYXEL_WEB_GUI_INDEX_SHOW_STATUS
+		bool "Show status on index"
+		default n
+
+	config ZYXEL_WEB_GUI_WIFI_SHOW_FLAG
+		hex "WIFI compile flag on Web Gui"
+		default 0x0
+
+	config ZyXEL_WEB_GUI_MGMT_SET_BIND_INTF_BY_SERVICE
+		bool "Zyxel Web Gui Set Remote MGMT Interface Binding By Each Service"
+
+	config ZYXEL_WEB_GUI_SHOW_USB_SERVICE
+		bool "Zyxel Web Gui show USB Service related pages and options"
+		default y
+
+        config ZYXEL_WEB_WIRELESS_NEW_VERSION_ONE
+                bool "Show new style of wireless page that was copied from CAAAB aim at original wireless page instead."
+                default n
+				
+        config ZYXEL_WEB_NETWORK_MAP_NEW_STYLE
+                bool "Show new style of networkMap page that was copied from CAAAB aim at original networkMap page instead."
+                default n
+
+        config ZYXEL_POWERMONITOR_ENABLE
+		bool "Zyxel Web Gui show Power Status"
+		default n
+
+        config ZYXEL_GUIVUE_CONNECTIVITY_CARDPAGE_DETAIL_INFO
+                bool "Zyxel Web Gui VUE show detail information on connectivity of cardpage"
+                default n
+
+        config ZYXEL_GUIVUE_USB_INFO_SHOW_SYSINFO
+                bool "Replace 3G status with USB status."
+                default n
+				
+        config ZYXEL_GUIVUE_HTTP_REDIRECT_TO_HTTPS
+                bool "If user access GUI form WAN, it's necessary to add https"
+                default n
+
+        config ZYXEL_GUIVUE_SHOW_ALLWIFI_CHANNEL
+                bool "NEW Behavior for SHOW all wifi channel in wifi general page of GUI_vue."
+                default n
+                
+        config ZYXEL_WEB_GUI_HIDE_MULTICAST_FILTER_MODE
+                bool "Hide filter mode of multicasting."
+                default n
+                
+	config ZYXEL_WEB_GUI_TR69_SINGLE_WAN
+		bool "TR-069 Client page use single wan."
+		default n
+
+	config ZYXEL_SFP_POWER_MGMT
+		bool "Zyxel Web GUI show SFP Power Management"
+		depends on ZYXEL_SFP_MODULE_SUPPORT
+		default n
+
+    config ZYXEL_WIFI_KEY_REMINDER
+        bool "Zyxel Web GUI wifi default key reminder"
+        default n
+
+ 	config ZyXEL_WEB_GUI_VPN_CONFIG_ENABLE
+    	bool "Zyxel Web Gui enable VPN client and server config setting"
+		default n
+
+	config ZyXEL_WEB_GUI_VPN_CONFIG_HIDE_PPTP
+		bool "Remove PPTP type from VPN client configuration page"
+		default n
+		depends on ZyXEL_WEB_GUI_VPN_CONFIG_ENABLE
+
+	config ZyXEL_WEB_GUI_VPN_CONFIG_HIDE_L2TP
+		bool "Remove L2TP type from VPN client configuration page"
+		default n
+		depends on ZyXEL_WEB_GUI_VPN_CONFIG_ENABLE
+
+    config ZYXEL_WEB_GUI_HIDE_QOS_DEFAULT_QUEUE
+        bool "Hide QoS Default Queue"
+        default n
+
+	config ZYXEL_WEB_GUI_SHOW_CELLWAN
+		bool "Zyxel Web Gui show CELLWAN related pages and options"
+		default n
+		depends on LTE_SUPPORT
+
+	config ZYXEL_WEB_GUI_SHOW_SAS_CBSD
+		bool "Zyxel Web Gui show SAS protocol CPE-CBSD client for CELLWAN"
+		default n
+		depends on ZYXEL_SUPPORT_SAS_CBSD
+
+	config ZYXEL_WEB_GUI_CELLWAN_SUPPORT_MULTI_APN
+		bool "Zyxel Web Gui support multiple APN for CELLWAN"
+		default n
+		depends on ZYXEL_WEB_GUI_SHOW_CELLWAN
+
+	config ZYXEL_WEB_GUI_CELLWAN_SUPPORT_SMS
+		bool "Zyxel Web Gui support SMS for CELLWAN"
+		default n
+		depends on ZYXEL_WEB_GUI_SHOW_CELLWAN
+
+	config ZYXEL_WEB_GUI_CELLWAN_SUPPORT_PCI_LOCK
+		bool "Zyxel Web Gui support PCI Lock for CELLWAN"
+		default n
+		depends on ZYXEL_WEB_GUI_SHOW_CELLWAN
+
+	config ZYXEL_WEB_GUI_CELLWAN_SUPPORT_NR_NSA
+		bool "Zyxel Web Gui support NR-NSA for CELLWAN"
+		default n
+		depends on ZYXEL_WEB_GUI_SHOW_CELLWAN
+
+	config ZYXEL_WEB_GUI_CELLWAN_SUPPORT_NBR_CELLS
+		bool "Zyxel Web Gui support Neighbour Cells for CELLWAN"
+		default n
+		depends on ZYXEL_WEB_GUI_SHOW_CELLWAN
+
+	config ZYXEL_WEB_GUI_SUPPORT_SAS_CBSD
+		bool "Zyxel Web Gui support SAS protocol CPE-CBSD client for CELLWAN"
+		default n
+		depends on ZYXEL_WEB_GUI_SHOW_SAS_CBSD
+
+	config ZYXEL_WEB_GUI_CELLWAN_SUPPORT_GNSS_LOCATION
+		bool "Zyxel Web Gui support GNSS Location information for CELLWAN"
+		default n
+		depends on ZYXEL_WEB_GUI_SHOW_CELLWAN
+
+	config ZYXEL_WEB_GUI_CELLWAN_QoS_TP_STYLE
+		bool "Zyxel Web Gui CELLWAN QoS Throughput Style"
+		default n
+		depends on ZYXEL_CELLWAN_SUPPORT_QOS_TP
+
+	config ZYXEL_WEB_GUI_LOGIN_WITH_RANDOM_CODE
+		bool "Zyxel Web Gui Login with Random Code"
+		default y if NN_FLOWER_SPECIFIC_CAPABILITY
+		default n
+
+	config ZYXEL_WEB_GUI_HOST_PRIORITY_STATICIP
+                bool "Support priority and dhcp static for hosts in connectivity page"
+                default n
+
+        config ZYXEL_WEB_GUI_SHOW_WIFI_HOST_DETAILS
+                bool "Support wifi hosts detail show in connectivity page"
+                default n
+
+	config ZYXEL_WEB_GUI_LOGIN_RANDOM_CODE_WITH_TIMEOUT_LOGOUT
+		bool "Zyxel Web Gui Login Random Code With Timeout Logout"
+		default y if NN_FLOWER_SPECIFIC_CAPABILITY
+		default n
+		depends on ZYXEL_WEB_GUI_LOGIN_WITH_RANDOM_CODE
+
+    config ZYXEL_WEB_GUI_NETWORK_TOPOLOGY
+        bool "Show network topology diagram."
+		default n
+
+    config ZYXEL_WEB_GUI_PORT_MIRROR_RPCAPD
+        bool "Support Port Mirror by rpcapd daemon."
+		default n
+endmenu

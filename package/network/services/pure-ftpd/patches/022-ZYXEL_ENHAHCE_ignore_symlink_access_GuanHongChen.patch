@@ -1,0 +1,38 @@
+Index: pure-ftpd-1.0.30/src/ftpd.c
+===================================================================
+--- pure-ftpd-1.0.30.orig/src/ftpd.c	2021-01-15 10:40:20.659072264 +0800
++++ pure-ftpd-1.0.30/src/ftpd.c	2021-01-15 10:43:32.109164885 +0800
+@@ -2694,7 +2694,9 @@
+ #ifdef WITH_RFC2640
+     char *nwd = NULL;
+ #endif
+-    
++    struct stat st;
++    int result = 0;
++
+     if (loggedin == 0) {
+         goto kaboom;
+     }
+@@ -2707,6 +2709,22 @@
+     if (dir == NULL || *dir == 0) {
+         dir = "~";
+     }
++    else{
++        result = lstat(dir, &st);
++        if (result != 0) {
++            addreply(553, MSG_SANITY_FILE_FAILURE, dir);
++            return;
++        }
++        else{
++            /*ignore symlink access except zcfg_config.json*/
++            if (S_ISLNK(st.st_mode)) { 
++                if (strstr("zcfg_config.json", dir) == NULL ){
++                    dir = "~";
++                }
++            }
++        }
++    }
++
+     if (*dir == '~') {
+         const struct passwd *pw;
+         

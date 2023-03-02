@@ -1,0 +1,36 @@
+Index: dnsmasq-2.85/Makefile
+===================================================================
+--- dnsmasq-2.85.orig/Makefile	2021-04-21 20:35:29.833970977 +0800
++++ dnsmasq-2.85/Makefile	2021-04-21 20:24:37.569162100 +0800
+@@ -65,9 +65,13 @@
+ nettle_cflags = `echo $(COPTS) | $(top)/bld/pkg-wrapper HAVE_DNSSEC     $(PKG_CONFIG) --cflags 'nettle hogweed' \
+                                                         HAVE_CRYPTOHASH $(PKG_CONFIG) --cflags nettle \
+                                                         HAVE_NETTLEHASH $(PKG_CONFIG) --cflags nettle`
+-nettle_libs =   `echo $(COPTS) | $(top)/bld/pkg-wrapper HAVE_DNSSEC     $(PKG_CONFIG) --libs 'nettle hogweed' \
+-                                                        HAVE_CRYPTOHASH $(PKG_CONFIG) --libs nettle \
+-                                                        HAVE_NETTLEHASH $(PKG_CONFIG) --libs nettle`
++#nettle_libs =   `echo $(COPTS) | $(top)/bld/pkg-wrapper HAVE_DNSSEC     $(PKG_CONFIG) --libs 'nettle hogweed' \
++#                                                        HAVE_CRYPTOHASH $(PKG_CONFIG) --libs nettle \
++#                                                        HAVE_NETTLEHASH $(PKG_CONFIG) --libs nettle`
++nettle_libs =   `if echo $(COPTS) | grep HAVE_DNSSEC >/dev/null 2>&1; then echo -lnettle -lhogweed; else echo $(COPTS) | $(top)/bld/pkg-wrapper \
++                                                         HAVE_CRYPTOHASH $(PKG_CONFIG) --libs nettle \
++                                                         HAVE_NETTLEHASH $(PKG_CONFIG) --libs nettle; fi`
++
+ gmp_libs =      `echo $(COPTS) | $(top)/bld/pkg-wrapper HAVE_DNSSEC NO_GMP --copy -lgmp`
+ sunos_libs =    `if uname | grep SunOS >/dev/null 2>&1; then echo -lsocket -lnsl -lposix4; fi`
+ version =     -DVERSION='\"`$(top)/bld/get-version $(top)`\"'
+Index: dnsmasq-2.85/src/dnssec.c
+===================================================================
+--- dnsmasq-2.85.orig/src/dnssec.c	2021-04-21 20:35:29.805970978 +0800
++++ dnsmasq-2.85/src/dnssec.c	2021-04-21 20:26:22.047553600 +0800
+@@ -19,6 +19,10 @@
+ 
+ #ifdef HAVE_DNSSEC
+ 
++#ifdef NO_GMP
++#include <nettle/mini-gmp.h>
++#endif
++
+ #define SERIAL_UNDEF  -100
+ #define SERIAL_EQ        0
+ #define SERIAL_LT       -1

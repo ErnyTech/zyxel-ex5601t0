@@ -1,0 +1,23 @@
+#!/bin/sh /etc/rc.common
+
+START=90
+
+USE_PROCD=1
+NAME=zy_agglan
+PROG=/usr/sbin/zy_agg_lan_led.sh
+
+start_service() {
+#	procd_open_instance
+#	procd_set_param command "${PROG}"
+#	procd_close_instance
+	${PROG} &
+}
+
+stop_service() {
+	pid=`ps | grep ${PROG} | awk '{print $1}' | sed -n 1p`
+	if [ $pid -ne 0 ]
+	then
+		kill -9 $pid
+		echo 0 > /sys/class/leds/zyled-green-lan/brightness
+	fi
+}

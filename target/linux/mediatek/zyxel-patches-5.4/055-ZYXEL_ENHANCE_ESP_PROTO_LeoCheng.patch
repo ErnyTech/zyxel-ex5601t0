@@ -1,0 +1,12 @@
+Index: linux-5.4.171/net/netfilter/Kconfig
+===================================================================
+--- linux-5.4.171.orig/net/netfilter/Kconfig
++++ linux-5.4.171/net/netfilter/Kconfig
+@@ -202,6 +202,7 @@ config NF_CT_PROTO_UDPLITE
+ config NF_CT_PROTO_ESP
+ 	bool 'ESP protocol connection tracking support'
+ 	depends on NETFILTER_ADVANCED
++	default n
+ 	help
+ 	  ESP connection tracking helper. Provides connection tracking for IPsec
+ 	  clients behind this device based on SPI, especially useful for

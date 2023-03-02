@@ -1,0 +1,13 @@
+Index: ppp-2.4.3/pppd/plugins/radius/util.
+===================================================================
+--- ppp-2.4.3.orig/pppd/plugins/radius/util.c	2004-11-14 15:26:26.000000000 +0800
++++ ppp-2.4.3/pppd/plugins/radius/util.c	2021-10-05 13:37:25.572839131 +0800
+@@ -77,7 +77,7 @@
+   static unsigned short int cnt = 0;
+   sprintf (buf, "%08lX%04X%02hX",
+ 	   (unsigned long int) time (NULL),
+-	   (unsigned int) getpid (),
++	   (unsigned int) getpid () % 65535,
+ 	   cnt & 0xFF);
+   cnt++;
+   return buf;

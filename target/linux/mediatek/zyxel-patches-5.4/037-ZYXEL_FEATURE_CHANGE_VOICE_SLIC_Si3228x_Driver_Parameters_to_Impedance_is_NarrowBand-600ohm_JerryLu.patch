@@ -1,0 +1,15 @@
+Index: linux-5.4.171/sound/soc/codecs/si3218x/si3218x.c
+===================================================================
+--- linux-5.4.171.orig/sound/soc/codecs/si3218x/si3218x.c	2022-05-26 13:19:31.051186448 +0800
++++ linux-5.4.171/sound/soc/codecs/si3218x/si3218x.c	2022-06-01 10:08:51.790506151 +0800
+@@ -187,8 +187,8 @@ static int ProSLIC_HWInit(void)
+ #endif
+ 		//Zyxel Porting: Modify to use the Impedance setting by default: 270ohm + (750ohm // 150nf).
+ 		//ProSLIC_ZsynthSetup(ports[i].ProObj, 0);
+-		printk ("%s(): Impedance Profile Preset Id = WB_ZSYN_600_0_0_20_0 (%d).\n", __func__, WB_ZSYN_600_0_0_20_0);
+-		ProSLIC_ZsynthSetup(ports[i].ProObj, WB_ZSYN_600_0_0_20_0);
++		printk ("%s(): Impedance Profile Preset Id = ZSYN_600_0_0_30_0 (%d).\n", __func__, ZSYN_600_0_0_30_0);
++		ProSLIC_ZsynthSetup(ports[i].ProObj, ZSYN_600_0_0_30_0);
+ 		ProSLIC_ToneGenSetup(ports[i].ProObj, 0);
+ #endif // D2 MOD.
+ 	}

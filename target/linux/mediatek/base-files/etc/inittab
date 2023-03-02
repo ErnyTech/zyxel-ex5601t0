@@ -1,0 +1,5 @@
+::sysinit:/etc/init.d/rcS S boot
+::shutdown:/etc/init.d/rcS K shutdown
+#ttyS0::respawnlate:/usr/libexec/login.sh
+#ttyS0::askfirst:/sbin/getty -L ttyS0 115200 vt100
+/dev/console::askfirst:/sbin/getty -L /dev/console 115200 vt100

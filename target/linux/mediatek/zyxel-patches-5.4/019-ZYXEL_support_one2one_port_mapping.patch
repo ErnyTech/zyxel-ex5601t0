@@ -1,0 +1,99 @@
+Index: linux-5.4.171/net/netfilter/nf_nat_core.c
+===================================================================
+--- linux-5.4.171.orig/net/netfilter/nf_nat_core.c
++++ linux-5.4.171/net/netfilter/nf_nat_core.c
+@@ -406,6 +406,9 @@ static void nf_nat_l4proto_unique_tuple(
+ 	__be16 *keyptr;
+ 	u16 off;
+ 	static const unsigned int max_attempts = 128;
++#if 1 /* Support one-to-one port mapping. __TELEFONICA__, ZyXEL Stan Su, 20120308. */
++	u_int16_t mappingOffset = 0;
++#endif
+ 
+ 	switch (tuple->dst.protonum) {
+ 	case IPPROTO_ICMP: /* fallthrough */
+@@ -494,6 +497,10 @@ find_free_id:
+ 	if (attempts > max_attempts)
+ 		attempts = max_attempts;
+ 
++#if 1 /* Support one-to-one port mapping. __TELEFONICA__, ZyXEL Stan Su, 20120308. */
++	mappingOffset = tuple->dst.u.all - range->mappingMin.all;
++#endif
++
+ 	/* We are in softirq; doing a search of the entire range risks
+ 	 * soft lockup when all tuples are already used.
+ 	 *
+@@ -501,7 +508,20 @@ find_free_id:
+ 	 * one and try again, with ever smaller search window.
+ 	 */
+ another_round:
++#if 1 /* Support one-to-one port mapping. __TELEFONICA__, ZyXEL Stan Su, 20120308. */
++	mappingOffset = tuple->dst.u.all - range->mappingMin.all;
++	for (i = 0; i < attempts; i++, off++, mappingOffset++) {
++#else
+ 	for (i = 0; i < attempts; i++, off++) {
++#endif
++#if 1 /* Support one-to-one port mapping. __TELEFONICA__, ZyXEL Stan Su, 20120308. */
++		/* if range->flags & IP_NAT_RANGE_PROTO_RANDOM is true, keyptr should be counted by off. */
++		if (range->mappingFlag == 1 && !(range->flags & NF_NAT_RANGE_PROTO_RANDOM))
++		{
++			*keyptr = htons(min + mappingOffset % range_size);
++		}
++		else
++#endif
+ 		*keyptr = htons(min + off % range_size);
+ 		if (!nf_nat_used_tuple(tuple, ct))
+ 			return;
+@@ -567,7 +587,18 @@ get_unique_tuple(struct nf_conntrack_tup
+ 	/* Only bother mapping if it's not already in range and unique */
+ 	if (!(range->flags & NF_NAT_RANGE_PROTO_RANDOM_ALL)) {
+ 		if (range->flags & NF_NAT_RANGE_PROTO_SPECIFIED) {
+-			if (!(range->flags & NF_NAT_RANGE_PROTO_OFFSET) &&
++#if 1 /* Support one-to-one port mapping. __TELEFONICA__, ZyXEL Stan Su, 20120308. */
++	     /* If external port range is 1000-2000, and internal port range is 1500-2500. */
++	     /* In this case, in_range() will return trun when the incoming traffic uses port 1555. */
++	     /* Therefore, only check in_range() when mappingFlag is false. */
++            if ((!range->mappingFlag && l4proto_in_range(tuple, maniptype,
++					      &range->min_proto,
++					      &range->max_proto)) &&
++			    (range->min_proto.all == range->max_proto.all ||
++			     !nf_nat_used_tuple(tuple, ct)))
++				return;
++#endif
++			else if (!(range->flags & NF_NAT_RANGE_PROTO_OFFSET) &&
+ 			    l4proto_in_range(tuple, maniptype,
+ 			          &range->min_proto,
+ 			          &range->max_proto) &&
+Index: linux-5.4.171/include/uapi/linux/netfilter/nf_nat.h
+===================================================================
+--- linux-5.4.171.orig/include/uapi/linux/netfilter/nf_nat.h
++++ linux-5.4.171/include/uapi/linux/netfilter/nf_nat.h
+@@ -26,6 +26,14 @@ struct nf_nat_ipv4_range {
+ 	__be32				max_ip;
+ 	union nf_conntrack_man_proto	min;
+ 	union nf_conntrack_man_proto	max;
++
++#if 1 /* Support one-to-one port mapping. __TELEFONICA__, ZyXEL Stan Su, 20120307. */
++	/* mappingFlag is 1, if it needs to do one-to-one port mapping. */
++	unsigned int mappingFlag;
++
++	/* Record external port information. */
++	union nf_conntrack_man_proto mappingMin, mappingMax;
++#endif
+ };
+ 
+ struct nf_nat_ipv4_multi_range_compat {
+@@ -48,6 +56,13 @@ struct nf_nat_range2 {
+ 	union nf_conntrack_man_proto	min_proto;
+ 	union nf_conntrack_man_proto	max_proto;
+ 	union nf_conntrack_man_proto	base_proto;
++#if 1	/* Support one-to-one port mapping. __TELEFONICA__, ZyXEL Stan Su, 20120307. */
++    	/* mappingFlag is 1, if it needs to do one-to-one port mapping. */
++    	unsigned int mappingFlag;
++
++    	/* Record external port information. */
++    	union nf_conntrack_man_proto mappingMin, mappingMax;
++#endif
+ };
+ 
+ #endif /* _NETFILTER_NF_NAT_H */

@@ -1,0 +1,93 @@
+Index: pure-ftpd-1.0.30/src/ftpd.c
+===================================================================
+--- pure-ftpd-1.0.30.orig/src/ftpd.c	2020-09-10 13:33:07.670659682 +0800
++++ pure-ftpd-1.0.30/src/ftpd.c	2020-09-10 13:48:05.402582206 +0800
+@@ -2061,10 +2061,10 @@
+ 
+ #ifdef MSTC_TTNET_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
+ //Send message to ssk for get some information of User info.
+-bool checkIsFromWan(char *addr){
++bool checkIsFromLan(char *addr){
+ 
+ 	char localAddr[64] = {0};
+-	bool isFromWan = false;
++	bool isFromLan = false;
+ 	objIndex_t ipIfaceIid, ipv4AddressIid;
+ 	rdm_IpIface_t *ipIfaceJobj = NULL;
+ 	rdm_IpIfaceV4Addr_t *ipIfacev4AddressJobj = NULL;
+@@ -2079,7 +2079,7 @@
+ 	if(ipType(localAddr) == AF_INET)//if is v4 address, need to check
+ 	{
+ 		while((zcfgFeObjStructGetNextWithoutUpdate(RDM_OID_IP_IFACE, &ipIfaceIid, (void **)&ipIfaceJobj)) == ZCFG_SUCCESS){
+-			if(strstr(ipIfaceJobj->X_ZYXEL_IfName, "br") == NULL){
++			if(strstr(ipIfaceJobj->X_ZYXEL_IfName, "br") != NULL){
+ 				ipv4AddressIid.idx[0] = ipIfaceIid.idx[0];
+ 				ipv4AddressIid.idx[1] = 1;
+ 				ipv4AddressIid.level = 2;
+@@ -2095,8 +2095,8 @@
+ 					}
+ 					sprintf(perfix, "%d", i);
+ 
+-					if((localAddr) && (checkCidrBlock(ipIfacev4AddressJobj->IPAddress, perfix, addr) == 1)){
+-						isFromWan = true;
++					if((localAddr) && (checkCidrBlock(ipIfacev4AddressJobj->IPAddress, perfix, localAddr) == 1)){
++						isFromLan = true;
+ 						//strcpy(userName, (char *)json_object_get_string(json_object_object_get(logCfgJobj, "Username")));
+ 						zcfgFeObjStructFree(ipIfaceJobj);
+ 						zcfgFeObjStructFree(ipIfacev4AddressJobj);
+@@ -2107,12 +2107,9 @@
+ 			}
+ 			zcfgFeObjStructFree(ipIfaceJobj);
+ 		}
+-	}else{
+-		/*Not support the IPv6 yet*/
+-		printf("%s(%d): [CBT] IPv6 are not support user_login_process_v4 yet.. \n",__FUNCTION__,__LINE__);
+-		isFromWan = false;
+ 	}
+-	if(isFromWan)
++
++	if(isFromLan)
+ 		return true;
+ 	else
+ 		return false;
+@@ -2146,7 +2143,10 @@
+ 			if(UsersUserObj->Level == 1)//Level 1
+       	{
+ 				userIid.idx[0] = 2;
+-				userIid.idx[1] = 1; 
++				if(iidStack.idx[0] == 1)
++					userIid.idx[1] = iidStack.idx[0];
++				else
++					userIid.idx[1] = iidStack.idx[0] - 1;
+ 				//user_iidStack.idx[0] = 1
+       	}
+ 			else//Level 2
+@@ -2157,15 +2157,15 @@
+ 			}
+ 
+ 			if(zcfgFeObjStructGet(RDM_OID_ZY_LOG_CFG_GP_ACCOUNT, &userIid, (void **)&UserLoginInfoObj) == ZCFG_SUCCESS) {			
+-				bool isFromWAN = false;
+-				if(checkIsFromWan(hostip)){
+-					isFromWAN = true;
++				bool isFromLAN = false;
++				if(checkIsFromLan(hostip)){
++					isFromLAN = true;
+ 				}
+ 
+ 				//if(strcmp(UserLoginInfoObj->Password, paword) == 0){				
+ 					if(UsersUserObj->Enable == 1){
+ 						//LAN
+-						if( (isFromWAN == false) && (UsersUserObj->LocalAccessCapable == 1))
++						if( (isFromLAN == true) && (UsersUserObj->LocalAccessCapable == 1))
+          	{
+ 							copy_protocol = strdup(UsersUserObj->Allowed_LA_Protocols);
+ 							if(copy_protocol !=NULL){
+@@ -2181,7 +2181,7 @@
+ 							}	
+ 						}
+ 						//WAN
+-						else if( (isFromWAN == true) && (UsersUserObj->RemoteAccessCapable == 1))
++						else if( (isFromLAN == false) && (UsersUserObj->RemoteAccessCapable == 1))
+          			{
+ 							copy_protocol = strdup(UsersUserObj->Allowed_RA_Protocols);
+ 							if(copy_protocol !=NULL){

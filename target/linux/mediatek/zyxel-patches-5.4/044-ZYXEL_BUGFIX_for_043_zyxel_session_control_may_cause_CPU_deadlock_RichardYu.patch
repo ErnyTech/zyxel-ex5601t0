@@ -1,0 +1,94 @@
+Index: linux-5.4.171/net/netfilter/nf_conntrack_core.c
+===================================================================
+--- linux-5.4.171.orig/net/netfilter/nf_conntrack_core.c
++++ linux-5.4.171/net/netfilter/nf_conntrack_core.c
+@@ -829,6 +829,13 @@ nf_ct_match(const struct nf_conn *ct1, c
+ 	       net_eq(nf_ct_net(ct1), nf_ct_net(ct2));
+ }
+ 
++#ifdef CONFIG_ZYXEL_NF_SESSION_CTL
++/* 
++ * Caller must hold NONE of the nf_sessctl_locks because this function eventually invokes 
++ * the function clean_session_ctl_lists which holds one of the nf_sessctl_locks.
++ * Attempting to acquire a spin lock recursively will cause a deadlock.
++ */
++#endif
+ /* caller must hold rcu readlock and none of the nf_conntrack_locks */
+ static void nf_ct_gc_expired(struct nf_conn *ct)
+ {
+@@ -1550,6 +1557,12 @@ __nf_conntrack_alloc(struct net *net,
+ 					//if (h_max->sess_Cnt >= nf_guest_ap_session_ctl_max) {
+ 					if ( unlikely(atomic_read(&h_max->sess_Cnt) >= nf_guest_ap_session_ctl_max) ) {
+ 						unsigned int hash1 = hash_conntrack(net, orig);
++						spin_unlock(lockp);
++						/* 
++						 * Caller of early_drop must hold NONE of the nf_sessctl_locks because it eventually invokes 
++						 * the function clean_session_ctl_lists which holds one of the nf_sessctl_locks.
++						 * Attempting to acquire a spin lock recursively will cause a deadlock.
++						 */
+ 						if (!early_drop(net, hash1)) {
+ 							atomic_dec(&net->ct.count);
+ 							net_warn_ratelimited("nf_conntrack: %u.%u.%u.%u exceeds the maximum number of session per Guest AP host.\n", NIPQUAD(orig->src.u3.ip));
+@@ -1559,11 +1572,11 @@ __nf_conntrack_alloc(struct net *net,
+ 									,NIPQUAD(orig->src.u3.ip)); // Modified nat log for system log
+ 							}
+ 							*/
+-							spin_unlock(lockp);
+ 							local_bh_enable();
+ 							rcu_read_unlock();
+ 							return ERR_PTR(-ENOMEM);
+ 						}
++						spin_lock(lockp);
+ 					}
+ 				}
+ #endif
+@@ -1572,32 +1585,47 @@ __nf_conntrack_alloc(struct net *net,
+ 				//if(h_max->sess_Cnt >= nf_session_ctl_max){
+ 				if( unlikely(atomic_read(&h_max->sess_Cnt) >= nf_session_ctl_max) ) {
+ 					unsigned int hash1 = hash_conntrack(net, orig);
++					spin_unlock(lockp);
++					/* 
++					 * Caller of early_drop must hold NONE of the nf_sessctl_locks because it eventually invokes 
++					 * the function clean_session_ctl_lists which holds one of the nf_sessctl_locks.
++					 * Attempting to acquire a spin lock recursively will cause a deadlock.
++					 */
+ 					if (!early_drop(net, hash1)){
+ 					    atomic_dec(&net->ct.count);
+ 					    net_warn_ratelimited(KERN_WARNING "NAT WARNING: %u.%u.%u.%u exceeds the max. number of session per host!\n"
+ 								,NIPQUAD(orig->src.u3.ip));	/* Modified nat log for system log*/
+-						spin_unlock(lockp);
+ 						local_bh_enable();
+ 						rcu_read_unlock();
+ 						return ERR_PTR(-ENOMEM);
+ 					}
++					spin_lock(lockp);
+ 				}
+ 
+ 				/* Reserved for well known services(known_port<1024) */
+ 				//if(h_max->sess_Cnt >= (nf_session_ctl_max*8/10) &&  known_port > 1024){
+ 				if( unlikely(atomic_read(&h_max->sess_Cnt) >= (nf_session_ctl_max*8/10)) &&  (known_port > 1024) ){
+ 					unsigned int hash2 = hash_conntrack(net, orig);
++					spin_unlock(lockp);
++					/* 
++					 * Caller of early_drop must hold NONE of the nf_sessctl_locks because it eventually invokes 
++					 * the function clean_session_ctl_lists which holds one of the nf_sessctl_locks.
++					 * Attempting to acquire a spin lock recursively will cause a deadlock.
++					 */
+ 					if (!early_drop(net, hash2)){
+ 						atomic_dec(&net->ct.count);
+ 						net_warn_ratelimited(KERN_WARNING
+ 								"unknown services(port>1024) session full [max=%d], dropping"
+ 								" packet.\n",(nf_session_ctl_max*8/10));
+-						spin_unlock(lockp);
+ 						local_bh_enable();
+ 						rcu_read_unlock();
+ 						return ERR_PTR(-ENOMEM);
+ 					}
++					spin_lock(lockp);
+ 				}
++
++				/* No need to traverse the list further. */
++				break;
+ 			}
+ 		}
+ 		spin_unlock(lockp);

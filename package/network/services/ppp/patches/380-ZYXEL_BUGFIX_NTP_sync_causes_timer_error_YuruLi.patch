@@ -1,0 +1,79 @@
+Index: ppp-2.4.3/pppd/main.c
+===================================================================
+--- ppp-2.4.3.orig/pppd/main.c
++++ ppp-2.4.3/pppd/main.c
+@@ -246,7 +246,7 @@ static struct subprocess *children;
+ 
+ /* Prototypes for procedures local to this file. */
+ 
+-static void check_time(void);
++static void check_time(struct timeval *);
+ static void setup_signals __P((void));
+ static void create_pidfile __P((int pid));
+ static void create_linkpidfile __P((int pid));
+@@ -659,8 +659,8 @@ main(argc, argv)
+ 	    info("Starting link");
+ 	}
+ 
+-	check_time();
+-	gettimeofday(&start_time, NULL);
++	check_time(&start_time);
++	//gettimeofday(&start_time, NULL);
+ 	script_unsetenv("CONNECT_TIME");
+ 	script_unsetenv("BYTES_SENT");
+ 	script_unsetenv("BYTES_RCVD");
+@@ -1415,16 +1415,16 @@ static struct timeval timenow;		/* Curre
+ static long uptime_diff = 0;
+ static int uptime_diff_set = 0;
+ 
+-static void check_time(void)
++static void check_time(struct timeval *t)
+ {
+ 	long new_diff;
+-	struct timeval t;
++	//struct timeval t;
+ 	struct sysinfo i;
+     struct callout *p;
+ 	
+-	gettimeofday(&t, NULL);
++	gettimeofday(t, NULL);
+ 	sysinfo(&i);
+-	new_diff = t.tv_sec - i.uptime;
++	new_diff = t->tv_sec - i.uptime;
+ 	
+ 	if (!uptime_diff_set) {
+ 		uptime_diff = new_diff;
+@@ -1461,7 +1461,8 @@ timeout(func, arg, secs, usecs)
+ 	fatal("Out of memory in timeout()!");
+     newp->c_arg = arg;
+     newp->c_func = func;
+-    gettimeofday(&timenow, NULL);
++    //gettimeofday(&timenow, NULL);
++	check_time(&timenow);
+     newp->c_time.tv_sec = timenow.tv_sec + secs;
+     newp->c_time.tv_usec = timenow.tv_usec + usecs;
+     if (newp->c_time.tv_usec >= 1000000) {
+@@ -1511,8 +1512,9 @@ static void
+ calltimeout()
+ {
+     struct callout *p;
+-
+-	check_time();
++	struct timeval t;
++	
++	check_time(&t);
+ 	
+     while (callout != NULL) {
+ 	p = callout;
+@@ -1542,9 +1544,9 @@ timeleft(tvp)
+     if (callout == NULL)
+ 	return NULL;
+ 	
+-	check_time();
++	check_time(&timenow);
+ 
+-    gettimeofday(&timenow, NULL);
++    //gettimeofday(&timenow, NULL);
+     tvp->tv_sec = callout->c_time.tv_sec - timenow.tv_sec;
+     tvp->tv_usec = callout->c_time.tv_usec - timenow.tv_usec;
+     if (tvp->tv_usec < 0) {

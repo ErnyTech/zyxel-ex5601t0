@@ -1,0 +1,193 @@
+Index: busybox-1.31.1/loginutils/login.c
+===================================================================
+--- busybox-1.31.1.orig/loginutils/login.c	2021-04-07 17:10:41.645221401 +0800
++++ busybox-1.31.1/loginutils/login.c	2021-04-07 17:11:53.189219337 +0800
+@@ -635,6 +635,168 @@
+ }
+ #endif
+ 
++#ifdef MSTC_TTNET_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
++bool checkIsFromWan(char *addr);
++bool queryUserInfo(char *userName,char *addr);
++int UserAllow(char *username,char *addr);
++
++//Send message to ssk for get some information of User info.
++bool checkIsFromWan(char *addr){
++
++	char localAddr[64] = {0};
++	bool isFromWan = false;
++	objIndex_t ipIfaceIid, ipv4AddressIid;
++	rdm_IpIface_t *ipIfaceJobj = NULL;
++	rdm_IpIfaceV4Addr_t *ipIfacev4AddressJobj = NULL;
++	unsigned int n;
++	char subnetMask[32] = {0};
++	char perfix[10]={0};
++	//CgHttpResponse *httpRes = NULL;
++
++	strcpy(localAddr,addr);
++	IID_INIT(ipIfaceIid);
++	IID_INIT(ipv4AddressIid);
++	if(ipType(localAddr) == AF_INET)//if is v4 address, need to check
++	{
++		while((zcfgFeObjStructGetNextWithoutUpdate(RDM_OID_IP_IFACE, &ipIfaceIid, (void **)&ipIfaceJobj)) == ZCFG_SUCCESS){
++			if(strstr(ipIfaceJobj->X_ZYXEL_IfName, "br") == NULL){
++				ipv4AddressIid.idx[0] = ipIfaceIid.idx[0];
++				ipv4AddressIid.idx[1] = 1;
++				ipv4AddressIid.level = 2;
++				if(zcfgFeObjStructGetWithoutUpdate(RDM_OID_IP_IFACE_V4_ADDR, &ipv4AddressIid, (void **)&ipIfacev4AddressJobj) == ZCFG_SUCCESS){
++					strcpy(subnetMask, ipIfacev4AddressJobj->SubnetMask);
++					inet_pton(AF_INET, subnetMask, &n);
++					int i = 0;
++
++					n = ntohl(n);
++					while (n) {
++							n = n << 1;
++							i++;
++					}
++					sprintf(perfix, "%d", i);
++
++					if((localAddr) && (checkCidrBlock(ipIfacev4AddressJobj->IPAddress, perfix, localAddr) == 1)){
++						isFromWan = true;
++						//strcpy(userName, (char *)json_object_get_string(json_object_object_get(logCfgJobj, "Username")));
++						zcfgFeObjStructFree(ipIfaceJobj);
++						zcfgFeObjStructFree(ipIfacev4AddressJobj);
++						break;
++					}
++					zcfgFeObjStructFree(ipIfacev4AddressJobj);
++				}
++			}
++			zcfgFeObjStructFree(ipIfaceJobj);
++		}
++	}else{
++		/*Not support the IPv6 yet*/
++		printf("%s(%d): [CBT] IPv6 are not support user_login_process_v4 yet.. \n",__FUNCTION__,__LINE__);
++		isFromWan = false;
++	}
++	if(isFromWan)
++		return true;
++	else
++		return false;
++}
++
++bool queryUserInfo(char *userName,char *addr)
++{
++	rdm_TtUser_t *UsersUserObj= NULL;
++	objIndex_t iidStack,userIid;
++	rdm_ZyLogCfgGpAccount_t * UserLoginInfoObj=NULL;
++	char *copy_protocol = NULL;
++	char *token;
++	char *encodepassword = NULL;
++	zcfgRet_t ret = ZCFG_SUCCESS;
++	bool isLan = false,isWan = false;
++	char username[257]={0},paword[257]={0};
++	bool IsAllow = false;
++
++	IID_INIT(userIid);
++
++	strncpy(username,userName, 257);
++
++	IID_INIT(iidStack);
++	while ((ret = zcfgFeObjStructGetNext(RDM_OID_TT_USER, &iidStack, (void **) &UsersUserObj)) == ZCFG_SUCCESS)
++	{
++		if(strcmp(UsersUserObj->Username, username) == 0 )
++		{
++			userIid.level = 2;
++			if(UsersUserObj->Level == 1)//Level 1
++			{
++				userIid.idx[0] = 2;
++				userIid.idx[1] = 1;
++				//user_iidStack.idx[0] = 1
++			}
++			else//Level 2
++			{
++				userIid.idx[0] = 1;
++				userIid.idx[1] = 1;
++				//user_iidStack.idx[0] = 1
++			}
++			if(zcfgFeObjStructGet(RDM_OID_ZY_LOG_CFG_GP_ACCOUNT, &userIid, (void **)&UserLoginInfoObj) == ZCFG_SUCCESS) {
++				bool isFromWAN = false;
++				if(checkIsFromWan(addr)){
++					isFromWAN = true;
++				}
++
++				if(UsersUserObj->Enable == 1){
++					//LAN
++					if( (isFromWAN == false) && (UsersUserObj->LocalAccessCapable == 1))
++					{
++						copy_protocol = strdup(UsersUserObj->Allowed_LA_Protocols);
++						if(copy_protocol !=NULL){
++							token = strtok(copy_protocol, ",");
++							while (token != NULL) {
++								if( strcmp(token, "TELNET") == 0){
++									IsAllow = true;
++									break;
++								}
++								token = strtok(NULL, ",");
++							}
++							free(copy_protocol);
++						}
++					}
++					//WAN
++					else if( (isFromWAN == true) && (UsersUserObj->RemoteAccessCapable == 1))
++					{
++						copy_protocol = strdup(UsersUserObj->Allowed_RA_Protocols);
++						if(copy_protocol !=NULL){
++
++							token = strtok(copy_protocol, ",");
++							while (token != NULL) {
++								if( strcmp(token, "TELNET") == 0){
++									IsAllow = true;
++									break;
++								}
++								token = strtok(NULL, ",");
++							}
++							free(copy_protocol);
++						}
++					}
++				}
++				zcfgFeObjStructFree(UserLoginInfoObj);
++			}
++			zcfgFeObjStructFree(UsersUserObj);
++			break;
++		}
++		zcfgFeObjStructFree(UsersUserObj);
++	}
++
++	return IsAllow;
++}
++int UserAllow(char *username,char *addr)
++{
++	bool IsAllow = false;
++
++	IsAllow = queryUserInfo(username,addr);
++
++	if(IsAllow == 1)
++		return 0;
++
++	return -1;
++}
++#endif	/* _MSTC_, Linda, CPE User Definitions and Rights_END. */
++
+ int login_main(int argc, char **argv) MAIN_EXTERNALLY_VISIBLE;
+ int login_main(int argc UNUSED_PARAM, char **argv)
+ {
+@@ -1116,6 +1278,19 @@
+ #endif
+ 			}
+ #endif
++#ifdef MSTC_TTNET_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
++			//Determine user can log in or not by using TELNET
++			if(strcmp(addr, "--")){
++				if (UserAllow(username,addr) == -1)
++				{
++					syslog(LOG_INFO, "This user is not allow to log in.");
++					printf("This user is not allow to log in.");
++					//strcpy(val, "2");
++					return EXIT_FAILURE;
++				}
++			}
++#endif	/*_MSTC_, Linda, CPE User Definitions and Rights_END.*/
++
+ 			break;
+ 		}
+ #endif /* ENABLE_PAM */

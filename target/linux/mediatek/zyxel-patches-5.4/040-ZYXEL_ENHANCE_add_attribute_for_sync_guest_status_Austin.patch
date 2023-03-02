@@ -1,0 +1,13 @@
+diff -ruN a/include/uapi/linux/wapp/wapp_cmm_type.h b/include/uapi/linux/wapp/wapp_cmm_type.h
+--- a/include/uapi/linux/wapp/wapp_cmm_type.h	2022-05-11 17:27:00.089171382 +0800
++++ b/include/uapi/linux/wapp/wapp_cmm_type.h	2022-05-11 17:46:43.792076669 +0800
+@@ -512,6 +512,9 @@
+ 	u8 key_len;
+ 	u8 key[64 + 1];
+ 	u8 hidden_ssid;
++#if 1 //zyxel mesh need add attribue to check guest status , Austin 2022/05/11
++	u8 attribute;
++#endif
+ } wdev_bss_info;
+ 
+ typedef struct GNU_PACKED _wsc_apcli_config {

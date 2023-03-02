@@ -1,0 +1,197 @@
+Index: busybox-1.31.1/loginutils/login.c
+===================================================================
+--- busybox-1.31.1.orig/loginutils/login.c	2021-04-07 17:09:02.869224251 +0800
++++ busybox-1.31.1/loginutils/login.c	2021-04-07 17:09:49.417222908 +0800
+@@ -75,6 +75,8 @@
+ #include "zcfg_rdm_obj.h"
+ #include "zcfg_rdm_oid.h"
+ #include "zcfg_fe_rdm_struct.h"
++
++#include "zyutil.h"
+ #endif
+ 
+ #if ENABLE_SELINUX
+@@ -521,6 +523,72 @@
+ }
+ #endif //ZYXEL_REMOMGMT_ONLY_HTTPS_ALLOWS_FOR_WLAN_CONNECT
+ 
++#ifdef ZYXEL_REMOTE_ACCESS_PRIVILEGE
++void checkClientFromLANWAN(char *remoaddr, char *remoAddr_Type);
++void checkClientFromLANWAN(char *remoaddr, char *remoAddr_Type)
++{
++	int addrType = 0;
++	objIndex_t objIid;
++	objIndex_t v4AddrIid;
++	objIndex_t v6AddrIid;
++	rdm_IpIface_t *ipObj = NULL;
++	rdm_IpIfaceV4Addr_t *ipv4Obj = NULL;
++	rdm_IpIfaceV6Addr_t *ipv6Obj = NULL;
++	char lanip[64] = {0};
++	char perfix[8] = {0};
++	bool found = false;
++
++	addrType = ipType(remoaddr);
++	if (addrType != AF_INET && addrType != AF_INET6) {
++		strcpy(remoAddr_Type, "Unknown");
++		syslog(LOG_INFO, "[%s][%d] Unknow IP type!!\n", __FUNCTION__, __LINE__);
++		return;
++	}
++
++	/*LANIP*/
++	IID_INIT(objIid);
++	while(!found && zcfgFeObjStructGetNext(RDM_OID_IP_IFACE, &objIid, (void **)&ipObj) == ZCFG_SUCCESS) {
++		if(!strcmp(ipObj->Name, "LAN")) {
++			if(addrType == AF_INET) {
++				IID_INIT(v4AddrIid);
++				while(zcfgFeObjStructGetNext(RDM_OID_IP_IFACE_V4_ADDR, &v4AddrIid, (void **)&ipv4Obj) == ZCFG_SUCCESS) {
++					if(objIid.idx[0] == v4AddrIid.idx[0]) { //check LAN group
++						if (!zyUtilIp4AddrDomainCmp(ipv4Obj->IPAddress, ipv4Obj->SubnetMask, remoaddr)) {
++							found = true;
++							zcfgFeObjStructFree(ipv4Obj);
++							break;
++						}
++					}
++					zcfgFeObjStructFree(ipv4Obj);
++				}
++			}
++			else {
++				IID_INIT(v6AddrIid);
++				while(zcfgFeObjStructGetNext(RDM_OID_IP_IFACE_V6_ADDR, &v6AddrIid, (void **)&ipv6Obj) == ZCFG_SUCCESS) {
++					if(objIid.idx[0] == v6AddrIid.idx[0]) { //check LAN group
++						sscanf(ipv6Obj->IPAddress, "%[^/]/%s", lanip, perfix);
++						if (checkCidrBlock(lanip, perfix, remoaddr) == 1) {
++							found = true;
++							zcfgFeObjStructFree(ipv6Obj);
++							break;
++						}
++					}
++					zcfgFeObjStructFree(ipv6Obj);
++				}
++			}
++		}
++		zcfgFeObjStructFree(ipObj);
++	}
++
++	if (found) {
++		strcpy(remoAddr_Type, "LAN");
++	}
++	else {
++		strcpy(remoAddr_Type, "WAN");
++	}
++}
++#endif
++
+ int login_main(int argc, char **argv) MAIN_EXTERNALLY_VISIBLE;
+ int login_main(int argc UNUSED_PARAM, char **argv)
+ {
+@@ -917,8 +985,8 @@
+ 				rdm_ZyLogCfgGp_t *logGpObj = NULL;
+ 				rdm_ZyLogCfgGpAccount_t *accountObj = NULL;
+ #ifdef ZYXEL_REMOTE_ACCESS_PRIVILEGE
+-				int addrType = 0;
+ 				char remoAddr_Type[32] = {0}; //WAN LAN
++				bool checkPrivilege = false;
+ 
+ 				memset(userPriviege, 0, sizeof(userPriviege));
+ #endif
+@@ -968,80 +1036,20 @@
+ 				}
+ #ifdef ZYXEL_REMOMGMT_ONLY_HTTPS_ALLOWS_FOR_WLAN_CONNECT
+ 				if (ipType(addr) == AF_INET){
++
+ 					if (ipComeFromWiFi(addr) == 1){ // Check WLAN
+ 						syslog(LOG_INFO, "TELNET permission denied with WLAN connection." );
+ 						return EXIT_FAILURE;
+ 					}
++
+ 				}
+ #endif //ZYXEL_REMOMGMT_ONLY_HTTPS_ALLOWS_FOR_WLAN_CONNECT
+ 
+ #ifdef ZYXEL_REMOTE_ACCESS_PRIVILEGE
+-
+-				//syslog(LOG_INFO, "Account privilege: ZYXEL_REMOTE_ACCESS_PRIVILEGE IN !!!!");
+-				//syslog(LOG_INFO, "Account privilege: get remoAddr = %s ", addr);
+-
+-				// check remote IP v4/v6
+-				addrType = ipType(addr);
+-
+-				if (addrType == AF_INET){
+-					int n;
+-					int i = 0;
+-					objIndex_t objIid;
+-					rdm_IpIface_t *ipObj = NULL;
+-					rdm_IpIfaceV4Addr_t *ipv4Obj = NULL;
+-					char lanip[32] = {0};
+-					char subnetMask[32] = {0};
+-					char perfix[10]={0};
+-					bool checkPrivilege = false;
+-					objIndex_t v4AddrIid;
+-
+-
+-					//v4 checking
+-
+-					//syslog(LOG_INFO, "Account privilege: %s remoAddr type = %d ", addr, addrType);
+-
+-					/*Remote Ip WAN/LAN Ip check */
+-
+-					//Get host IP
+-
+-					/*LANIP*/
+-					IID_INIT(objIid);
+-					while( zcfgFeObjStructGetNext(RDM_OID_IP_IFACE, &objIid, (void **)&ipObj) == ZCFG_SUCCESS) {
+-						if(strcmp(ipObj->X_ZYXEL_IfName, "br0") ==0) {
+-							free(ipObj);
+-							break;
+-						}
+-						free(ipObj);
+-					}
+-
+-					v4AddrIid.level = 2;
+-
+-					IID_INIT(v4AddrIid);
+-					while( zcfgFeObjStructGetNext(RDM_OID_IP_IFACE_V4_ADDR, &v4AddrIid, (void **)&ipv4Obj)== ZCFG_SUCCESS){
+-						if (objIid.idx[0] == v4AddrIid.idx[0]){ //check br0(LAN) group
+-							strcpy(lanip, ipv4Obj->IPAddress);
+-							strcpy(subnetMask, ipv4Obj->SubnetMask);
+-
+-							inet_pton(AF_INET, subnetMask, &n);
+-							i = 0;
+-
+-							while (n > 0) {
+-								n = n >> 1;
+-								i++;
+-							}
+-							sprintf(perfix, "%d", i);
+-							if (checkCidrBlock(lanip, perfix, addr) == 1){
+-								strcpy(remoAddr_Type, "LAN");
+-							}
+-							else{
+-								strcpy(remoAddr_Type, "WAN");
+-							}
+-
+-							if (strstr(userPriviege, remoAddr_Type) != NULL){
+-								checkPrivilege = true;
+-							}
+-						}
+-						free(ipv4Obj);
++				if(ipType(addr) == AF_INET && strcmp(userPriviege, "LAN,WAN")) {
++					checkClientFromLANWAN(addr, remoAddr_Type);
++					if (strstr(userPriviege, remoAddr_Type) != NULL){
++						checkPrivilege = true;
+ 					}
+ 
+ 					if (checkPrivilege == false){
+@@ -1050,13 +1058,6 @@
+ 						syslog(LOG_INFO, "Account privilege:'%s' TELNET permission denied.", username);
+ 						return EXIT_FAILURE;
+ 					}
+-
+-				}
+-				else if (addrType == AF_INET6){
+-					//not support V6 for WIND Italy
+-				}
+-				else{
+-					//skip check unknow IP type
+ 				}
+ 
+ #endif

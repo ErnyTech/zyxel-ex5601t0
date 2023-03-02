@@ -1,0 +1,728 @@
+
+menu "Customization"
+
+	menu "SAAAD"
+
+	    config SAAAD_XTUR_CUSTOMIZATION
+	    	bool "SAAAD xTU-R Vendor ID Customization"
+	    	default n
+	    	
+	    config SAAAD_STB_PROVISION
+	    	bool "SAAAD STB Provisioning"
+	    	default n
+	    	
+	    config SAAAD_RELEASE_DHCP_PPP_BEFORE_IFDOWN
+	    	bool "Send DHCP release and disconnect PPP connection before reboot"
+	    	default n
+	    	
+	    config SAAAD_LOCK_ACSURL
+	    	bool "Lock TR69 settings on GUI when acs url was allocated via DHCP option 43"
+	    	default n
+	    	
+	    config SAAAD_DHCP_FORCE_RENEW
+	    	bool "Support SAAAD DHCP force renew"
+	    	default n
+	    	
+	    config SAAAD_DHCP_OPTION58_OPTION59
+	    	bool "Support DHCP option 58,59"
+	    	default n
+	    	
+	    config SAAAD_TR98_CUSTOMIZATION
+	    	bool "SAAAD TR98 Customization"
+	    	default n
+
+	    config SAAAD_TR69_CUSTOMIZATION
+	    	bool "SAAAD TR69 RetryInterval Customization"
+	    	default n
+
+		config BUILD_CUSTOMIZATION_SAAAD
+			bool "BUILD_CUSTOMIZATION_SAAAD : project SAAAD voice related"
+	    	default n
+		
+		config SAAAD_TR69_WAN_CUSTOMIZATION
+			bool "SAAAD Wan change service name customization"
+			default n
+
+		config SAAAD_RANDOM_PASSWORD
+			bool "SAAAD Random password customization"
+			default n
+			
+		config SAAAD_FIREWALL_CUSTOMIZATION
+			bool "SAAAD Firewall priority customization"
+			default n
+		config SAAAD_VLANHUNT_CUSTOMIZATION
+			bool "SAAAD VLAN autohunt customization(verify option43)"
+			default n
+		config SAAAD_WAN_AUTO_DETECT_CUSTOMIZATION
+			bool "SAAAD VLAN auto dectct customization"
+			default n
+		config SAAAD_FIXED_WANDEV_INDEX_CUSTOMIZATION
+			bool "SAAAD CPE mapping WANDevice.1 to TR69 binding WAN"
+			default n
+		config SAAAD_BRIDGE_INDEX_CUSTOMIZATION
+			bool "SAAAD Mapping Layer2Bridging.Bridge.1(2,3).VLAN to TR69 binding WAN"
+			default n
+
+		config ABWW_IPTV_WPS_PBC_BEHAVIOR
+			bool "IPTV WPS behavior for ABWW SAAAD"
+			default n	    	
+
+	    config ABWW_STB_PROVISION_Y2020
+	    	bool "ABWW STB Provisioning via DHCP option"
+	    	default n
+
+ 	    config ABWW_GUEST_WIFI_CUSTOMIZATION
+	    	bool "ABWW Guest wifi customization for SAAAD"
+	    	default n	  	
+	    	
+	    config ABWW_ZERO_TOUCH_L3_FIBER_QOS_DEACTIVE
+	    	bool "ABWW Zero Touch L3 Fiber Qos Deactive"
+	    	default n	
+	    	
+	    config ABWW_ALLOW_UPGRADE_FW_ID_WITH_DUMMY
+	    	bool "ABWW Allow Upgrade FW ID with Dummy"
+	    	default n	
+	    		    	
+	   config ABWW_AVOID_AAAA_DNS_QUERY_FORWARD_LAN_TO_WAN
+	    	bool "ABWW Avoid_AAAA_DNS_Query_Forward_LAN_to_WAN"
+	    	default n	 		    	
+	    		    	
+	   config ABWW_SHOW_USB_PARTITION_INFOR
+	    	bool "ABWW Show_USB_partiation_information"
+	    	default n	 		
+	    	
+	   config ABWW_HIDE_GUEST23_WIFI_FOR_ACS
+	    	bool "ABWW Hide Guest23 Wifi_For ACS"
+	    	default n	 		
+
+	   config ABWW_OMCI_CWMP_WITH_SPECIFIC_MAC_ADDR
+	    	bool "Use sepcific mac address as GPON register ID and TR069 Inform SerialNumber"
+	    	default n
+
+	   config ABWW_STATIC_DNS_CUSTOMIZATION
+	    	bool "Support ABWW static DNS feature"
+	    	default n
+
+	   config ABWW_WEB_GUI_IPERF
+	    	bool "Show the latest 10 iperf test rsult on GUI"
+	    	default n
+
+	   config ABWW_CHECK_BAD_BLOCK
+	    	bool "Support ABWW check bad block"
+	    	default n
+    endmenu
+
+	menu "EAAAA"
+		config EAAAA_DEFAULT_TR69_USERNAME_PASSWD
+			bool "EAAAA tr69 username and password customization"
+			default n
+			help
+			  EAAAA take serial as username and WPA-PSK as password
+		
+		config EAAAA_DEFAULT_LOGIN_PASSWORD
+			bool "EAAAA login password is the same as preShardeKey"
+			default n
+
+		config EAAAA_CUSTOMIZATION
+			bool "EAAAA customization"
+			default n
+			
+		config EAAAA_WAN_AUTO_DETECT
+			bool "EAAAA wan auto dectct customization"
+			default n
+		
+		config EAAAA_CLEAN_ROMD_EVERYTIME_DURING_BOOT_UP
+			bool "EAAAA clean romd during every boot up time"
+			default n
+
+		config EAAAA_ISOLATE_LAN_PORT
+			bool "EAAAA isolate lan port"
+			default n
+
+		config EAAAA_NETWORKMAP_CUSTOMIZATION
+			bool "EAAAA NetworkMap Customization for wireless client"
+			default n
+
+		config EAAAA_NAT_PORTFORWARD_CUSTOMIZATION
+			bool "EAAAA NAT Portmapping Customization"
+			default n			
+
+		config EAAAA_TR69_WANDSL_CUSTOMIZATION
+			bool "EAAAA tr69 WANSDL Customization"
+			default n
+			help
+			  Returning default values for getting DSL realted parameters of non-DSL WAN interfaces
+
+		config ZYXEL_DSL_AVERAGE_SIGNAL_ATTEN
+			bool "EAAAA want to see the total signal attenuation at ACS that average of different bands"
+			default n
+		
+                config ZYXEL_SYNC_CCWAN_TO_ALL_DEFGW
+                        bool "Set one of the CCWAN will sync to other default GW CCWAN"
+                        default n
+
+	endmenu
+
+	menu "SAAAE"
+		config SAAAE_CUSTOMIZATION
+		bool "SAAAE Customization"
+		default n
+
+		config SOL_TR69_CUSTOMIZATION
+		bool "SAAAE TR69 Customization"
+		default n
+
+		config SOL_TR69_AUTO_REDOWNLOAD_FW
+		bool "SAAAE TR69 Automatic ReDownload FW if power off whrn FW upgrade"
+                default n
+
+		config SOL_TR69_AUTO_CHANGE_DHCP_POOL
+		bool "SAAAE TR69 automatic change DHCP pool by LAN IP and subnet mask"
+		default n
+
+		config SOL_TR69_FIREWALL_CONTROL
+		bool "SAAAE TR69 Firewall Enable/Disable Control"
+		default n
+
+		config SOL_TR69_3G_Backup
+		bool "SAAAE TR69 3G Backup enable/Disable and PIN setting"
+		default n
+
+		config SOL_TR69_TRUSTDOMAIN
+		bool "SAAAE TR69 Support MGMT Trust Doamin"
+		default n
+
+		config SOL_TR69_LOGINACCOUNT
+		bool "SAAAE TR69 Support Login Account Configuration"
+		default n
+
+		config SOL_TR69_NO_LAN_HOST
+		bool "SAAAE TR69 - Fix No LAN Host"
+		default n
+
+	endmenu
+
+	menu "ZYXEL_RUNNINGWAN_CUSTOMIZATION"
+        config ZYXEL_RUNNINGWAN_CUSTOMIZATION
+        bool "Show ZYXEL RUNNINGWAN interface for tr098 parameter"
+        default n
+	endmenu
+
+
+	menu "TAAAA"
+		config TAAAA_CUSTOMIZATION
+		bool "TAAAA Customization"
+		default n
+
+		config TAAAA_FIREWALL
+		bool "TAAAA Firewall Customization"
+		default n
+		
+	endmenu
+	
+	menu "OAAAB"
+		config ABUE_CUSTOMIZATION
+		bool "ABUE Customization"
+		default n
+	
+	endmenu
+
+	menu "CAAAE"
+		config CAAAE_CUSTOMIZATION
+		bool "CAAAE Customization"
+		default n
+
+	endmenu
+
+	menu "CAAAD"
+		config CAAAD_CUSTOMIZATION
+		bool "CAAAD Customization"
+		default n
+	endmenu
+
+	menu "PAAAA"
+		config PAAAA_CUSTOMIZATION
+		bool "PAAAA Customization"
+		default n
+
+	endmenu
+
+	menu "VMG3926-B10A/VMG3925-B10B Generic"
+		config SAME_FW_FOR_TWO_BOARD
+		bool "Generic Customization"
+		default n
+
+	endmenu
+
+	menu "Wind"
+		config WIND_CUSTOMIZATION
+		bool "Wind Customization"
+		default n
+		
+		config WIND_ITALY_CUSTOMIZATION
+		bool "Wind Italy Customization"
+		default n
+
+		config WIND_ITALY_DONT_DELETE_HOST_BEFORE_LEASE_EXPIRED
+		bool "Wind Italy Customization, don't delete host before DHCP lease expired"
+		default n
+
+                config ZCFG_NEW_PWD_RULE_FOR_ADMIN_PSK_WIND_ITALY
+                bool "Administrator Randon / WPA-PSK password rules changes for WIND project Only"
+                default n
+
+		config ACEN_ENCRYPTED_IMAGE
+                bool "ACEN Customization, encrypted ras.bin"
+                default n
+		
+	endmenu	
+
+	menu "SAAAB"
+		config SAAAB_CUSTOMIZATION
+		bool "SAAAB Customization"
+		default n
+
+	endmenu
+
+	menu "CAAAB"
+		config CAAAB_CUSTOMIZATION
+		bool "CAAAB Customization"
+		default n
+		
+		config CAAAB_PUBLIC_LAN
+		bool "New style for CAAAB public lan"
+		default n
+
+	endmenu
+	
+	menu "EAAAB"
+		config EAAAB_CUSTOMIZATION
+		bool "EAAAB Customization"
+		default n
+	endmenu
+
+	menu "OAAAA"
+		config OAAAA_CUSTOMIZATION
+		bool "OAAAA Customization"
+		default n
+		
+		config OAAAA_HOTSPOT_ENABLE
+		bool "Hide WLAN guest#3 (for hotspot) when user login as 'admin' in WEB GUI, change WLAN BSSIDs generate sequence in MT7603/NT7612."
+		default n
+		
+		config OAAAA_WAN_MAC_FOR_VMG3625
+		bool "Change WAN MAC for OAAAA VMG3625-T20A_OAAAA to match WLAN BSSID."
+		default n
+
+	endmenu
+	
+	menu "TAAAD"
+		config TAAAD_CUSTOMIZATION
+		bool "TAAAD Customization"
+		default n
+
+		config ZYXEL_VMG8924_B10D_TAAAD_ISOLATE_DMZ
+		bool "TAAAD VMG8924_B10D Isolate DMZ"
+		default n
+
+		config ZYXEL_VMG8825_T50K_TAAAD_ISOLATE_DMZ
+		bool "TAAAD VMG8825_T50K Isolate DMZ"
+		default n
+	endmenu
+	
+	menu "ABWP"
+		config ABWP_CUSTOMIZATION
+		bool "ABWP Customization"
+		default n	
+	endmenu
+   
+   	menu "ABXM"
+		config ABXM_CUSTOMIZATION
+		bool "ABXM Customization"
+		default n
+	endmenu
+
+   menu "TAAAF"
+		   config TAAAF_CUSTOMIZATION
+		   bool "TAAAF Customization"
+		   default n
+		   
+	endmenu
+
+	menu "ABWO"
+		config ABWO_CUSTOMIZATION
+		bool "ABWO Customization"
+		default n
+
+	endmenu
+
+	menu "MAAAC"
+		config MAAAC_SHORTEN_TR69_RESPONSE_TIME
+		bool "MAAAC TR69 shorten response time"
+		default n
+
+	endmenu
+	menu "BRAZIL"
+		config BRAZIL_CUSTOMIZATION
+		bool "BRAZIL CUSTOMIZATION"
+		default n
+
+	endmenu
+	
+	menu "MAAAB"
+		config MAAAB_CUSTOMIZATION
+		bool "MAAAB CUSTOMIZATION"
+		default n
+	endmenu
+	
+	menu "AAAAA"
+		config AAAAA_CUSTOMIZATION
+		bool "AAAAA CUSTOMIZATION"
+		default n
+
+	endmenu
+	
+	menu "SAAAA"
+		config SAAAA_CUSTOMIZATION
+		bool "SAAAA CUSTOMIZATION"
+		default n
+
+	endmenu
+
+	menu "IAAAA"
+		config USE_OLD_VOIP_PREFIX
+		bool "Use old TR98 VOIP parameter prefix X_ZyXEL_COM_"
+		default n
+		
+		config IAAAA_GUI_CUSTOMIZATION
+		bool "IAAAA Gui customization"
+		default n
+
+		config IAAAA_CUSTOMIZATION
+		bool "IAAAA customization"
+		default n
+
+                config IAAAA_CUSTOMIZATION_Motorola_VIP1003
+                bool "For IAAAA Motorola_VIP1003 LAN bridge switching issue"
+                default n
+	endmenu
+
+	menu "CAAAA"
+		config CAAAA_CUSTOMIZATION
+		bool "CAAAA customization "
+		default n
+	endmenu
+
+        menu "HAAAA Customization"
+                config HAAAA_CUSTOMIZATION 
+                bool "HAAAA Customization"
+                default n
+        endmenu
+
+	menu "Altibox"
+		config ALTIBOX_CUSTOMIZATION
+		bool "Altibox customization"
+		default n
+	endmenu
+
+	menu "TAAAC"
+		config TAAAC_Y2015_CUSTOMIZATION
+		bool "TAAAC_Y2015_CUSTOMIZATION"
+		default n
+
+		config ABOG_CUSTOMIZATION
+		bool "ABOG customization"
+		default n
+
+		config TAAAC_CUSTOMIZATION
+		bool "Mobile / TAAAC Customization"
+		default n
+		default y  if (TAAAC_Y2015_CUSTOMIZATION || ABOG_CUSTOMIZATION)
+	endmenu
+
+    menu "TAAAE"
+        config ABPY_CUSTOMIZATION
+        bool "ABPY customization"
+        default n
+    endmenu
+
+    menu "APP"
+        config ZYXEL_APP_HOME_PAGE_DISPLAY_MESH_STATUS
+        bool "APP customization"
+        default n
+    endmenu
+
+	menu "TT"
+		config ZYXEL_TAAAB_CUSTOMIZATION
+		bool "Enable TT CUSTOMIZATION feature"
+		default n
+	endmenu
+
+	menu "CAAAC"
+		config ABQA_CUSTOMIZATION
+                bool "CAAAC customization"
+                default n
+
+		config BRIDGE_VLAN_COUNTER
+                bool "RX TX counter per Vlan in Bridge Mode"
+                default n
+	endmenu
+	
+	menu "OAAAC"
+        config ABVG_CUSTOMIZATION
+        bool "OAAAC customization"
+        default n
+    endmenu
+    
+	menu "SAAAC"
+		config SAAAC_CUSTOMIZATION
+		bool "SAAAC Customization"
+		default n
+
+		config ZYXEL_DETECT_WAN_IP_CONFLICT
+		bool "LAN IP range will automatically change to another range if the WAN IP is within the IP range of LAN networks"
+		default n
+	endmenu
+
+    menu "WIND Greece"
+        config WIND_GREECE_GUI_CUSTOMIZATION
+        bool "WIND Greece GUI customization"
+        default n
+
+        config WIND_GREECE_CUSTOMIZATION
+        bool "WIND_Greece customization"
+        default n
+
+        config WIND_Greece_DHCPv6_Client_NTP_Option
+        bool "WIND Greece DHCPv6 Client NTP Option"
+        default n
+
+    endmenu
+
+    menu "PPPoE Service"
+		config ZYXEL_PPPoE_SERVICE_OPTION
+                bool "PPPoE Service Option"
+                default n
+    endmenu
+	
+	menu "TT"
+		config TAAAB_CUSTOMIZATION
+		bool "TT CUSTOMIZATION"
+		default n
+		
+		config ZYXEL_SUPPORT_LIFEMOTE
+		bool "TT SUPPORT LIFEMOTE"
+		default n
+		
+		config X_ZYXEL_SUPPORT_LIFEMOTE
+		bool "opal generic SUPPORT LIFEMOTE"
+		default n
+
+	        config ZYXEL_SUPPORT_QUANTWIFI
+		bool "TT SUPPORT QUANTWIFI"
+		default n
+
+		config TAAAB_DSL_BINDING
+		bool "Enable TT DSL BINDING"
+		default n
+
+		config MSTC_TAAAG_MULTI_USER
+		bool "MSTC TTNET MULTI USER"
+		default n
+		
+		config MSTC_RAAAA_MULTI_USER
+		bool "MSTC RETAIL MULTI USER"
+		default n
+
+		config SUPERVISOR_USE_ZYSH
+		bool "Supervisour/root use zysh"
+		default n
+
+                config TAAAB_PORTMIRROR
+		bool "support TT PORTMIRROR"
+		default n
+
+                config TAAAB_PACKETCAPTURE
+		bool "support TT PACKETCAPTURE"
+		default n
+
+	        config ZYXEL_TAAAB_PARTIAL_RESTORE
+		bool "TT PARTIAL RESTORE"
+		default n
+
+		config ZYXEL_TAAAG_TR69ALG
+		bool "MSTC ZYXEL TR69 ALG paramters"
+		default n
+
+	        config ZYXEL_TAAAB_WPSSETUPLOCK
+		bool "TT CUSTOMIZATION WPSSETUPLOCK"
+		default n
+
+		config TENDER_TAAAB_FEATURE
+		bool "support TENDER TT FEATURE"
+		default n
+
+	        config TAAAB_CUSTOMIZATION_TR069
+		bool "TT CUSTOMIZATION TR069"
+		default n
+
+        config ZYXEL_WLAN_WORK_24_HOURS
+		bool "support WLAN 4th SSID work 24 hours"
+		default n
+
+		config ZYXEL_CONFIG_MAX_WLAN_CLIENT
+		bool "support config max wlan accociate client"
+		default n
+
+		config ZYXEL_TR140
+		bool "ZYXEL TR140"
+		default n
+
+		config ZYXEL_PPP_OTHER_DOMAIN
+		bool "TT PPP OTHER DOMAIN"
+		default n
+
+		config ZYXEL_CUSTOMIZATION_DEVICELOG
+		bool "TT DEVICELOG"
+		default n
+		
+		config ZYXEL_TAAAB_DUAL_MANAGEMENT
+		bool "TT DUAL MANAGEMENT"
+		default n
+		
+		config ZYXEL_TAAAB_MGMTPORT_SEPARETE
+		bool "TT MGMT LAN WAN PORT SEPARETE"
+		default n
+		
+		config MSTC_TAAAG_REMOTEMGMT_FEATURE
+		bool "support MSTC TTNET REMOTEMGMT FEATURE"
+		default n
+		
+		config MSTC_CAAAB_REMOTE_ACCESS
+		bool "support MSTC CAAAB REMOTE ACCESS"
+		default n
+		
+		config MSTC_TRUSTDOMAIN
+		bool "support MSTC TRUSTDOMAIN"
+		default n
+		
+		config MSTC_IPTABLE_GROUP
+		bool "support MSTC IPTABLE GROUP"
+		default n
+		
+		config NORWAY_CUSTOMIZATION
+		bool "support NORWAY CUSTOMIZATION"
+		default n
+		
+		config MSTC_SERVICE_ROUTE
+		bool "support MSTC SERVICE ROUTE"
+		default n
+		
+		config SUPPORT_HTTPD_SSL
+		bool "support SUPPORT HTTPD SSL"
+		default n
+		
+		config DMP_X_5067F0_IPV6_1
+		bool "support DMP X_5067F0 IPV6"
+		default n
+		
+		config SUPPORT_SSHD
+		bool "support SUPPORT SSHD"
+		default n
+		
+		config MSTC_ACCESSSERVICE
+		bool "support MSTC ACCESSSERVICE"
+		default n
+
+		config ZYXEL_IGMPDIAG
+		bool "ZYXEL IGMPDIAG"
+		default n
+
+		config ZYXEL_CUSTOMIZATION_SYSLOG
+		bool "ZYXEL CUSTOMIZATION SYSLOG"
+		default n
+
+		config ZYXEL_TAAAG_NTP_MULTIWAN
+		bool "Support ZYXEL TTNET NTP MultiWan for test"
+		default n
+	endmenu
+
+	menu "NN FLOWER SPECIFIC CAPABILITY"
+		config NN_FLOWER_SPECIFIC_CAPABILITY
+		bool "NN FLOWER SPECIFIC CAPABILITY"
+		default n
+	endmenu
+
+	menu "ABUU Customization"
+		config ABUU_CUSTOMIZATION
+		bool "ABUU Customization"
+		default n
+
+		config ABUU_CUSTOMIZATION_MULTIPLE_CONFIG
+		bool "ABUU Customization Multiple Config"
+		default n
+
+		config ABUU_CUSTOMIZATION_WLAN_SCHEDULER
+		bool "ABUU Customization WLAN scheduler"
+		default n
+
+		config ABUU_CUSTOMIZATION_ONLINE_FW_UPGRADE
+		bool "ABUU Customization Online FW upgrade"
+		default n
+
+        config ABUU_CUSTOMIZATION_QOS
+        bool "ABUU QoS Customization"
+        default n
+	endmenu
+
+	menu "ABWJ Customization"
+        config ABWJ_CUSTOMIZATION
+		bool "ABWJ Customization"
+		default n
+	endmenu
+	
+	menu "ABYM Customization"
+        config ABYM_CUSTOMIZATION
+		bool "ABYM Customization"
+		default n
+	endmenu
+
+	menu "Malaysia Customization"
+        config ZYXEL_ERROR_RESPOND_WITH_DUPLEX_PARAMETER_IN_ONE_REQUEST
+        bool "Error respond from CPE with duplex parameter value in one setting request."
+        default n
+
+        config ZYXEL_ZTR69_ACS_UPLOAD_CONFIG_COMMAND_URL_IS_DATAPATH
+        bool "Makesure all the URL which is come from 'ACSServer upload config Command' is datapath."
+        default n
+		
+        config ZYXEL_IP_UNNUMBER
+        bool "Zyxel IP UNNUMBER for PUBLIC LAN"
+        default n		
+		
+        config ZYXEL_FEATURE_PROGRESS_STATUS_WITH_FIRMWARE_UPGRADE
+        bool "Progress status with Firmware Upgrade."
+        default n
+        
+        config ZYXEL_SHOW_CPU_MEMORY_USAGE_BAR_INDICATORS
+        bool "MUST support Memory & CPE % Usage with bar indicators."
+        default n
+
+        config ABWU_CUSTOMIZATION
+        bool "ABWU_GUI_Customization with TM GUI Customization."
+        default n
+	endmenu
+
+	menu "ABZQ Customization"
+        config ABZQ_CUSTOMIZATION
+		bool "ABZQ Customization"
+		default n
+	endmenu
+
+	menu "ACCL Customization"
+        config ACCL_CUSTOMIZATION
+		bool "ACCL Customization"
+		default n
+	endmenu
+	
+endmenu

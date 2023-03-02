@@ -1,0 +1,108 @@
+Index: linux-5.4.171/net/core/dev.c
+===================================================================
+--- linux-5.4.171.orig/net/core/dev.c
++++ linux-5.4.171/net/core/dev.c
+@@ -166,6 +166,18 @@ static int call_netdevice_notifiers_exta
+ 					   struct netlink_ext_ack *extack);
+ static struct napi_struct *napi_by_id(unsigned int napi_id);
+ 
++#if 1 /* Kide@zyxel: Zyxel QoS */
++#include "skb_defines.h"
++
++#define QOS_1Q_ADD      1
++#define QOS_1Q_REMARK   2
++#define QOS_1Q_REMOVE   3
++
++/* as enabled, allow vlan-packets forwarding to wan. save receiving vlan and push it back after forwarding. */
++int zy_vlan_rx_allow_forward __read_mostly = 0;
++EXPORT_SYMBOL(zy_vlan_rx_allow_forward);
++#endif
++
+ /*
+  * The @dev_base_head list is protected by @dev_base_lock and the rtnl
+  * semaphore.
+@@ -3275,11 +3287,6 @@ static struct sk_buff *validate_xmit_vla
+ 		skb = __vlan_hwaccel_push_inside(skb);
+ 
+ #if 1 /* Kide@zyxel: Zyxel Qos vtag */
+-#include "skb_defines.h"
+-
+-#define QOS_1Q_ADD      1
+-#define QOS_1Q_REMARK   2
+-#define QOS_1Q_REMOVE   3
+     /* should be the last xmit device */
+     if (skb->vtag && (skb->dev->hw_features & NETIF_F_HW_VLAN_CTAG_TX)) {
+         u16 vlan_tci = ((skb->vtag & 0xfff) - 1) | (((skb->vtag >> 13) - 1) << 13);
+@@ -4885,6 +4892,17 @@ another_round:
+ 
+ 	__this_cpu_inc(softnet_data.processed);
+ 
++#if 1 /* Kide@zyxel: Zyxel QoS
++       * as enabled, allow receiving vlan packets from lan. restore the vlan-tag and then push it back after forwarding.
++       */
++    if (zy_vlan_rx_allow_forward && (skb->dev->priv_flags & IFF_EBRIDGE)) {
++        if (skb_vlan_tag_get(skb) && !skb->vtag) {
++            skb->mark = SKBMARK_SET_VID_ACTION(skb->mark, QOS_1Q_ADD);
++            skb->vtag = ((skb_vlan_tag_get_prio(skb) + 1) << 13) | (skb_vlan_tag_get_id(skb) + 1);
++        }
++    }
++#endif
++
+ 	if (static_branch_unlikely(&generic_xdp_needed_key)) {
+ 		int ret2;
+ 
+@@ -4995,10 +5013,19 @@ skip_classify:
+ 	if (unlikely(skb_vlan_tag_present(skb))) {
+ check_vlan_id:
+ 		if (skb_vlan_tag_get_id(skb)) {
++#if 1 /* Kide@zyxel: Zyxel QoS
++       * as enabled, allow vlan-packets forwarding to wan. save receiving vlan and push it back after forwarding.
++       */
++            if (zy_vlan_rx_allow_forward && (skb->dev->priv_flags & IFF_EBRIDGE) && skb->vtag)
++                skb->pkt_type = skb->pkt_type;
++            else
++                skb->pkt_type = PACKET_OTHERHOST;
++#else
+ 			/* Vlan id is non 0 and vlan_do_receive() above couldn't
+ 			 * find vlan device.
+ 			 */
+ 			skb->pkt_type = PACKET_OTHERHOST;
++#endif
+ 		} else if (skb->protocol == cpu_to_be16(ETH_P_8021Q) ||
+ 			   skb->protocol == cpu_to_be16(ETH_P_8021AD)) {
+ 			/* Outer header is 802.1P with vlan 0, inner header is
+Index: linux-5.4.171/net/core/sysctl_net_core.c
+===================================================================
+--- linux-5.4.171.orig/net/core/sysctl_net_core.c
++++ linux-5.4.171/net/core/sysctl_net_core.c
+@@ -43,6 +43,12 @@ EXPORT_SYMBOL(sysctl_fb_tunnels_only_for
+ int sysctl_devconf_inherit_init_net __read_mostly;
+ EXPORT_SYMBOL(sysctl_devconf_inherit_init_net);
+ 
++#if 1 /* Kide@zyxel: Zyxel QoS
++       * as enabled, allow vlan-packets forwarding to wan. save receiving vlan and push it back after forwarding.
++       */
++extern int zy_vlan_rx_allow_forward;
++#endif
++
+ #ifdef CONFIG_RPS
+ static int rps_sock_flow_sysctl(struct ctl_table *table, int write,
+ 				void __user *buffer, size_t *lenp, loff_t *ppos)
+@@ -577,6 +583,17 @@ static struct ctl_table net_core_table[]
+ 		.proc_handler	= proc_dointvec_minmax,
+ 		.extra1		= SYSCTL_ONE,
+ 	},
++#if 1 /* Kide@zyxel: Zyxel QoS
++       * as enabled, allow vlan-packets forwarding to wan. save receiving vlan and push it back after forwarding.
++       */
++    {
++        .procname   = "zy_vlan_rx_allow_forward",
++        .data       = &zy_vlan_rx_allow_forward,
++        .maxlen     = sizeof(unsigned int),
++        .mode       = 0644,
++        .proc_handler   = proc_dointvec
++    },
++#endif
+ 	{ }
+ };
+

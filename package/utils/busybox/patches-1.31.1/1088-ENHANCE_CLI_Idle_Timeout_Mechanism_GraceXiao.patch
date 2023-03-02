@@ -1,0 +1,87 @@
+Index: busybox-1.31.1/loginutils/login.c
+===================================================================
+--- busybox-1.31.1.orig/loginutils/login.c	2021-03-23 11:03:33.872639955 +0800
++++ busybox-1.31.1/loginutils/login.c	2021-03-23 11:04:19.259004600 +0800
+@@ -552,6 +552,7 @@
+ 	int last_login_time = 0;
+ 	int retry_times = 0;
+ 	int lock_period = 0;
++	int idle_times = 0;
+ 	zcfgEidInit(ZCFG_EID_TELNETD, NULL);
+ #endif
+ 	IF_SELINUX(security_context_t user_sid = NULL;)
+@@ -853,6 +854,7 @@
+ 				if (!strcmp(accountObj->Username, username)){
+ 					retry_times = accountObj->AccountRetryTime;
+ 					lock_period = accountObj->AccountLockTime;
++					idle_times = accountObj->AccountIdleTime;
+ 					cur_user_idx[GROUP_IID] = logAccountObjIid.idx[GROUP_IID];
+ 					cur_user_idx[ACCOUNT_IID] = logAccountObjIid.idx[ACCOUNT_IID];
+ #ifdef ZYXEL_REMOTE_ACCESS_PRIVILEGE
+@@ -978,6 +980,17 @@
+ 
+ 		}
+ 
++		/* __ZyXEL__, GraceXiao, 20180227, Add timeout mechanism by using AccountIdleTime */
++		if(idle_times) {
++#ifdef ZYXEL_CLI_IDLE_TIMEOUT
++			FILE *fp;
++			fp=fopen("/var/accountIdleTime", "w+");
++			if(fp){
++				fprintf( fp, "%d\n", idle_times);
++				fclose(fp);
++			}
++#endif
++		}
+ 
+ 		if(chk_account_is_locked(cur_user_idx, &login_fail_cnt, last_login_time, retry_times, lock_period)){
+ 			puts("Account has been blocked temporarily, please try later!");
+Index: busybox-1.31.1/shell/ash.c
+===================================================================
+--- busybox-1.31.1.orig/shell/ash.c	2019-10-21 22:54:40.000000000 +0800
++++ busybox-1.31.1/shell/ash.c	2021-03-23 11:05:35.110004600 +0800
+@@ -10546,14 +10546,24 @@
+ 	if (!iflag || g_parsefile->pf_fd != STDIN_FILENO)
+ 		nr = nonblock_immune_read(g_parsefile->pf_fd, buf, IBUFSIZ - 1);
+ 	else {
+-# if ENABLE_ASH_IDLE_TIMEOUT
++# if ENABLE_ASH_IDLE_TIMEOUT || defined(ZYXEL_CLI_IDLE_TIMEOUT)
+ 		int timeout = -1;
+ 		const char *tmout_var = lookupvar("TMOUT");
+-		if (tmout_var) {
++
++		/* __ZyXEL__, GraceXiao, 20180227, Add timeout mechanism by using AccountIdleTime */
++		FILE *fp;
++		int idle_times = 0;
++		fp=fopen("/var/accountIdleTime", "r");
++		if(fp) fscanf(fp, "%d", &idle_times);
++
++		if(tmout_var)
+ 			timeout = atoi(tmout_var) * 1000;
+-			if (timeout <= 0)
+-				timeout = -1;
+-		}
++		else if(idle_times)
++			timeout = idle_times * 1000;
++
++		if (timeout <= 0)
++			timeout = -1;
++
+ 		line_input_state->timeout = timeout;
+ # endif
+ # if ENABLE_FEATURE_TAB_COMPLETION
+@@ -10574,12 +10584,13 @@
+ 			bb_putchar('\n');
+ 			goto retry;
+ 		}
++
+ 		if (nr < 0) {
+ 			if (errno == 0) {
+ 				/* Ctrl+D pressed */
+ 				nr = 0;
+ 			}
+-# if ENABLE_ASH_IDLE_TIMEOUT
++# if ENABLE_ASH_IDLE_TIMEOUT || defined(ZYXEL_CLI_IDLE_TIMEOUT)
+ 			else if (errno == EAGAIN && timeout > 0) {
+ 				puts("\007timed out waiting for input: auto-logout");
+ 				exitshell();

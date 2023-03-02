@@ -1,0 +1,241 @@
+Index: linux-5.4.171/sound/soc/codecs/Kconfig
+===================================================================
+--- linux-5.4.171.orig/sound/soc/codecs/Kconfig	2022-06-24 20:47:29.209794400 +0800
++++ linux-5.4.171/sound/soc/codecs/Kconfig	2022-06-27 09:53:10.442000000 +0800
+@@ -165,6 +165,7 @@ config SND_SOC_ALL_CODECS
+ 	select SND_SOC_RT5682 if I2C
+ 	select SND_SOC_SGTL5000 if I2C
+ 	select SND_SOC_SI3218X_SPI
++	select SND_SOC_SLIC_DUMMY
+ 	select SND_SOC_SI476X if MFD_SI476X_CORE
+ 	select SND_SOC_SIMPLE_AMPLIFIER
+ 	select SND_SOC_SIRF_AUDIO_CODEC
+@@ -1493,6 +1494,9 @@ config SND_SOC_SI3218X_SPI
+ 	depends on SPI
+ 	select SND_SOC_SI3218X
+ 
++config SND_SOC_SLIC_DUMMY
++	tristate "slic dummy codec"
++
+ config SND_SOC_TPA6130A2
+ 	tristate "Texas Instruments TPA6130A2 headphone amplifier"
+ 	depends on I2C
+Index: linux-5.4.171/sound/soc/codecs/Makefile
+===================================================================
+--- linux-5.4.171.orig/sound/soc/codecs/Makefile	2022-06-24 20:47:29.209794400 +0800
++++ linux-5.4.171/sound/soc/codecs/Makefile	2022-06-27 09:53:13.503000000 +0800
+@@ -177,6 +177,7 @@ snd-soc-sigmadsp-objs := sigmadsp.o
+ snd-soc-sigmadsp-i2c-objs := sigmadsp-i2c.o
+ snd-soc-sigmadsp-regmap-objs := sigmadsp-regmap.o
+ snd-soc-si3218x-spi-objs := si3218x-spi.o
++snd-soc-slic-dummy-objs := slic-dummy.o
+ snd-soc-si476x-objs := si476x.o
+ snd-soc-sirf-audio-codec-objs := sirf-audio-codec.o
+ snd-soc-spdif-tx-objs := spdif_transmitter.o
+@@ -568,3 +569,6 @@ obj-$(CONFIG_SND_SOC_TPA6130A2)	+= snd-s
+ # Proslic si3218x
+ obj-$(CONFIG_SND_SOC_SI3218X)	+= si3218x/
+ obj-$(CONFIG_SND_SOC_SI3218X_SPI)	+= snd-soc-si3218x-spi.o
++
++# d2 slick dummy codec
++obj-$(CONFIG_SND_SOC_SLIC_DUMMY)	+= slic-dummy.o
+Index: linux-5.4.171/sound/soc/codecs/slic-dummy.c
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ linux-5.4.171/sound/soc/codecs/slic-dummy.c	2022-06-14 15:32:25.000000000 +0800
+@@ -0,0 +1,143 @@
++/* Copyright (c) 2022-2023, The Linux Foundation. All rights reserved.
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 and
++ * only version 2 as published by the Free Software Foundation.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ */
++
++#include <linux/module.h>
++#include <sound/soc.h>
++#include <linux/debugfs.h>
++#include <sound/pcm_params.h>
++
++#define STUB_RATES	SNDRV_PCM_RATE_8000_192000
++#define STUB_FORMATS	(SNDRV_PCM_FMTBIT_S16_LE | \
++			SNDRV_PCM_FMTBIT_U16_LE | \
++			SNDRV_PCM_FMTBIT_S24_LE | \
++			SNDRV_PCM_FMTBIT_U24_LE | \
++			SNDRV_PCM_FMTBIT_S32_LE | \
++			SNDRV_PCM_FMTBIT_U32_LE)
++
++struct dummy_chip {
++	struct device *dev;
++	struct snd_soc_component *component;
++};
++
++static int dummy_component_probe(struct snd_soc_component *component)
++{
++	dev_info(component->dev, "%s\n", __func__);
++	return 0;
++}
++
++static void dummy_component_remove(struct snd_soc_component *component)
++{
++	struct dummy_chip *chip = snd_soc_component_get_drvdata(component);
++	dev_info(component->dev, "%s\n", __func__);
++	chip->component = NULL;
++}
++
++static const struct snd_soc_dapm_widget dummy_component_dapm_widgets[] = {
++	SND_SOC_DAPM_INPUT("VINP"),
++	SND_SOC_DAPM_OUTPUT("VOUTP"),
++};
++
++static const struct snd_soc_dapm_route dummy_component_dapm_routes[] = {
++	{ "VOUTP", NULL, "aif_playback"},
++	{ "aif_capture", NULL, "VINP"},
++};
++
++static const struct snd_soc_component_driver dummy_component_driver = {
++	.probe = dummy_component_probe,
++	.remove = dummy_component_remove,
++
++	.dapm_widgets = dummy_component_dapm_widgets,
++	.num_dapm_widgets = ARRAY_SIZE(dummy_component_dapm_widgets),
++	.dapm_routes = dummy_component_dapm_routes,
++	.num_dapm_routes = ARRAY_SIZE(dummy_component_dapm_routes),
++
++	.idle_bias_on = false,
++};
++
++static int dummy_component_aif_hw_params(struct snd_pcm_substream *substream,
++	struct snd_pcm_hw_params *hw_params, struct snd_soc_dai *dai)
++{
++	int word_len = params_physical_width(hw_params);
++	int aud_bit = params_width(hw_params);
++
++	dev_dbg(dai->dev, "format: 0x%08x\n", params_format(hw_params));
++	dev_dbg(dai->dev, "rate: 0x%08x\n", params_rate(hw_params));
++	dev_dbg(dai->dev, "word_len: %d, aud_bit: %d\n", word_len, aud_bit);
++	if (word_len > 32 || word_len < 16) {
++		dev_err(dai->dev, "not supported word length\n");
++		return -ENOTSUPP;
++	}
++
++	dev_dbg(dai->dev, "%s: --\n", __func__);
++	return 0;
++}
++
++static const struct snd_soc_dai_ops dummy_component_aif_ops = {
++	.hw_params = dummy_component_aif_hw_params,
++};
++
++static struct snd_soc_dai_driver dummy_codec_dai = {
++	.name = "slic-dummy-aif",
++	.playback = {
++		.stream_name	= "aif_playback",
++		.channels_min	= 1,
++		.channels_max	= 2,
++		.rates		= STUB_RATES,
++		.formats	= STUB_FORMATS,
++	},
++	.capture = {
++		.stream_name	= "aif_capture",
++		.channels_min	= 1,
++		.channels_max	= 2,
++		.rates = STUB_RATES,
++		.formats = STUB_FORMATS,
++	},
++	/* dai properties */
++	.symmetric_rates = 1,
++	.symmetric_channels = 1,
++	.symmetric_samplebits = 1,
++	/* dai operations */
++	.ops = &dummy_component_aif_ops,
++};
++
++static int slic_dummy_codec_probe(struct platform_device *pdev)
++{
++	return snd_soc_register_component(&pdev->dev, &dummy_component_driver,
++				      &dummy_codec_dai, 1);
++}
++
++static int slic_dummy_codec_remove(struct platform_device *pdev)
++{
++	snd_soc_unregister_component(&pdev->dev);
++	return 0;
++}
++
++static const struct of_device_id slic_dummy_codec_dt_match[] = {
++	{.compatible = "d2,slic-dummy-codec",},
++	{}
++};
++
++static struct platform_driver slic_dummy_codec = {
++	.driver = {
++		   .name = "slic-dummy-codec",
++		   .owner = THIS_MODULE,
++		   .of_match_table = slic_dummy_codec_dt_match,
++		   },
++	.probe = slic_dummy_codec_probe,
++	.remove = slic_dummy_codec_remove
++};
++
++module_platform_driver(slic_dummy_codec);
++
++/* Module information */
++MODULE_DESCRIPTION("slic dummy codec");
++MODULE_LICENSE("GPL");
+Index: linux-5.4.171/sound/soc/mediatek/Kconfig
+===================================================================
+--- linux-5.4.171.orig/sound/soc/mediatek/Kconfig	2022-06-24 20:47:29.209794400 +0800
++++ linux-5.4.171/sound/soc/mediatek/Kconfig	2022-06-27 10:55:31.846000000 +0800
+@@ -76,7 +76,8 @@ config SND_SOC_MT79XX_WM8960
+ config SND_SOC_MT79XX_SI3218X
+ 	tristate "ASoc Audio driver for MT79XX with SI3218X codec"
+ 	depends on SND_SOC_MT79XX && SPI
+-	select SND_SOC_SI3218X_SPI
++	#select SND_SOC_SI3218X_SPI
++	select SND_SOC_SLIC_DUMMY
+ 	help
+ 	  This adds ASoC driver for Mediatek MT79XX boards
+ 	  with the SI3218X codecs.
+Index: linux-5.4.171/sound/soc/mediatek/mt79xx/mt79xx-dai-etdm.c
+===================================================================
+--- linux-5.4.171.orig/sound/soc/mediatek/mt79xx/mt79xx-dai-etdm.c	2022-06-24 20:47:30.697777000 +0800
++++ linux-5.4.171/sound/soc/mediatek/mt79xx/mt79xx-dai-etdm.c	2022-06-27 10:55:27.980000000 +0800
+@@ -309,7 +309,8 @@ static int mtk_dai_etdm_trigger(struct s
+ 	switch (cmd) {
+ 	case SNDRV_PCM_TRIGGER_START:
+ 	case SNDRV_PCM_TRIGGER_RESUME:
+-//        printk("%s %d D2 debug TRIGGER START/RESUME \n", __func__, __LINE__);
++////        printk("%s %d D2 debug TRIGGER START/RESUME \n", __func__, __LINE__);
++//        printk("%s %d D2 debug TRIGGER %s\n", __func__, __LINE__, (SNDRV_PCM_TRIGGER_START == cmd) ? "START" : "RESUME" );
+ #if 1 // D2 MOD.
+ 		regmap_update_bits(afe->regmap, ETDM_IN5_CON0, ETDM_EN_MASK,
+ 				   ETDM_EN);
+@@ -319,7 +320,8 @@ static int mtk_dai_etdm_trigger(struct s
+ 		break;
+ 	case SNDRV_PCM_TRIGGER_STOP:
+ 	case SNDRV_PCM_TRIGGER_SUSPEND:
+-//        printk("%s %d D2 debug TRIGGER STOP/SUSPEND\n", __func__, __LINE__);
++////        printk("%s %d D2 debug TRIGGER STOP/SUSPEND\n", __func__, __LINE__);
++//        printk("%s %d D2 debug TRIGGER %s\n", __func__, __LINE__, (SNDRV_PCM_TRIGGER_STOP == cmd) ? "STOP" : "SUSPEND");
+ #if 1 // D2 MOD.
+ 		regmap_update_bits(afe->regmap, ETDM_IN5_CON0, ETDM_EN_MASK,
+ 				   0);
+Index: linux-5.4.171/sound/soc/mediatek/mt79xx/mt79xx-si3218x.c
+===================================================================
+--- linux-5.4.171.orig/sound/soc/mediatek/mt79xx/mt79xx-si3218x.c	2022-06-24 20:47:30.633777800 +0800
++++ linux-5.4.171/sound/soc/mediatek/mt79xx/mt79xx-si3218x.c	2022-06-27 10:55:24.317000000 +0800
+@@ -202,7 +202,8 @@ SND_SOC_DAILINK_DEFS(capture,
+ 
+ SND_SOC_DAILINK_DEFS(codec,
+ 	DAILINK_COMP_ARRAY(COMP_CPU("ETDM")),
+-	DAILINK_COMP_ARRAY(COMP_CODEC(NULL, "proslic_spi-aif")),
++	//DAILINK_COMP_ARRAY(COMP_CODEC(NULL, "proslic_spi-aif")),
++	DAILINK_COMP_ARRAY(COMP_CODEC(NULL, "slic-dummy-aif")),
+ 	DAILINK_COMP_ARRAY(COMP_EMPTY()));
+ 
+ static struct snd_soc_dai_link mt79xx_si3218x_dai_links[] = {

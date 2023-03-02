@@ -1,0 +1,14 @@
+Index: dropbear-2018.76/configure
+===================================================================
+--- dropbear-2018.76.orig/configure	2020-10-22 16:50:16.422651451 +0800
++++ dropbear-2018.76/configure	2020-10-22 16:52:04.149128715 +0800
+@@ -3321,7 +3321,9 @@
+ else
+ 
+ 			CFLAGS="$OLDCFLAGS"
++			if [ ! -n "​​${CONFIG_EXTERNAL_TOOLCHAIN}" ]; then
+ 			TESTFLAGS="-fstack-protector --param=ssp-buffer-size=4"
++			fi
+ 			CFLAGS="$CFLAGS $TESTFLAGS"
+ 			cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+ /* end confdefs.h.  */

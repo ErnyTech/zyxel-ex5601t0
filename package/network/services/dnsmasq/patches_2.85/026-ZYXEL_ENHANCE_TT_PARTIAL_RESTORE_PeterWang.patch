@@ -1,0 +1,175 @@
+Index: dnsmasq-2.85/src/dnsmasq.h
+===================================================================
+--- dnsmasq-2.85.orig/src/dnsmasq.h	2021-04-22 11:20:05.000439804 +0800
++++ dnsmasq-2.85/src/dnsmasq.h	2021-04-22 11:20:05.124439800 +0800
+@@ -287,6 +287,16 @@
+ #define MS_SCRIPT LOG_MAIL
+ #define MS_DEBUG  LOG_NEWS
+ 
++#ifdef CONFIG_TT_CUSTOMIZATION_TR069
++struct query_domain {
++  char domainname[MAXDNAME];
++  int queryCount;
++  time_t timer;
++  unsigned int QType;
++  struct query_domain *next;
++};
++#endif
++
+ /* Note that this is used widely as a container for IPv4/IPv6 addresses,
+    so for that reason, was well as to avoid wasting memory in almost every
+    cache entry, the other variants should not be larger than
+@@ -1235,6 +1245,9 @@
+   int pipe_to_parent;
+   int numrrand;
+   struct randfd *randomsocks;
++#ifdef CONFIG_TT_CUSTOMIZATION_TR069
++  struct query_domain *domainQuery;
++#endif
+   struct randfd_list *rfl_spare, *rfl_poll;
+   int v6pktinfo;
+   struct addrlist *interface_addrs;     /* list of all addresses/prefix lengths associated with all local interfaces */
+Index: dnsmasq-2.85/src/forward.c
+===================================================================
+--- dnsmasq-2.85.orig/src/forward.c	2021-04-22 11:20:05.012439804 +0800
++++ dnsmasq-2.85/src/forward.c	2021-04-22 11:20:05.124439800 +0800
+@@ -237,6 +237,25 @@
+   return flags;
+ }
+ 
++#ifdef CONFIG_TT_CUSTOMIZATION_TR069
++static struct query_domain *
++create_domain_rec (char *namebuff, unsigned int QType)
++{
++  struct query_domain *n;
++
++  if (n = (struct query_domain *) whine_malloc (sizeof (struct query_domain))) {
++    n->next = daemon->domainQuery;
++    n->queryCount = 0;
++    strncpy (n->domainname, namebuff, MAXDNAME);
++    n->timer = dnsmasq_time ();
++    n->QType = QType;           //richard
++    daemon->domainQuery = n;
++  }
++  return n;
++
++}
++#endif
++
+ #ifdef HAVE_CONNTRACK
+ static void
+ set_outgoing_mark (struct frec *forward, int fd)
+@@ -316,6 +335,15 @@
+ #endif
+   unsigned int gotname =
+     extract_request (header, plen, daemon->namebuff, NULL);
++#ifdef CONFIG_TT_CUSTOMIZATION_TR069
++  int i = 0;
++  int forwardFlag = 0;          //richard
++  time_t now_time;
++  char diff_buf[8];
++  int diff = 0;
++  char tmpStr[256] = { 0 };
++  int bytes;
++#endif
+   unsigned char *oph =
+     find_pseudoheader (header, plen, NULL, NULL, NULL, NULL);
+   int old_src = 0;
+@@ -515,6 +543,74 @@
+     size_t edns0_len;
+     unsigned char *pheader;
+ 
++#ifdef CONFIG_TT_CUSTOMIZATION_TR069
++    struct query_domain *n = NULL;
++    int found = 0;
++
++    FILE *fp = fopen ("/tmp/tr69url", "r");
++    if (fp) {
++      bytes = fread (tmpStr, sizeof (char), 256, fp);
++      if (bytes < 256)
++        tmpStr[bytes] = '\0';
++
++      fclose (fp);
++    }
++
++    for (n = daemon->domainQuery; n != NULL; n = n->next) {
++      if (daemon->namebuff != NULL && !strncmp (n->domainname, daemon->namebuff, MAXDNAME) && n->QType == gotname)      //richard
++      {
++        found = 1;
++        break;
++      }
++    }
++    if (found) {
++      now_time = dnsmasq_time ();
++      sprintf (diff_buf, "%f", difftime (now_time, n->timer));
++      diff = atoi (diff_buf);
++      if (diff >= 30 || diff <= -30) {
++        n->timer = now_time;
++        n->queryCount = 0;
++      }
++    }
++    else {
++      n = create_domain_rec (daemon->namebuff, (unsigned short) gotname);       //richard
++
++      if (n == NULL)
++        return 0;
++
++    }
++    if (n != NULL && n->domainname != NULL
++        && strncmp (n->domainname, tmpStr, strlen (tmpStr)) == 0
++        && n->queryCount == 2)
++      return 1;
++
++    if (!forwardFlag) {         //richard
++      firstsentto = start = daemon->servers;
++
++      if (n != NULL) {
++        i = (n->queryCount) % 2;
++      }
++      if (i == 0) {
++        start = firstsentto;
++      }
++      else if (i == 1) {
++#if 1                           //RichardFeng
++        for (start != NULL; start != NULL && start->domain != NULL;
++             start = start->next) {
++          if (domain && hostname_isequal (domain, start->domain))
++            break;
++        }
++        if (start != NULL)
++#endif
++          start = start->next;
++
++        if (start == NULL) {
++          start = firstsentto;
++        }
++      }
++    }                           //richard
++#endif
++
+     /* If a query is retried, use the log_id for the retry when logging the answer. */
+     forward->frec_src.log_id = daemon->log_id;
+ 
+@@ -607,6 +703,11 @@
+           log_query_mysockaddr (F_SERVER | F_FORWARD, daemon->namebuff,
+                                 &start->addr, NULL);
+           start->queries++;
++#ifdef CONFIG_TT_CUSTOMIZATION_TR069
++          if (n != NULL) {
++            n->queryCount++;
++          }
++#endif
+           forwarded = 1;
+           forward->sentto = start;
+ 
+@@ -620,8 +721,9 @@
+               forward->forwardall = 1;
+           }
+ #endif
+-
++#ifndef CONFIG_TT_CUSTOMIZATION_TR069
+           if (!forward->forwardall)
++#endif
+             break;
+           forward->forwardall++;
+         }

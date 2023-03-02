@@ -1,0 +1,13 @@
+Index: dropbear-2018.76/sysoptions.h
+===================================================================
+--- dropbear-2018.76.orig/sysoptions.h	2018-02-27 22:25:12.000000000 +0800
++++ dropbear-2018.76/sysoptions.h	2021-01-14 16:05:20.144114367 +0800
+@@ -7,7 +7,7 @@
+ #define DROPBEAR_VERSION "2018.76"
+ #endif
+ 
+-#define LOCAL_IDENT "SSH-2.0-dropbear_" DROPBEAR_VERSION
++#define LOCAL_IDENT "SSH-2.0-ssh"
+ #define PROGNAME "dropbear"
+ 
+ /* Spec recommends after one hour or 1 gigabyte of data. One hour

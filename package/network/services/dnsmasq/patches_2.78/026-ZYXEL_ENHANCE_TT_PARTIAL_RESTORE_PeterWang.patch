@@ -1,0 +1,170 @@
+Index: dnsmasq-2.78/src/dnsmasq.h
+===================================================================
+--- dnsmasq-2.78.orig/src/dnsmasq.h	2020-09-03 11:33:23.106421301 +0800
++++ dnsmasq-2.78/src/dnsmasq.h	2020-09-03 16:25:11.147418143 +0800
+@@ -253,6 +253,16 @@
+ #define MS_DHCP   LOG_DAEMON
+ #define MS_SCRIPT LOG_MAIL
+ 
++#ifdef CONFIG_TT_CUSTOMIZATION_TR069
++struct query_domain {
++  char domainname[MAXDNAME];
++  int queryCount;
++  time_t timer;
++  unsigned int QType;
++  struct query_domain *next;
++};
++#endif
++
+ struct all_addr {
+   union {
+     struct in_addr addr4;
+@@ -1075,6 +1085,9 @@
+   struct randfd *rfd_save;      /*      "        "        */
+   pid_t tcp_pids[MAX_PROCS];
+   struct randfd randomsocks[RANDOM_SOCKS];
++#ifdef CONFIG_TT_CUSTOMIZATION_TR069
++  struct query_domain *domainQuery;
++#endif
+   int v6pktinfo;
+   struct addrlist *interface_addrs;     /* list of all addresses/prefix lengths associated with all local interfaces */
+   int log_id, log_display_id;   /* ids of transactions for logging */
+Index: dnsmasq-2.78/src/forward.c
+===================================================================
+--- dnsmasq-2.78.orig/src/forward.c	2020-09-03 11:33:23.110421301 +0800
++++ dnsmasq-2.78/src/forward.c	2020-09-03 16:25:42.077393473 +0800
+@@ -212,6 +212,23 @@
+   return flags;
+ }
+ 
++#ifdef CONFIG_TT_CUSTOMIZATION_TR069
++static struct query_domain *create_domain_rec(char *namebuff,unsigned int QType)
++{
++	struct query_domain *n ; 
++	if(n= (struct query_domain *)whine_malloc(sizeof(struct query_domain))){
++		n->next = daemon->domainQuery;
++		n->queryCount = 0;
++		strncpy(n->domainname,namebuff,MAXDNAME);
++		n->timer = dnsmasq_time();
++		n->QType = QType;//richard
++		daemon->domainQuery = n;
++	}
++	return n;
++	 
++}
++#endif
++
+ static int forward_query(int udpfd, union mysockaddr *udpaddr,
+                          struct all_addr *dst_addr, unsigned int dst_iface,
+                          struct dns_header *header, size_t plen, time_t now,
+@@ -233,6 +250,15 @@
+   void *hash = &crc;
+ #endif
+   unsigned int gotname = extract_request(header, plen, daemon->namebuff, NULL);
++#ifdef CONFIG_TT_CUSTOMIZATION_TR069
++  int i =0;
++  int forwardFlag = 0;//richard
++  time_t now_time;
++  char diff_buf[8];  
++  int diff=0;
++  char tmpStr[256] = {0};
++  int bytes;
++#endif
+ 
+   (void) do_bit;
+ 
+@@ -385,6 +411,71 @@
+     int subnet, forwarded = 0;
+     size_t edns0_len;
+ 
++#ifdef CONFIG_TT_CUSTOMIZATION_TR069
++	  struct query_domain *n = NULL;
++	  int found = 0;
++
++	FILE *fp = fopen("/tmp/tr69url", "r");
++	if (fp){
++		bytes = fread(tmpStr, sizeof(char), 256,fp);
++		if(bytes<256)
++			tmpStr[bytes]='\0';		
++
++		fclose(fp);
++	}
++	
++	  for(n = daemon->domainQuery; n!=NULL ; n=n->next)
++		{
++			if(daemon->namebuff!=NULL && !strncmp(n->domainname,daemon->namebuff,MAXDNAME) && n->QType == gotname)//richard
++			{
++				found = 1;
++				break;
++			}
++		}
++		if (found){
++			now_time = dnsmasq_time();
++			sprintf(diff_buf, "%f", difftime(now_time, n->timer) );
++			diff = atoi(diff_buf);  
++			if(diff >= 30 || diff <= -30 )
++			{
++				n->timer = now_time;
++				n->queryCount = 0;
++			}
++		}else{
++			n = create_domain_rec(daemon->namebuff,(unsigned short)gotname);//richard
++	
++			if(n == NULL)
++				return 0;
++		
++		}
++		if(n!=NULL && n->domainname!=NULL && strncmp(n->domainname, tmpStr, strlen(tmpStr))  == 0 && n->queryCount ==2)
++			return 1;
++
++	if(!forwardFlag){//richard
++		firstsentto = start = daemon->servers;
++
++			if(n != NULL){
++				i=(n->queryCount)%2;
++			}
++			if( i == 0 ){
++				start = firstsentto;
++			}else if ( i ==1 ){
++#if 1//RichardFeng						
++				for(start != NULL;start != NULL && start->domain!= NULL ; start = start->next){
++					if( domain &&  hostname_isequal(domain, start->domain))
++						break;
++				}
++				if(start != NULL)
++#endif
++					start = start->next;
++
++				if(start == NULL){
++					start = firstsentto;
++				}
++			}
++		}//richard
++#endif
++
+     /* If a query is retried, use the log_id for the retry when logging the answer. */
+     forward->log_id = daemon->log_id;
+ 
+@@ -505,6 +596,11 @@
+                       (struct all_addr *) &start->addr.in6.sin6_addr, NULL);
+ #endif
+           start->queries++;
++#ifdef CONFIG_TT_CUSTOMIZATION_TR069
++		  if(n != NULL){
++			n->queryCount++;
++		  }
++#endif
+           forwarded = 1;
+           forward->sentto = start;
+ 
+@@ -518,8 +614,9 @@
+               forward->forwardall = 1;
+           }
+ #endif
+-
++#ifndef CONFIG_TT_CUSTOMIZATION_TR069
+           if (!forward->forwardall)
++#endif
+             break;
+           forward->forwardall++;
+         }

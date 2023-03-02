@@ -1,0 +1,79 @@
+Index: logrotate-3.17.0/config.c
+===================================================================
+--- logrotate-3.17.0.orig/config.c
++++ logrotate-3.17.0/config.c
+@@ -1711,6 +1711,10 @@ static int readConfigFile(const char *co
+                         free(glob_string);
+                         goto error;
+                     }
++                    for (argNum = 0; argNum < argc; argNum++) {
++                        message(MESS_ERROR, "%s:%d glob failed on %s\n",
++                          configFile, lineNum, argv[argNum]);
++                    }
+ 
+                     newlog->files = NULL;
+                     newlog->numFiles = 0;
+@@ -1729,6 +1733,12 @@ static int readConfigFile(const char *co
+                                 | GLOB_TILDE
+ #endif
+                                 , globerr, &globResult);
++
++                        for (int i = 0; i < globResult.gl_pathc; i++) {
++                            message(MESS_ERROR, "%s:%d globResult %s\n",
++                               configFile, lineNum, globResult.gl_pathv[i]);
++                        }
++#if 0
+                         if (rc == GLOB_ABORTED) {
+                             if (newlog->flags & LOG_FLAG_MISSINGOK) {
+                                 continue;
+@@ -1743,7 +1753,7 @@ static int readConfigFile(const char *co
+ 
+                             globResult.gl_pathc = 0;
+                         }
+-
++#endif
+                         tmp = realloc(newlog->files,
+                                     sizeof(*newlog->files) * (newlog->numFiles +
+                                         globResult.
+Index: logrotate-3.17.0/logrotate.c
+===================================================================
+--- logrotate-3.17.0.orig/logrotate.c
++++ logrotate-3.17.0/logrotate.c
+@@ -2788,17 +2788,25 @@ static int readState(const char *stateFi
+             continue;
+ 
+         year = month = day = hour = minute = second = 0;
+-        if (poptParseArgvString(buf, &argc, &argv) || (argc != 2) ||
+-                (sscanf(argv[1], "%d-%d-%d-%d:%d:%d", &year, &month, &day, &hour, &minute, &second) < 3)) {
++        if (
++           poptParseArgvString(buf, &argc, &argv) || (argc != 2) ||
++              (sscanf(argv[1], "%d-%d-%d-%d:%d:%d", &year, &month, &day, &hour, &minute, &second) < 3)
++           )
++        {
+             message(MESS_ERROR, "bad line %d in state file %s\n",
+                     line, stateFilename);
++
+             free(argv);
+             fclose(f);
++
+             return 1;
+         }
+ 
+         /* Hack to hide earlier bug */
+-        if ((year != 1900) && (year < 1970 || year > 2100)) {
++        #ifdef LogZyxel
++        /*Added by Zyxel staven*/
++        if ((year != 1900) && (year < 1970 || year > 2100))
++        {
+             message(MESS_ERROR,
+                     "bad year %d for file %s in state file %s\n", year,
+                     argv[0], stateFilename);
+@@ -2806,7 +2814,7 @@ static int readState(const char *stateFi
+             fclose(f);
+             return 1;
+         }
+-
++        #endif
+         if (month < 1 || month > 12) {
+             message(MESS_ERROR,
+                     "bad month %d for file %s in state file %s\n", month,

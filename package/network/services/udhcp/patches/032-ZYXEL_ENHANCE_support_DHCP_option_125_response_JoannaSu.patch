@@ -1,0 +1,113 @@
+Index: udhcp-0.9.8/script.c
+===================================================================
+--- udhcp-0.9.8.orig/script.c	2020-11-30 11:03:10.787059868 +0800
++++ udhcp-0.9.8/script.c	2020-11-30 13:24:39.101849732 +0800
+@@ -160,9 +160,10 @@
+ 	char optStr[256];
+ #endif
+ 
++
++
+ 	dest += sprintf(dest, "%s=", type_p->name);
+ 	tmp = dest;
+-
+ 	type = type_p->flags & TYPE_MASK;
+ 	optlen = option_lengths[type];
+ 	for(;;) {
+@@ -271,6 +272,69 @@
+ 				//printf("type_p->name:%s\n", type_p->name);
+ 				json_object_object_add(dhcpc_opt, type_p->name, json_object_new_string(sip_svr_addr));
+ 			}
++            else if(type_p->code == 0x7d) //option 125, vender specific info
++            {
++                /*
++                  Option: (125) V-I Vendor-specific Information:
++                          Option Total Length(1),
++                          Enterprise (4),
++                          SubOption total Length(1),
++                              SubOption Code (1)
++                                  SubOption Length (1)
++                                  SubOption Value  (SubOption Length)
++                                  ...
++                */
++                /*SubOption example:
++                  Option 125 Suboption: 0x06
++                    GatewayProductClass Length(1)
++                    GatewayProductClass Value
++                  Option 125 Suboption: 0x05
++                    GatewaySerialNumber Length(1)
++                    GatewaySerialNumber Value
++                  Option 125 Suboption: 0x04
++                    GatewayManufacturerOUI Length(1)
++                    GatewayManufacturerOUI Value
++                */
++
++                char *payload = option ; //Enterprise
++                char mOui[8] = {0};
++                char serialNumber[64+1] = {0};
++                char productClass[64+1] = {0};
++                char op125_total_len = *(option - 1);
++                char suboption_code = 0;
++                int  sub_op_count = 0;
++
++                payload = payload + 4 + 1; //skip option total length enterpise and suboption total length
++                while (payload < (option + op125_total_len))
++                {
++                    suboption_code = *payload;
++                    payload++;
++                    //printf("\033[0;32m Debug: FUNC:%s, LINE:%d: suboption_code=%d\033[0m \n",__FUNCTION__, __LINE__, suboption_code);
++
++                    if (suboption_code == DHCP_OPTION125_SUBOPTION_GW_MOUI)
++                    {
++                        strncpy(mOui, payload+1, *(payload));
++                        printf("Gateway mOui=%s\n", mOui);
++                    }
++                    else if (suboption_code == DHCP_OPTION125_SUBOPTION_GW_SN)
++                    {
++                        strncpy(serialNumber, payload+1, *(payload));
++                        printf("Gateway serialNumber=%s\n", serialNumber);
++                    }
++                    else if (suboption_code == DHCP_OPTION125_SUBOPTION_GW_PCLASS)
++                    {
++                        strncpy(productClass, payload+1, *(payload));
++                        printf("Gateway productClass=%s\n", productClass);
++                    }
++
++                    payload = payload + 1 + *(payload);
++                    sub_op_count ++;
++                }
++
++                json_object_object_add(dhcpc_opt, "GwManufacturerOUI", json_object_new_string(mOui));
++                json_object_object_add(dhcpc_opt, "GwSerialNumber", json_object_new_string(serialNumber));
++                json_object_object_add(dhcpc_opt, "GwProductClass", json_object_new_string(productClass));
++            }
+ #endif
+ 			memcpy(dest, option, len);
+ 			dest[len] = '\0';
+Index: udhcp-0.9.8/options.c
+===================================================================
+--- udhcp-0.9.8.orig/options.c	2020-11-30 11:03:10.727059868 +0800
++++ udhcp-0.9.8/options.c	2020-11-30 11:03:10.795059868 +0800
+@@ -52,6 +52,7 @@
+ 	{"forcerenew",	OPTION_FORCERENEW,	0x5a},
+ #endif
+ 	{"sipsrv",	OPTION_STRING,				0x78}, //Keep following four option in order
++	{"venderinfo",  OPTION_STRING,          0x7d}, //Keep following four option in order
+ 	/* Pochao: keep the following three options in order,
+ 	   since the function read_config_options will check these options by the order in the array*/
+ 	{"6rd", OPTION_STRING,          DHCP_6RD_OPT},
+Index: udhcp-0.9.8/dhcpd.h
+===================================================================
+--- udhcp-0.9.8.orig/dhcpd.h	2020-11-30 14:57:01.859059842 +0800
++++ udhcp-0.9.8/dhcpd.h	2020-11-30 14:57:08.635621907 +0800
+@@ -70,6 +70,10 @@
+ #define DHCP_AUTHENTICATION_INFO 0x5a
+ #endif
+ 
++#define DHCP_OPTION125_SUBOPTION_GW_MOUI   0x04
++#define DHCP_OPTION125_SUBOPTION_GW_SN     0x05
++#define DHCP_OPTION125_SUBOPTION_GW_PCLASS 0x06
++
+ #define BOOTREQUEST		1
+ #define BOOTREPLY		2
+ 

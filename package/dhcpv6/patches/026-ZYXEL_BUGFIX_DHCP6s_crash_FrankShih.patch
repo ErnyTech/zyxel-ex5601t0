@@ -1,0 +1,20 @@
+Index: wide-dhcpv6-20080615/dhcp6s.c
+===================================================================
+--- wide-dhcpv6-20080615.orig/dhcp6s.c	2021-01-06 05:38:52.625163715 +0000
++++ wide-dhcpv6-20080615/dhcp6s.c	2021-01-06 05:42:50.701461294 +0000
+@@ -3936,7 +3936,6 @@
+ 	int num = 0;
+ 	char NumStr[512] = {0};
+ 	struct json_object *dhcp6sJsonMsg = NULL;
+-	dhcp6sJsonMsg = json_object_new_object();
+ 	dhcp6sMsg.ClientIPv6release_flag = false;
+ 	char *msg = NULL;
+ 	int msgLen = 0;
+@@ -3968,6 +3967,7 @@
+ 						dhcp6sMsg.isIA_NA = true;
+ 					else
+ 						dhcp6sMsg.isIA_NA = false;
++					dhcp6sJsonMsg = json_object_new_object();
+ 					dhcp6sMsg.ClientIPv6deletAddr = true;
+ 					dhcp6sMsg.ClientIPv6release_flag = true;
+ 					sprintf(dhcp6sMsg.ClientIPV6Linklocaladdr, "%s", ipV6LinklocalAddr);

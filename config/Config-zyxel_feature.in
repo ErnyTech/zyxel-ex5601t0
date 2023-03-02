@@ -1,0 +1,1686 @@
+
+menu "ZyXEL Userspace Features"
+
+	menu "romfile"
+		config ZYXEL_NAT_LOG
+			bool "NAT log record"
+			default n
+
+		config ZCFG_CONFIG_ENCRYPT
+			bool "encrypt whole romfile"
+			default n
+
+		config ZYXEL_MULTI_ROM_FILE
+			bool "For co-fw project,FW runtime select rom file"
+			default n
+	endmenu
+	
+	menu "Cellular WWAN"
+		menu "WWAN backup interface design"
+			config ZYXEL_WWAN
+				bool "Enable/Disable ZyXEL Cellular WWAN (3G/4G/LTE) feature"
+				default n
+				select PACKAGE_wwan
+				select PACKAGE_wwanbackupd
+				select PACKAGE_libzywwan
+				select PACKAGE_usb-modeswitch
+				select ZyXEL_WEB_GUI_SHOW_WWAN
+				select PACKAGE_kmod-usb-storage
+
+
+			config ZYXEL_PPP_AUTH_MENU_CHAP_PAP_CTL
+				bool "support authentication options and show/hide WebGUI menu"
+				default n
+				select PACKAGE_kmod-usb-serial
+				select PACKAGE_kmod-usb-serial-wwan
+				select PACKAGE_kmod-usb-serial-option
+				depends on ZYXEL_WWAN
+			
+			config ZYXEL_WWAN_SERIAL
+				bool "support SERIAL"
+				default y
+				select PACKAGE_kmod-usb-serial
+				select PACKAGE_chat
+				depends on ZYXEL_WWAN
+				
+			config ZYXEL_WWAN_SERIAL_OPTION
+				bool "support SERIAL OPTION"
+				default y
+				select ZYXEL_WWAN_SERIAL
+				select PACKAGE_kmod-usb-serial-wwan
+				select PACKAGE_kmod-usb-serial-option
+				depends on ZYXEL_WWAN
+				
+			config ZYXEL_WWAN_ACM
+				bool "support ACM"
+				default y
+				select PACKAGE_kmod-usb-acm
+				depends on ZYXEL_WWAN
+				
+			config ZYXEL_WWAN_HSO
+				bool "support HSO"
+				default y
+				select PACKAGE_kmod-usb-net-hso
+				depends on ZYXEL_WWAN
+				
+			config ZYXEL_WWAN_ETHER
+				bool "support ETHER"
+				default y
+				select PACKAGE_kmod-usb-net
+				select PACKAGE_kmod-usb-net-cdc-ether
+				depends on ZYXEL_WWAN
+				
+			config ZYXEL_WWAN_RNDIS
+				bool "support RNDIS"
+				default y
+				select ZYXEL_WWAN_ETHER
+				select PACKAGE_kmod-usb-net-rndis
+				depends on ZYXEL_WWAN
+				
+			config ZYXEL_WWAN_NCM
+				bool "support NCM"
+				default y
+				select PACKAGE_kmod-usb-net
+				select PACKAGE_kmod-usb-net-cdc-ncm
+				depends on ZYXEL_WWAN
+				
+			config ZYXEL_WWAN_QMIWWAN
+				bool "support QMI WWAN"
+				default y
+				select PACKAGE_kmod-usb-net
+				select PACKAGE_kmod-usb-wdm
+				select PACKAGE_kmod-usb-net-qmi-wwan
+#				select PACKAGE_libqmi
+				select PACKAGE_zqmictl
+				depends on ZYXEL_WWAN
+
+			config ZYXEL_WWAN_QMIWWAN_USBSERIAL
+				bool "support QMI WWAN, Quectel EG06 and EG12"
+				default n
+				select PACKAGE_kmod-usb-serial-wwan
+				select PACKAGE_kmod-usb-serial-option
+				select PACKAGE_kmod-usb-net
+				select PACKAGE_kmod-usb-net-qmi-wwan
+				select PACKAGE_quectel-CM
+				depends on ZYXEL_WWAN
+
+			config ZYXEL_WWAN_GOBINET
+				bool "support GobiNet"
+				default y
+				select ZYXEL_WWAN_SERIAL_OPTION
+				select PACKAGE_kmod-scsi-cdrom
+				select PACKAGE_kmod-fs-isofs
+				select PACKAGE_kmod-GobiNet
+				select BUSYBOX_CONFIG_EJECT
+				select PACKAGE_zqmictl
+				depends on ZYXEL_WWAN
+				
+			config ZYXEL_USB_HW_LIMITATION
+				bool "USB power or EMI HW issue, for 1004 and DLINK 156 157..."
+				default n
+				depends on ZYXEL_WWAN
+				
+			config ZYXEL_WWAN_CONFIG_SYNC_MECHANISM
+				bool "CZ eits #200700932 132366 Requirements from backup WWAN, config sync to IK40V LTE GUI via curl command"
+				default n
+				depends on ZYXEL_WWAN
+		endmenu
+
+		menu "LTE CELLWAN style design"
+			config ZYXEL_CELLWAN_SUPPORT
+				bool "Support new style of CELLWAN"
+				default n
+				select ZYXEL_WEB_GUI_SHOW_CELLWAN
+				select ZYXEL_CELLWAN_SUPPORT_MULTI_APN
+				select PACKAGE_rilcmd
+				select PACKAGE_rs6
+				select KERNEL_USB_NET_GOBINET
+				select KERNEL_USB_NET_GOBINET_MULTI_APN
+				select KERNEL_QUECTEL_1_6_1
+				depends on LTE_SUPPORT
+
+			config ZYXEL_CELLWAN_SUPPORT_MULTI_APN
+				bool "Support multiple APN for CELLWAN"
+				default n
+				select ZYXEL_WEB_GUI_CELLWAN_SUPPORT_MULTI_APN
+				depends on ZYXEL_CELLWAN_SUPPORT
+
+			config RILCMD_MULTI_APN_NUMBER
+				int "Specify the max number of active APN"
+				default 2
+				depends on ZYXEL_CELLWAN_SUPPORT
+
+
+			config ZYXEL_DEFAULT_LOCAL_CERTIFICATE
+				bool "Get default TR-069 local certificate from MRD"
+				default n
+
+			config ZYXEL_RETYPE_LOGIN_PASSWORD_BEFORE_APPLY
+				bool "retype login password before apply change"
+				default n
+
+			config ZYXEL_MQTT_PUBLISHER
+				bool "Act as a MQTT publisher."
+				default n
+
+			config ZYXEL_NUTTCP
+				bool "backend for nuttcp"
+				default n
+
+			config ZYXEL_CELLWAN_SUPPORT_SMS
+				bool "Support SMS for CELLWAN"
+				default n
+				select ZYXEL_WEB_GUI_SHOW_CELLWAN
+				select ZYXEL_WEB_GUI_CELLWAN_SUPPORT_SMS
+				depends on LTE_SUPPORT
+
+			config ZYXEL_CELLWAN_SUPPORT_PCI_LOCK
+				bool "Support PCI Lock for CELLWAN"
+				default n
+				select ZYXEL_WEB_GUI_SHOW_CELLWAN
+				select ZYXEL_WEB_GUI_CELLWAN_SUPPORT_PCI_LOCK
+				depends on LTE_SUPPORT
+
+			config BUILD_ZYXEL_PCI_LOCK_NUM
+				int "Max Phyiscal Cell ID number (1-8)."
+				range 1 8
+				default 1
+				depends on ZYXEL_CELLWAN_SUPPORT_PCI_LOCK
+
+			config ZYXEL_CELLWAN_SUPPORT_NR_NSA
+				bool "Support NR-NSA for CELLWAN"
+				default n
+				select ZYXEL_WEB_GUI_SHOW_CELLWAN
+				select ZYXEL_WEB_GUI_CELLWAN_SUPPORT_NR_NSA
+				depends on LTE_SUPPORT
+
+			config ZYXEL_CELLWAN_SUPPORT_NBR_CELLS
+				bool "Support Neighbour Cells for CELLWAN"
+				default n
+				select ZYXEL_WEB_GUI_SHOW_CELLWAN
+				select ZYXEL_WEB_GUI_CELLWAN_SUPPORT_NBR_CELLS
+				depends on LTE_SUPPORT
+
+			config ZYXEL_SUPPORT_SAS_CBSD
+				bool "Support SAS protocol CPE-CBSD client for CELLWAN"
+				default n
+				select ZYXEL_WEB_GUI_SHOW_SAS_CBSD
+				select ZYXEL_WEB_GUI_SUPPORT_SAS_CBSD
+				depends on LTE_SUPPORT
+
+			config ZYXEL_CELLWAN_SUPPORT_GNSS_LOCATION
+				bool "Support GNSS Location information for CELLWAN"
+				default n
+				select ZYXEL_WEB_GUI_SHOW_CELLWAN
+				select ZYXEL_WEB_GUI_CELLWAN_SUPPORT_GNSS_LOCATION
+				depends on LTE_SUPPORT
+
+			config ZYXEL_CELLWAN_SUPPORT_QOS_TP
+				bool "Add cellular WAN to support QoS throughput profile"
+				default n
+				select ZYXEL_WEB_GUI_CELLWAN_QoS_TP_STYLE
+				depends on LTE_SUPPORT
+
+			config ZYXEL_CELLWAN_SUPPORT_USA_VERIZON
+				bool "Support USA VERIZON use apn3 as internet service on CELLWAN 1"
+				default n
+				depends on LTE_SUPPORT
+
+			config RILCMD_CBRS_ANTENNA_GAIN
+				int "Specify the antenna gain used in CBRS band to limit the output power"
+				default 10
+
+			config RILCMD_MULTI_APN_NUMBER
+				int "Specify the max number of active APN"
+				default 2
+				depends on ZYXEL_CELLWAN_SUPPORT
+
+			config KERNEL_USB_NET_GOBINET
+				bool "GOBINET driver for Qualcomm MSM based 3G and LTE modems"
+				default n
+
+			config KERNEL_USB_NET_GOBINET_MULTI_APN
+				bool "Enable GOBINET driver multiple APN option"
+				default n
+
+			config KERNEL_QUECTEL_1_6_1
+				bool "Enable this flag to use GOBINET driver version 1.6.1"
+				default n
+		endmenu
+	endmenu
+	
+	menu "DLNA"
+	
+		config ZYXEL_MINIDLNA
+			bool "support MiniDlna"
+			default n
+			select PACKAGE_ffmpeg
+			select PACKAGE_ffprobe
+			select PACKAGE_ffserver
+			select PACKAGE_minidlna
+			
+	endmenu
+
+	menu "Wlan SSID Priority & IPTV SSID WPS PBC"
+
+		config ZYXEL_SSID_PRIORITY
+			bool "support SSID traffic priority feature (toad and toast for Brcm)"
+			default n
+
+		config ZYXEL_IPTV_SSID_PRIORITY_WPS_PBC
+			bool "enable WPS PBC on IPTV SSID, usually 5G guest wifi"
+			default n
+
+		config ZYXEL_WPS_IPTV_GUEST_WIFI_NUM
+			int "define which guest wifi to run WPS IPTV"
+			default 3
+
+	endmenu
+
+	menu "OneSSID"
+	
+		config ZYXEL_ONESSID
+			bool "support ZyXEL One SSID"
+			default n
+
+		config ZYXEL_MESH_WITHOUT_ONESSID
+			bool "US one SSID do not force enabled with Mesh Enable"
+			default n
+
+	endmenu
+
+	menu "Add Preset and Backhaul SSID"
+		config ZYXEL_Add_Preset_Backhaul
+			bool "Add Preset and Backhaul SSID"
+			default n
+
+	endmenu
+
+	menu "EasyMesh"
+
+		config ZYXEL_EASYMESH
+			bool "support ZyXEL Easy Mesh"
+			default n
+			select ZYXEL_ONESSID
+			select ZYXEL_Add_Preset_Backhaul
+			select BRCMSDK502L05_ZYXEL_EASYMESH if BRCM963xx_SDK_VER_502L05
+			select BRCMSDK502L07_ZYXEL_EASYMESH if BRCM963xx_SDK_VER_502L07
+			select BRCMSDK504L02_ZYXEL_EASYMESH if BRCM963xx_SDK_VER_504L02
+			select PACKAGE_zyMAPSteer if !ZY_ECN_NO_MESH_CUSTOM
+			select PACKAGE_zyMAPLog
+			select EN7516SDK_TCSUPPORT_ZYXEL_EASYMESH if ZY_WIFI_CHIP_ECONET
+#			deselect PACKAGE_app-agent
+
+		config ZYXEL_EASYMESH_ROM_CONVERT
+			bool "rom convert for EASYMESH"
+			default n
+			depends on ZYXEL_EASYMESH
+
+		config ZYXEL_EASYMESH_R2
+			bool "support ZyXEL Easy Mesh R2"
+			default n
+			select ZYXEL_EASYMESH
+			select BRCMSDK502L07_ZYXEL_EASYMESH_R2 if BRCM963xx_SDK_VER_502L07
+			select MTK_ZYXEL_EASYMESH_R2 if ZY_WIFI_CHIP_MTK
+
+		config ZYXEL_EASYMESH_R3
+			bool "support ZyXEL Easy Mesh R3"
+			default n
+			select ZYXEL_DPP_R2
+			select ZYXEL_EASYMESH_R2
+			select ZYXEL_EASYMESH
+
+		config ZYXEL_DPP_R2
+			bool "support DPP R2"
+			default n
+				
+		config ZYXEL_FIRESTICK_11V_IOP
+			bool "support Amazon Fire TV Stick by 11v"
+			default n
+				
+	endmenu
+
+	menu "WiFiWepWpaMixModeSupport"
+		config ZYXEL_WIFI_SUPPORT_WEP_WPA_MIXMODE
+			bool "support WiFi WEP and WPA Mixmode"
+			default y if NN_FLOWER_SPECIFIC_CAPABILITY
+			default n
+			select BRCMSDK502L07_ZYXEL_WIFI_SUPPORT_WEP_WPA_MIXMODE if BRCM963xx_SDK_VER_502L07
+	endmenu
+
+	menu "OpalExtender"
+		config ZYXEL_OPAL_EXTENDER
+			bool "Support Zyxel Extender in Bridge Mode"
+			select PACKAGE_eth_backhaul_monitor
+			select ZyXEL_WEB_GUI_HIDE_ETHWAN
+			select ZyXEL_WEB_GUI_HIDE_DSL
+			select ZyXEL_WEB_GUI_HIDE_OAM
+			select ZyXEL_WEB_GUI_HIDE_802_1x
+			select ZyXEL_WEB_GUI_HIDE_CFM
+			select ZyXEL_WEB_GUI_HIDE_VLAN_GROUP
+			select ZyXEL_WEB_GUI_HIDE_STB_VENDOR_ID
+			select ZYXEL_WEB_GUI_HIDE_FIREWALL
+			select ZyXEL_WEB_GUI_HIDE_IGMP_MLD
+			select BRCMSDK502L07_ZYXEL_OPAL_EXTENDER if BRCM963xx_SDK_VER_502L07
+			select BRCMSDK502L07_ZYXEL_OPAL_EXTENDER_USA if BRCM963xx_SDK_VER_502L07 && ZYXEL_USA_PRODUCT
+			select MTK_ZYXEL_OPAL_EXTENDER if ZY_WIFI_CHIP_MTK
+			default n
+#			deselect ZYXEL_WWAN
+#			deselect ZyXEL_WEB_GUI_SHOW_PON
+#			deselect ZyXEL_WEB_GUI_SHOW_WWAN
+#			deselect ZyXEL_WEB_GUI_SHOW_IGMP_MLD_SNOOPING
+#			deselect ZYXEL_NAT_LOG
+#			deselect ZYXEL_DNS_TRAFFIC_ROUTE
+#			deselect ZYXEL_VLAN_GROUP
+#			deselect PACKAGE_zupnp
+
+		config ZYXEL_OPAL_EXTENDER_WITH_NPACK
+			bool "Support Zyxel Extender with 2~N pack Mode"
+			default n
+			help
+				Extender project may have 2, 3, or N pack as a set.
+				Add additional sub-serial number to identify the different device with the same set.
+
+		config ZYXEL_OPAL_EXTENDER_CE_UNII2C_LED_BEHAVIOR
+			bool "support CE UNII2C power table difference"
+			default n
+	endmenu
+
+	#menu ZYXEL_EXTENDER_WPS_HWPBC_PRESS_ONCE_AUTO_SELECT
+	menu "ZYXEL_EXTENDER_WPS_HWPBC_PRESS_ONCE_AUTO_SELECT"
+		config ZYXEL_EXTENDER_WPS_HWPBC_PRESS_ONCE_AUTO_SELECT
+			bool "ZYXEL EXTENDER WPS HWPBC PRESS ONCE AUTO SELECT"
+			default n 
+	endmenu
+
+	menu "SteeringLogic"
+		config ZYSL_DEAUTH_11V_STA
+			bool "ZYSL_DEAUTH_11V_STA"
+			default n
+		config ZYSL_DEAUTH_NON_11V_STA
+			bool "ZYSL_DEAUTH_NON_11V_STA"
+			default n
+		config ZYSL_DATA_ELEMENT_TR
+			bool "ZYSL_DATA_ELEMENT_TR"
+			default n
+		config ZYSL_MULTI_STA_AIR_MONITOR
+			bool "ZYSL_MULTI_STA_AIR_MONITOR"
+			default y if !ZY_WIFI_ECONET_MT7615
+		config MAX_RADIO_PER_DEVICE
+			int "zyMAPSteer will redefine MAX_RADIO_PER_DEVICE if the value is 0"
+			default 0
+		config MAX_BSS_PER_DEVICE
+			int "zyMAPSteer will redefine MAX_BSS_PER_DEVICE if the value is 0"
+			default 0
+		config MAX_CLIENT_PER_DEVICE
+			int "zyMAPSteer will redefine MAX_CLIENT_PER_DEVICE if the value is 0"
+			default 0
+	endmenu
+
+	menu "BSA"
+
+		config BSA_SUPPORT_BCM2_DRIVER
+			bool "bsa support Broadcom 2.4G"
+			default n
+
+		config BSA_SUPPORT_BCM5_DRIVER
+			bool "bsa support Broadcom 5G"
+			default n
+
+		config BSA_SUPPORT_ECO2_DRIVER
+			bool "bsa support Econet 2.4G"
+			default n
+
+		config BSA_SUPPORT_ECO5_DRIVER
+			bool "bsa support Econet 5G"
+			default n
+
+		config BSA_SUPPORT_BCM_MONITOR_MODE
+			bool "bsa support BCM monitor mode"
+			default n
+
+		config BSA_SUPPORT_BCM_MONITOR_MODE_TIMER
+			bool "bsa support BCM monitor mode (default every 30 seconds)"
+			default 30
+
+	endmenu
+
+	menu "QRPE"
+
+		config QRPE_SUPPORT_BCM2_DRIVER
+			bool "qrpe support Broadcom 2.4G"
+			default n
+
+		config QRPE_SUPPORT_BCM5_DRIVER
+			bool "qrpe support Broadcom 5G"
+			default n
+
+		config QRPE_SUPPORT_ECO2_DRIVER
+			bool "qrpe support Econet 2.4G"
+			default n
+
+		config QRPE_SUPPORT_ECO5_DRIVER
+			bool "qrpe support Econet 5G"
+			default n
+
+	endmenu
+
+	menu "SONiQ"
+	
+		config ZYXEL_SONIQ
+			bool "support ZyXEL SONiQ"
+			default n
+			select PACKAGE_qsteer
+			select PACKAGE_bsa
+			select PACKAGE_qrpe
+			select PACKAGE_netprobe
+			select ZYXEL_ONESSID
+			select ZYXEL_Add_Preset_Backhaul
+
+			config ZYXEL_SONIQ_ROM_CONVERT
+				bool "rom convert for SONiQ"
+				default n
+				depends on ZYXEL_SONIQ
+
+	endmenu
+
+	menu "One Connect"
+
+		config ZYXEL_ONECONNECT
+			bool "Enable/Disable ZyXEL One Connect"
+			default n
+			select ZYXEL_HOSTPOLLING
+			select PACKAGE_zy1905 if !ZY_ECN_NO_MESH_CUSTOM
+			select PACKAGE_netprobe
+			select PACKAGE_nbtscan
+			select PACKAGE_SpeedTest
+			select PACKAGE_curl
+
+			choice
+				prompt "Zyxel One Connect Version"
+				default ZYXEL_ONECONNECT_VER_30 if ZYXEL_EASYMESH
+				default ZYXEL_ONECONNECT_VER_24
+
+				config ZYXEL_ONECONNECT_VER_24
+					bool "oneconnect version 2.4"
+					depends on ZYXEL_ONECONNECT
+
+				config ZYXEL_ONECONNECT_VER_30
+					bool "oneconnect version 3.0 for new Multy Pro 2.0"
+					depends on ZYXEL_ONECONNECT
+					depends on ZYXEL_EASYMESH
+			endchoice
+
+			config ZYXEL_ONECONNECT_EU
+				bool "One Connect for EU"
+				default n
+				depends on ZYXEL_ONECONNECT
+
+			config ZYXEL_APP_AGENT
+				bool "support iDevice/Android ZyXEL APP"
+				default n
+				select PACKAGE_app-agent
+				select PACKAGE_bwm
+				depends on ZYXEL_ONECONNECT && !ZYXEL_EASYMESH
+				select PACKAGE_zyschedule
+				select ZYXEL_POWER_MANAGEMENT
+
+			choice
+				prompt "Zyxel App Agent Version"
+				default ZYXEL_APP_AGENT_VER_24 if ZYXEL_ONECONNECT_VER_24
+				default ZYXEL_APP_AGENT_VER_30 if ZYXEL_ONECONNECT_VER_30
+
+				config ZYXEL_APP_AGENT_VER_24
+					bool "APP agent version 2.4"
+					depends on PACKAGE_app-agent
+
+				config ZYXEL_APP_AGENT_VER_30
+					bool "APP agent version 3.0 for new Multy Pro 2.0"
+					depends on PACKAGE_app-agent
+			endchoice
+
+			config ZYXEL_APP_USERNAME_LOGIN
+				bool "support username to login to the app"
+				default n
+				depends on ZYXEL_APP_AGENT
+				
+			config ZYXEL_P0F
+				bool "p0f (OS fingerprinting tool)"
+				default n
+				select PACKAGE_p0f
+				depends on ZYXEL_ONECONNECT
+				
+			config ZYXEL_HOSTPOLLING
+				bool "Host polling (check reboot/reset/FWupgrade is success or fail)"
+				default n
+				select PACKAGE_hostpolling
+				depends on ZYXEL_ONECONNECT
+			
+			config ZYXEL_AP_STEERING
+				bool "AP STEERING"
+				default n
+				select PACKAGE_zyAPSteering
+				depends on ZYXEL_ONECONNECT
+
+			choice
+				prompt "Zyxel Netprobe Version"
+				default ZYXEL_NETPROBE_VER_24 if ZYXEL_ONECONNECT_VER_24
+				default ZYXEL_NETPROBE_VER_30 if ZYXEL_ONECONNECT_VER_30
+
+				config ZYXEL_NETPROBE_VER_24
+					bool "netprobe version 2.4"
+					depends on PACKAGE_netprobe
+
+				config ZYXEL_NETPROBE_VER_30
+					bool "netprobe version 3.0 for new Multy Pro 2.0"
+					depends on PACKAGE_netprobe
+			endchoice
+
+			choice
+				prompt "Zyxel 1905 Version"
+				default ZYXEL_ZY1905_VER_24 if ZYXEL_ONECONNECT_VER_24
+				default ZYXEL_ZY1905_VER_30 if ZYXEL_ONECONNECT_VER_30
+
+				config ZYXEL_ZY1905_VER_24
+					bool "zy1905 version 2.4"
+					depends on PACKAGE_zy1905
+
+				config ZYXEL_ZY1905_VER_30
+					bool "zy1905 version 3.0 for new Multy Pro 2.0"
+					depends on PACKAGE_zy1905
+			endchoice
+
+			config ZYXEL_ONECONNECT_PARENTCTL_OPTION
+				bool "An option to manage whether to remove grayed-out of parental control UI page"
+				default n
+				depends on ZYXEL_ONECONNECT
+	endmenu
+	
+	config ZYXEL_MEMORY_LEAK_DETECT
+		bool "Enable memory leakage detect"
+		default n
+	
+	config ZYXEL_AVAST_AGENT_SUPPORT
+                bool "tr98/DAL supported for Avast security"
+                default n	
+	
+	config ZYXEL_CONFIG_IGNORE_OWNER_CHECK
+		bool "Ignore config owner account check when restoring"
+		default n
+
+	config ZYXEL_NO_DH_ALGO_CHECK
+		bool "Ignore OpenSSL Diffie-Hellman key length check"
+		default n
+	
+	config ZYXEL_RESET_WATCHDOG
+		bool "Reset Hardware Watchdog"
+		default n
+
+	config ZYXEL_MUTI_DEFAULT_GATEWAY
+		bool "Removed the limitation on the WAN default gateway if WAN type was same"
+		default n
+	
+	config ZYXEL_FIREWALL_INDEPENDENT
+		bool "Enable IPv4/IPv6 Firewall seperately"
+		default n
+	
+    config ZYXEL_USB_MANAGERMENT
+		bool "Usb account management"
+		default n
+		
+	config ZYXEL_MOUNT_NOEXEC
+		bool "USB partition be mounted as non-executable"
+		default n
+		
+	config ZYXEL_ACCOUNT_MANAGEMENT
+		bool "Account management"
+		default n
+		
+	config ZYXEL_ACESS_INTERNET_WHITE_LIST
+		bool "this is for DeviceCtrl, if it opens, parental control of app-agen would be white list "
+		default n
+
+	config ZYXEL_USA_PRODUCT
+		bool "The USA Product management flag"
+		default n
+
+	config ZYXEL_USA_Generic
+		bool "USA Generic projects"
+		default n
+
+	config ZYXEL_DNS_TRAFFIC_ROUTE
+		bool "DNS route will apply to traffic route"
+		default n
+
+	config ZYXEL_DNS_TRAFFIC_ROUTE_FUZZY_COMPARE
+		bool "Support DNS Fuzzy Route"
+		default n
+		depends on ZYXEL_DNS_TRAFFIC_ROUTE
+
+	config ZYXEL_REPLACE_SSID_AMBIGIOUS_CHARACTER
+		bool "If SSID contain the Defined ambigous characters, replace it"
+		default n
+		
+	config ZYXEL_VLAN_GROUP
+		bool "VLAN Group"
+		default n
+
+	config PRE_SHARED_KEY_LENGTH
+		int "Pre Shared Key (WiFi Key) length"
+		default 10
+
+#	config ZYXEL_WL_AUTO_GEN_SSID_BY_SERIAL
+#		bool "Use the serial number to generate SSID"
+#		default n
+
+	config SSID_START_MAC_SEQ
+		int "Use the nth MAC for the SSID suffix"
+		default 2
+
+	config SSID_SUFFIX_LEN
+		int "SSID suffix length"
+		default 4
+	
+    config GUEST_SSID_NO_ADD_SUFFIX
+        bool "Guest SSID doesn't add guest suffix"
+        default n
+    
+	config ZYXEL_PASSPHRASE
+		bool "Passphrases are particularly applicable to systems that use the passphrase as an encryption key"
+		default n
+
+	config ZYXEL_WOL
+		bool "Wake-on-LAN is an Ethernet computer networking standard that allows a computer to be turned on or awakened by a network message"
+		default n
+		select PACKAGE_zwol
+		
+	config ZYXEL_RADIO_MAIN_SSID_INDEPENDENT
+		bool "Support wireless Radio is independent of main SSID"
+		default n
+		select BRCMSDK502L07_ZYXEL_RADIO_MAIN_SSID_INDEPENDENT if BRCM963xx_SDK_VER_502L07
+		
+	config ZYXEL_WIFI_HW_BUTTON_SWITCH
+		bool "Support wireless hw button enable or disable"
+		default n
+
+	config ZY_WIFI_ONESSID_SECURITY_SYNC
+                bool "One SSID security sync for Dual Band"
+                default n
+
+	config ZY_WIFI_24G_SUPPORT_11AC
+		bool "2.4G chip can support 11ac(vht feature), MCS 8 & 9"
+		default n
+	
+	config ZYXEL_WIFI_24G_SUPPORT_11GN
+		bool "Support feature can use 802.11g/n Mixed"
+		default n
+	
+	config ZY_WIFI_5G_SUPPORT_1024QAM
+		bool "Support 5G chip support 1024-QAM"
+		default n
+		
+	config WAN_AUTO_DETECT
+		bool "wan auto dectct, Ethernet priority is higher than DSL"
+		default y
+
+	config ZYXEL_AUTO_GEN_PRESHARED_KEY_ENCRPT_BY_SHA256
+		bool "Use SHA256 to encrypt preshared key"
+		default n
+
+	config ZYXEL_AUTO_GEN_RANDOM_ADMIN_PASSWORD_ENCRPT_BY_SHA256
+		bool "Use SHA256 to encrypt admin random password"
+		default n
+
+	config ZYXEL_HASH_ACCOUNT_PASSWORD_BY_SHA512
+		bool "Use SHA512 algorithm to hash Account Password"
+		default n
+
+    config ZYXEL_HASH_ACCOUNT_PASSWORD_BY_SHA512_START_VER
+		int "Hash Account Password by SHA512 feature start version"
+		default 0
+		depends on ZYXEL_HASH_ACCOUNT_PASSWORD_BY_SHA512
+
+	config ZYXEL_RANDOM_SUPERVISOR_PASSWORD
+		bool "Random root/supervisor password"
+		default n
+
+	config ZYXEL_RANDOM_USER_PASSWORD_BY_MAC
+		bool "Random user password"
+		default n
+
+	config ZYXEL_RANDOM_ADMIN_PASSWORD
+		bool "Random admin account password"
+		default n
+		
+	config ZYXEL_RANDOM_ADMIN_PASSWORD_START_YEAR
+		int "Random admin account password start year"
+		default 2018
+		depends on ZYXEL_RANDOM_ADMIN_PASSWORD
+
+	config ZYXEL_RANDOM_ADMIN_PASSWORD_START_WEEK
+		int "Random admin account password start week"
+		default 1
+		depends on ZYXEL_RANDOM_ADMIN_PASSWORD
+
+	config ZYXEL_RANDOM_ADMIN_PASSWORD_NEW_ALGORITHM_START_YEAR
+		int "Random admin account password start year"
+		default 2100
+		depends on ZYXEL_RANDOM_ADMIN_PASSWORD
+
+	config ZYXEL_RANDOM_ADMIN_PASSWORD_NEW_ALGORITHM_START_WEEK
+		int "Random admin account password start week"
+		default 48
+		depends on ZYXEL_RANDOM_ADMIN_PASSWORD
+
+	config ZYXEL_RANDOM_SUPERVISOR_PASSWORD_NEW_ALGORITHM_START_YEAR
+		int "Random root/supervisor account password start year"
+		default 2100
+		depends on ZYXEL_RANDOM_SUPERVISOR_PASSWORD
+
+	config ZYXEL_RANDOM_SUPERVISOR_PASSWORD_NEW_ALGORITHM_START_WEEK
+		int "Random root/supervisor account password start week"
+		default 48
+		depends on ZYXEL_RANDOM_SUPERVISOR_PASSWORD
+
+	config ZYXEL_VMG8825_B60C_DDR533MHZ_YEAR_OBM
+		string "VMG8825-B60C with this SN pattern should check board id"
+		default "S19XX"
+		
+	config ZYXEL_INDEPENDENT_WPS_METHODS
+		bool "Enable/Disable three WPS methods independently"
+		default y
+
+	config WPS_WIFID_MSG
+		bool "WPS WIFID MSG"
+		default n
+
+	config ZYXEL_SUPERVISOR_LEVEL_HTTPD_LOGIN_DENY
+		bool "Deny SUPERVISOR level account login via GUI"
+		default n
+
+	config ZYXEL_SUPERVISOR_LEVEL_LOGIN_DENY
+		bool "Deny SUPERVISOR level account login to linux via console, telnet, ssh, ftp, etc..."
+		default n
+
+	config ZYXEL_ADMIN_LEVEL_LOGIN_DENY
+		bool "Deny ADMIN level account login to linux via console, telnet, ssh, ftp, etc..."
+		default n
+
+	config ZYXEL_USER_LEVEL_LOGIN_DENY
+		bool "Deny USER level account login to linux via console, telnet, ssh, ftp, etc... DON'T enable this flag and ZYXEL_USER_LEVEL_CONSOLE_LOGIN_DENY at same time"
+		default n
+
+	config ZYXEL_USER_LEVEL_CONSOLE_LOGIN_DENY
+		bool "Deny user level account login from console"
+		default n
+
+        config ZYXEL_ADMIN_LEVEL_CONSOLE_LOGIN_DENY
+                bool "Deny admin level account login from console"
+                default n
+
+	config ZyXEL_WEB_REDIRECT
+		bool "Zyxel web redirect"
+		default n
+
+	config ZyXEL_PCP_WEB_REDIRECT
+		bool "Zyxel Parent control web redirect"
+		default n
+		select ZyXEL_WEB_REDIRECT
+
+	config ZYXEL_LANDING_PAGE_FEATURE
+		bool "Zyxel landing page"
+		default n
+
+	config ZyXEL_PPP_LCP_ECHO
+		bool "Enable/Disable Zyxel PPP LCP ECHO and Connection Retry by tr069"
+		default n	
+
+	config ZYXEL_PPP_UTILIZE_FILE_PARAM
+		bool "Enable/Disable utilizing param file passing on starting pppd"
+		default y
+	
+	config ZYXEL_DHCP_OPTION15
+		bool "Enable/Disable Zyxel DHCP option15"
+		default n
+	
+	config ZyXEL_DHCP_OPTION125
+		bool "Enable/Disable Zyxel DHCP option125"
+		default n
+
+	config ZyXEL_DHCP_OPTION42
+		bool "Enable/Disable Zyxel DHCP option42"
+		default n
+
+	config ZYXEL_DHCPV6_OPTION64
+		bool "Enable/Disable Zyxel DHCPv6 option64"
+		default n	
+		
+	config ZYXEL_FWUPGRADE_DHCP_SUB_OPTION43
+		bool "Enable/Disable Zyxel DHCP sub option43 Firmware Upgrade"
+	default n
+
+	config ZYXEL_WAN_MAC
+		bool "Enable/Disable WAN MAC address assignment by user defined"
+		default n
+
+	config ZYXEL_FIX_WAN_MAC
+		bool "Enable/Diasble Fixed WAN MAC address sequence arrangement"
+		default y
+
+	config ZYXEL_ONE_MAC_ADDRESS
+		bool "Enable/Diasble All WAN used the same MAC, only supported on MTK platform"
+		default n
+
+	config ZYXEL_INTFGUP_ACCEPT_BIND_ONLY_WAN
+		bool "Accept Interface Group bind only WAN"
+		default n
+
+	config ZYXEL_MULTI_WAN
+		bool "Support Multiple WAN configuration"
+		default n
+		select PACKAGE_libzyplatform
+		select PACKAGE_zymultiwan
+		help
+			This design will generate a GUI to configure the WAN active/back, priority and failback mode.
+			It will also create a frame to add/delete mode wan type into it.
+
+	config ZyXEL_IPP_PRINTSERVER
+		bool "Zyxel Print Server"
+		default n		
+		
+	config ZYXEL_ZYBTT
+		bool "Zyxel Button Test"
+		default n				
+
+	config ZYXEL_SAVE_LOG_TO_FLASH
+		bool "Zyxel Save System Log to Flash"
+		default n
+		
+	config ZYXEL_SEND_ALL_TPYE_EMAIL_LOG
+		bool "Zyxel Send All Type Email Log"
+		default n
+		
+    config ZyXEL_Online_Firmware_Upgrade
+		bool "ZyXEL Online Firmware Upgrade"
+		default n		
+
+		
+    config ZYXEL_SP_DOMAIN_TIMER
+		bool "ZyXEL SP Domain Timer"
+		default n
+		
+	config SMALL_RAM
+		bool "Small RAM configuration"
+		default n
+
+	config ZYXEL_WIFI_SUPPORT_WDS
+		bool "Support WiFi WDS"
+		default n
+		
+	config ZYXEL_WIFI_SUPPORT_WEP_MODE
+		bool "Support WiFi Security Mode WEP"
+		default y if NN_FLOWER_SPECIFIC_CAPABILITY
+		default n
+
+	config ZYXEL_WIFI_SUPPORT_WEP_WPA_MIXMODE
+		bool "Support WiFi Security Mode WEP/WPA/WPA-MIXED"
+		default y if NN_FLOWER_SPECIFIC_CAPABILITY
+		default n
+
+	config ZYXEL_WIFI_SUPPORT_WPA_ONLY_MODE
+		bool "Support WiFi Security Mode WPAPSK"
+		default y if NN_FLOWER_SPECIFIC_CAPABILITY
+		default n
+
+	config ZYXEL_SUPPORT_WL_WPA2_EAP
+		bool "Support WiFi Security Mode WPA2-Enterprise"
+		default n
+
+	config ZYXEL_SUPPORT_8021X
+		bool "Support WiFi Security Mode WPA/WPA2 EAP"
+		default n
+
+	config ZYXEL_WIFI_SUPPORT_CHANNEL_SCAN
+		bool "Support WiFi channel scan"
+		default y
+		
+	config ZYXEL_DUMP_AP_CHANNEL_SCAN_CLI
+		bool "Dump AP channel scan data"
+		default n
+	
+	config ZYXEL_DISABLE_WIFI_HW_BTN
+		bool "Support WiFi/WPS hardware button can be disabled by configuration"
+		default y
+
+	config ZYXEL_ACS_WPS_ACTIVATION
+		bool "Support ACS could start WPS activation"
+		default n
+	
+        config ZYXEL_GUEST_PSK_DIFF_FROM_MAIN
+                bool "Support Guest SSID password different from main SSID password"
+                default n
+
+	config ZYXEL_REVERSE_PORT
+		bool "Support Reverse LanPort"
+		default n
+
+	config ZYXEL_IPSEC_VPN
+		bool "Support IPSec VPN"
+		default n
+
+	config SEND_PADT_BEFORE_DISCOVERY
+		bool "Send PADT before PPPoE discovery procedure"
+		default y
+
+	config PPPOE_PASS_THROUGH_WAN_MAC
+		bool "use WAN MAC when PPPoE PassThrough"
+		default n
+
+        config ZYXEL_SUPPORT_TR098_BRCM_BONDING_LINE
+                bool "The xDSL Bonding status support in the TR098"
+                default n
+
+        config ZCFG_LOG_USE_DEBUGCFG
+                bool "Utilize rdm log settings to config debug options"
+                default n
+
+        config ZLOG_USE_DEBUG
+                bool "Utilize zlog setting to config debug options"
+                default n
+                select PACKAGE_syslog-ng
+
+        config CORE_DUMP_ZCMD
+                bool "Save the zcmd core dump log to /var/log/core_zcmd"
+                default n
+
+
+        config UPNP_SSDP_LIMIT
+                bool "Handle 1 SSDP packet at 1 second for zUPnP"
+                default n
+
+        config ZYXEL_BLOCK_PACKETS_FROM_CPE_IN_BRIDGE
+                bool "Block packet from CPE in bridge mode"
+                default n
+
+	config ZYXEL_ECONET_OPERATION_MODE
+		bool "support Econet operation mode"
+		default n
+
+	config ZYXEL_ECONET_DUAL_BAND_BACKHAUL
+		bool "support Econet dual band backhaul"
+		default n
+
+	config ZYXEL_SUPPORT_WLAN_WPS_LED_BY_SW
+		bool "software control wps and wlan led"
+		default n
+
+	menu "VDSL profile extra support"
+	config ZYXEL_VDSL_Support_30A
+		bool "Support VDSL 30a"
+		default n
+	config ZYXEL_VDSL_Support_35B
+		bool "Support VDSL 35b"
+		default n
+	endmenu	
+
+	config ZCFG_RUNNING_WANDEV_INDEX_CUSTOMIZATION
+		bool "Set CPE mapping WANDevice.1 to TR69 binding WAN"
+		default n
+
+	config GENERIC_TR98_LAN_IP_ALIAS
+ 		bool "TR98 Lan Ip Alias Objects"
+ 		default n
+	
+	config ZYXEL_SECOND_LAN_IP_ALIAS
+ 		bool "Second Lan Ip Alias Objects"
+ 		default n
+		
+ 	config ZYXEL_SUPPORT_TR98_LOGIN_ACCOUNT
+ 		bool "Support TR98 Login Account Objects"
+ 		default n
+
+ 	config ZYXEL_WEB_GUI_HIDE_CARD
+ 		bool "Support GUI hide Cards"
+ 		default n
+
+ 	config ZYXEL_CONTROl_EEE
+ 		bool "Enable/Disable Energy-Efficient-Ethernet on all Ethernet-ports"
+ 		default n
+
+ 	config ZYXEL_BLACK_LIST_CHARACTERS_FOR_WIFI_PASSPHRASE
+ 		bool "Support parameter of black-list characters for auto-generated WiFi Passphrase"
+ 		default n
+
+ 	config ZYXEL_TR69_INFORM_PARAMETER
+ 		bool "Support tr69 inform parameter"
+ 		default n
+
+	config ZYXEL_LAN_L3_Isolation
+		bool "Isolate L3 unicast packet between different LAN subnet"
+		default n
+
+	config ZYXEL_SUPPORT_DMZ_MANAGEMENT
+		bool "Support DMZ Management "
+		default n
+
+	config INTERNET_LED_DEPEND_ON_DEFAULT_GW
+        bool "Internet LED controller via esmd. If this feature was enable then Internet LED status will depend on default Gateway."
+        default y
+		
+	config ZYXEL_MULTICAST_MODE_FIRST_IN
+		bool "Set multicast mode to FIRST_IN mode in mcpd"
+		default n
+
+        config ZYXEL_DUAL_ROUTE_IN_PPPOE
+                bool "The PPPoE connection support the dual routing for remoteMGMT if that PPPoE are not default route"
+                default n
+
+		config ZYXEL_DL_DIAG_CALCULATION
+				bool "Add X_ZyXEL_Latency, X_ZyXEL_RoundTripTime, X_ZyXEL_DownloadSpeed in IGD.DownloadDiagnostics."
+				default n
+		
+		config ZYXEL_UL_DIAG_CALCULATION
+				bool "Add X_ZyXEL_Latency, X_ZyXEL_RoundTripTime, X_ZyXEL_UploadSpeed in IGD.UploadDiagnostics."
+				default n
+
+        
+        config ZYXEL_DIAG_IPERF_SUPPORT
+               bool "Add X_ZyXEL Iperf series parameters in IGD.DownloadDiagnostics and IGD.UploadDiagnostics" 
+                default n
+
+        config ZYXEL_DL_DIAG_HWOFFLOAD
+               bool "Use broadcom provided bcm_spdt api  to enable hwoffload to improved result of diagnostic."
+                default n
+	
+	config ZYXEL_POWER_MANAGEMENT
+		bool "Support Power Management"
+		default n
+
+	config ZYXEL_IPV6_READYLOGO_CONFORMANCE
+		bool "Support IPv6 Ready Logo Conformance"
+		default n
+		
+	config ZYXEL_TR98_IPV6SPECIFIC
+		bool "Support IPv6 Specific objects on TR98 table"
+		default n
+	
+	config ZYXEL_OLD_ADVPREFIXLIST
+		bool "Support IPv6 RouterAdvertisement listing stale prefixes"
+		default n
+
+	config ZYXEL_RADVD_OPT
+		bool "Support RouterAdvertisement Option Objects"
+		default n
+	
+	config ZYXEL_DNS_RELAY
+		bool "Support Dns Relay Objects"
+		default n
+		
+	config ZYXEL_NEIGHBOR_DISCOVERY
+		bool "Support NeighborDiscovery Objects"
+		default n
+	
+	config ZYXEL_IPV6_GLOBAL_ENABLE
+		bool "Support ipv6 global system enable on TR98 table"
+		default n
+
+	config ZYXEL_IPV6_ULAPREFIX
+		bool "Support ipv6 ULA prefix on TR98 table"
+		default n
+
+	config ZYXEL_DHCPV6C_OPTION
+		bool "Support dhcpv6 client options on TR98 table"
+		default n
+	
+	config ZYXEL_DHCP_DISCOVER_EXPONENTIAL
+                bool "Support dhcp discover packet exponential interval with base 2"
+                default n
+
+	config ZYXEL_VPN_CLIENT
+			bool "Support VPN Client Configuration"
+				default n
+
+	config ZYXEL_GRE
+		bool "Support gre tunnel"
+		default n
+		
+	config ZYXEL_PCP
+		bool "Support PCP Feature"
+		default n
+		
+	config ZYXEL_WEB_GUI_SHOW_PACKETCAP
+		bool "Zyxel Web Gui to show Packet Captured page"
+		default n
+
+	config ZYXEL_WEB_GUI_SHOW_PWR_MGMT
+		bool "Zyxel Web Gui show Power Management related pages"
+		default n
+		depends on ZYXEL_POWER_MANAGEMENT
+
+	config ZYXEL_FW_ID_CHECK_FW_UPGRADE
+		bool "InActive the FW ID check by default. Or switch via the command of sys fwidcheck."
+		default n
+		
+	config ZYXEL_NO_UPGRADE_SAME_FW
+		bool "Don't upgrade FW that FW version same with current using"
+		default n
+		depends on ZYXEL_FW_ID_CHECK_FW_UPGRADE
+
+	config ZYXEL_FW_ID_CHECK_PREVENT_DOWNGRADE
+		bool "Implement mechanisms to prevent the installation of a previous firmware version(downgrade)"
+		default n
+		depends on ZYXEL_FW_ID_CHECK_FW_UPGRADE
+
+	config ZYXEL_FLASH_ID_CHECK_PREVENT_DOWNGRADE
+		string
+		prompt "The mechanism of FW downgrade check depend on on-board flash ID and FW version."
+		default ""
+		depends on ZYXEL_FW_ID_CHECK_FW_UPGRADE
+
+	config ZYXEL_FW_SIGNATURE_SUPPORT
+		bool "Implement mechanisms to upgrade FW with digital signature check"
+		default n
+
+	config ZYXEL_DISK_MOUNT_AND_FIRMWARE_UPGRADE
+		bool "Search firmware and upgrade while specific disks mount"
+		default n
+
+	config ZYXEL_MODEL_ID_CHECK_FW_UPGRADE
+		bool "Active the Model ID check by default. Or switch via the command of sys modelcheck."
+		default n
+
+	config ZYXEL_ZYSH_IPERF
+		bool "Iperf command for none root user."
+		select PACKAGE_zyshcmd_wrapper
+		default n
+
+	config ZYXEL_ZYSH_ROOT_WRAPPER
+		bool "root wrapper function for none root user."
+		select PACKAGE_zyshcmd_wrapper
+		default n
+
+	config ZYXEL_ZYCLI_REBOOT
+		bool "Reboot command for none root user."
+		default n
+
+	config ZYXEL_ZYCLI_HIDE_EDIT_INTF
+		bool "Hide editintf option for user."
+		default n
+
+	config ZYXEL_ZYCLI_RESET_DEFAULT_REBOOT
+		bool "Reset to default command with option. After reset to default, reboot device or not."
+		default n
+
+	config ZYXEL_ZYCLI_ROUTE
+		bool "route command for none root user."
+		default n
+		
+	config ZYXEL_ZYCLI_ARP
+		bool "arp command for none root user."
+		default n
+
+	config ZYXEL_ENABLE_STP
+		bool "Enable STP when brige interface create"
+		default n
+	
+	config ZYXEL_ZYCLI_SUPERVISOR_IPTABLES
+		bool "Support iptables cmd with supervisor in zycli"
+		default n
+
+	config ZYXEL_ZYCLI_SUPERVISOR_TCPDUMP
+		bool "Support tcpdump cmd with supervisor in zycli"
+		default n
+
+	config ZYXEL_BLOCK_239_255_255_250
+		bool "Block destination IP 239.255.255.250 in INPUT/OUTPUT chain of iptables"
+		default n
+
+	config ZYXEL_SUPPORT_DEVINFO_PROCSTATUS_PROC
+        bool "Support Device.DeviceInfo.ProcessStatus.Process.i."
+        default y
+
+	config ZYXEL_PROCNUMBEROFENTRIES_INCLUDE_KTHREADS
+        bool "ProcessNumberOfEntries include KThreads or not"
+        default n
+
+	config ZYXEL_TR069_EXCLUDE_NONMGMTWAN_IP_CHANGE_IN_1BOOT
+		bool "TR069 1 BOOT + 4 VAULE CHANGE enent don't include those notifications for non TR069 used WAN"
+		default n
+	
+	config ZYXEL_TR69_REMOTE_MANAGE_SEPARATE_PARAMETER
+		bool "InternetGatewayDevice.X_ZYXEL_EXT.RemoteManagement.Service.x.Mode spearate to LAN, WLAN, WAN and TrustDomain"
+		default n	
+
+	config ZYXEL_SKIP_LOG
+		bool "Support feature not to accelerate dedicated traffic."
+		default n
+
+	config ZYXEL_IPV6_IANA_IAPD
+		bool "Support IPv6 IA_NA and IA_PD Option"
+		default n		
+		
+	config ZYXEL_IPV6_MAP
+		bool "Support IPv6 MAP-E/MAP-T"
+		default n
+
+	config ZYXEL_WIFI_SingleSKU
+		bool "Support WiFi Change SingleSKU"
+		default n
+		
+	config ZYXEL_SET_SOCKOPT
+		bool "set socket option"
+		default n
+
+	config ZYXEL_WIFI_NUM_OF_24G_SSID_INTERFACE
+		int "Maximum number of 2.4G SSID interface."
+		default 4
+		
+	config ZYXEL_WIFI_NUM_OF_5G_SSID_INTERFACE
+		int "Maximum number of 5G SSID interface."
+		default 4
+
+        config ZYXEL_WLAN_SCHEDULER
+		bool "The scheduler allows you to permit internet traffic from each wireless network interfaces."
+                default n
+
+        config ZYXEL_WLAN_SCHEDULER_AUTO_SWITCH_RADIO_ON
+                bool "Auto switch ON of all the WLAN radios for Extended functionality of WLAN SCHEDULER."
+                default n
+
+	config ZYXEL_TR69_URL_PATH_MAC
+		bool "Use WAN MAC to generate TR069 URL."
+		default n
+
+	config ZYXEL_ELIMINATE_DHCP_LEASE
+		bool "Enable eliminate DHCP lease manually."
+		default n
+
+        config ZYXEL_ACL_HIGH_THAN_REMOMGMT
+                bool "Set iptabled chain INPUT_CF(ACL) priority high then INPUT_REMOMGMT"
+                default n
+
+	config ZYXEL_WLAN_MAXBITRATE
+		bool "Enable MaxBitRate setting for WLAN."
+		default n
+
+        config ZYXEL_ISOLATED_PUBLIC_LAN
+                bool "Isolate public lan and let them be restricted to access other bridges."
+                default n
+	
+	config ZYXEL_IPV6_UPLOAD_DIAG_ENABLE
+		bool "Enable IPv6 upload diagnostic."
+		default n
+
+	config ZYXEL_DHCPV6S_LEASE
+		bool "Enable DHCPv6S lease manually."
+		default n
+
+	config ZYXEL_REMOTE_ACCESS_PRIVILEGE
+                bool "The function is meant to manage the remote accounts (more than one) as separated from local Lan/Wlan accounts."
+                default n
+
+    config ZYXEL_REMOTE_ACCESS_PRIVILEGE_ROM_CONVERT
+        bool "Convert Account Remote Access Privilege as default"
+        default n
+        depends on ZYXEL_REMOTE_ACCESS_PRIVILEGE
+				
+	config ZYXEL_REMOTE_ACCOUNT_ACCESS_PRIVILEGE
+                bool "The function is meant to manage the remote Protocol (more than one) for each user account."
+                default n
+				
+	config ZYXEL_REMOMGMT_SEPARATE_LAN_WLAN_PRIVILEGE
+               bool "Separate LAN/WLAN as different column on REMOMGMT"
+			   default n
+			   
+    config ZYXEL_CUSTOMIZATION_LOGO
+		bool "Customization logo in GUI"
+           default n
+			   
+	config ZYXEL_SIP_ALG_REMOVE_CONNTRACK_WHEN_INSERT_REMOVE
+		bool "Fix the issue that disabling and enabling SIP alg will make the SIP phone has wrong behavior."
+		default y
+		select PACKAGE_conntrack-tools
+
+        config ZYXEL_REMOMGMT_ONLY_HTTPS_ALLOWS_FOR_WLAN_CONNECT
+                bool "With Wi-Fi, you can only connect to REMOMGMT using HTTPS."
+                default n
+
+        config ZYXEL_FLOW_CONTROl_RGMII5_QTN
+                bool "Enable the BRCM flow control for CPU port5 with 5G QTN. The CSP:4183012"
+                default n
+
+	config ZYXEL_ADMIN_GUI_BASIC_VIEW
+                bool "Add Basic View in GUI for admin group level."
+                default n
+                
+	config ZYXEL_CLI_IDLE_TIMEOUT
+		bool "Support CLI idle timeout mechanism"
+		default n
+
+      config ZYXEL_SFP_LINKUP_DELAYTIMES
+                bool "Add SFP inteface Linkup delaytimes."
+                default n
+      config ZYXEL_SIP_DELAYTIMES
+                bool "Add Sip Linkup delaytimes."
+                default n
+
+	config ZYXEL_TR69_DATA_USAGE
+		bool "LAN and WAN Tx and Rx Mbps monitor."
+		default n
+
+	config ZYXEL_TR143_DIAG_ENHANCEMENT
+		bool "TR143 UpLoad/DownLoad Diagnostics throughtput enhancement."
+		default n
+
+	config ZYXEL_IGNORE_PASSWORD_CHK_IN_SECURITY_FILTER_TBL
+		bool "Ignore password check in security filter table."
+		default n
+
+	config ZYXEL_HTTPDIAG_SPECIFIED_INTERFACE
+		bool "httpdiag specified interface"
+		default n
+
+	config ZYXEL_TR69_SUPPLEMENTAL_ACS
+		bool "Supplemental ACS."
+		default n
+
+	config ZYXEL_FQ_CODEL
+		bool "Support Fq Codel QoS Algorithm."
+		default n
+
+	config ZYXEL_IPPASS_RM_MULTI_WAN_SUPPORT
+		bool "In IP pass through mode, remote management supports multiple WAN interfaces."
+		default n
+
+
+	config ZYXEL_WIFI_LOG_AUTH_FAIL
+		bool "sys log will record wifi auth failure"
+		default n
+
+	config ZYXEL_FAKE_IP_169_254_X_X
+		bool "Set a fake IP 169.254.X.X/16 to WAN interface if it doesn't get IP"
+		default n
+
+	config ZYXEL_G729_AND_LOGIN_PRIVILEGE_CONVERT
+		bool "Add enough empty codec list object and double check Login Privilege configure."
+		default n
+
+	config ZYXEL_HIDE_USB_PAGE_IN_GUI
+		bool "Disable page USB Service in GUI and disable File Sharing Services."
+		default n
+
+	config ZYXEL_ADMIN_HIDE_FTP_SNMP_SSH_PORT_NUMBER
+		bool "If y, hide SSH/SNMP/FTP port number in remote management (loing in admin)"
+		default n
+
+	config ZYXEL_HIDE_URL_KEYWORD
+		bool "Hide URL Keyword in Parental Control page of GUI."
+		default n
+
+	config ZYXEL_AUTO_REMOVE_INTFGUP_CRIT_OPT60_WIFI_INTF
+		bool "Auto remove Interface Group criteria DHCP option 60 interface when no opt60 client.(Note: this feature only work on SSID 1~8 interfaces"
+		default n
+
+	config ZYXEL_DISABLE_PMF_ROM_CONVERT
+		bool "Rom comvert PMF to disable."
+		default n
+
+	config ZYXEL_ECONET_CALA_DATA_RE_WRITE_TO_FLASH
+		bool "Prevent no calibration data in falsh, FW re-write calibration data to flash,only for ECONET WIFI solution."
+		default n
+
+	config ZYXEL_TR69_RELAUNCH
+		bool "TR69 relaunch mechanism."
+		default n
+
+	config ZYXEL_SUPPORT_SPEEDTEST_BY_PKTGEN
+		bool "Support speedtest by kernel module Pktgen."
+		default n
+
+        config ZYXEL_BANDWIDTH_IMPROVEMENT
+		bool "Support Bandwidth Improvement by (3G/4G)Mobile Backup. "
+		select PACKAGE_kmod-zybwm
+		default n
+        config ZYXEL_NAT_PORTFORWARD_SOURCE_IP_SUBNETMASK
+                bool "Port forwarding support A external specific subnet."
+                default n
+
+    config ZXYEL_TCP_PURE_ACK_FILTER
+        bool "TCP pure ack prioritization"
+        default n
+
+	config ZYXEL_ROMCONVERT_GUI_VOIP_SHOW_IOP_FLAGS_IGNORE_CHECK_CONTACT_URL_IN_REGISTER_200OK
+		bool "Convert VoIP GUI to show out IOP flag for ignore to check the Contact URL in the SIP REGISTER's 200 OK"
+		default n
+
+	config ZYXEL_CHANNEL_SKIP_LIST_ROM_CONVERT
+		bool "Convert WiFi Auto/Manual Channel Skip List as default"
+		default n
+
+	config ZXYEL_GUEST_AP_SESSION_CTL
+		bool "Support Guest AP session control on data model and GUI."
+		default n
+
+	config ZYXEL_SUPPORT_NESSUS
+		bool "Support NESSUS"
+		default n
+
+	config ZYXEL_DISABLE_FORCE_SHOW_SKIP_BTN_IN_CHG_DEF_PWD_PAGE
+		bool "Do not force show skip button in change default password page."
+		default n
+
+	config ZYXEL_REGISTRATION_ID_WITH_MAC_ADDR
+		bool "REGISTRATION ID WITH MAC ADDR"
+		default n
+
+	config ZYXEL_FORCE_PON_SN_VENDORID_TO_ZYXE
+		bool "Force vendor ID of PON SN to ZYXE"
+		default n
+		
+	config ZYXEL_SEND_NEW_CONNECTION_NOTIFICATION
+		bool "Zyxel send notifications when new devices connected"
+		default n
+
+	config ZYXEL_PERIODICALLY_CHANGE_PASSWORD
+		bool "admin periodically change password option"
+		default n
+
+	config ZYXEL_SUPPORT_RDPAWAN_CONFIGURE
+		bool "Disable auto initial rdpa scratchpad while DUT boot up and support cli command for set rdpa scratchpad manually"
+		default n
+
+	config ZYXEL_SUPPORT_BBF247
+		bool "Support BBF247 Certification"
+		default n
+
+	config ZYXEL_LOG_FILTER
+		bool "Filter specific log content"
+		default n
+
+    config ZYXEL_SEND_EMAIL_WHEN_LOG_ADD
+        bool "email logs if there are new message add to log."
+        default n
+
+	config ZYXEL_WLAN_BLOCK_OPEN
+		bool "support WLAN block open mode"
+		default n
+
+	config ZYXEL_REBOOT_SCHEDULE
+		bool "support periodic reboot on schedule"
+		default n
+
+        config ZYXEL_SUPPORT_G988_IGMP_WHITE_LIST
+                bool "Support dynamic access control list table of multicast operations profile in G.988"
+                default n
+
+    config ZYXEL_VPNLITE
+		bool "VPNLite customization"
+		default n
+
+	config ZYXEL_AUTO_GEN_CERT
+		bool "Zyxel auto generate certificate"
+		default n
+
+   config ZYXEL_SUPPORT_SMB2
+		bool "Support samba SMBv2 protocol"
+		depends on PACKAGE_samba || PACKAGE_samba3-server || PACKAGE_samba3-client
+		default y if (PACKAGE_samba || PACKAGE_samba3-server || PACKAGE_samba3-client)
+		default n
+		help
+			Build samba-3.6.25 to support samba SMBv2 protocol.
+
+	config ZYXEL_URL_FILTER
+		bool "Support URL white/black list"
+		default n
+		help
+			Support Zyxel URL white/black list.
+
+menu "Home Cyber Security"
+
+	config ZYXEL_HOME_CYBER_SECURITY
+		bool "Support Home Cyber Security"
+		default n
+		help
+			Support Zyxel Home Cyber Security.
+
+	config ZYXEL_URL_FILTER_FSECURE
+		bool "Support F-Secure URL white/black list"
+		depends on ZYXEL_URL_FILTER
+		depends on ZYXEL_HOME_CYBER_SECURITY_FSECURE
+		default y
+		help
+			Support F-Secure URL white/black list.
+
+    config ZYXEL_HOME_CYBER_SECURITY_FSECURE_NOAPPLY
+        bool "FSECURE NOAPPLY"
+        depends on ZYXEL_HOME_CYBER_SECURITY_FSECURE
+        default y
+        help
+            FSECURE NOAPPLY.
+
+	config ZYXEL_HOME_CYBER_SECURITY_FSECURE
+		bool "Support F-Secure Home Cyber Security"
+		select PACKAGE_librest-c
+		select PACKAGE_zylicense
+		select ZYXEL_URL_FILTER_FSECURE
+		select PACKAGE_fsecure-sdk
+		default n
+		help
+			Support F-Secure Home Cyber Security.
+
+	config ZYXEL_SKIP_IPV6_DNS_ROMCONV_FSECURE
+		bool "Skip IPv6 DNS rom convert for ISP to proxy"
+		depends on ZYXEL_HOME_CYBER_SECURITY_FSECURE
+		default n
+		help
+			Auto romconvert for br0's IPv6 DNS server setting from ISP to proxy
+endmenu
+
+	config ZYXEL_ZIPQ_USE_LIBMNL
+		bool "zipq using the libmnl instead of libnetfilter_queue"
+		default n if !ZYXEL_HOME_CYBER_SECURITY
+		default y if ZYXEL_HOME_CYBER_SECURITY
+		depends on KERNEL_ZYXEL_EXT_MARK 
+		help
+			zipq using the libmnl instead of libnetfilter_queue.
+
+	config ZYXEL_ZIPQ_USE_ZEXTMARK
+		bool "zipq using the zextension mark intead of mark"
+		default n if !ZYXEL_HOME_CYBER_SECURITY
+		default y if ZYXEL_HOME_CYBER_SECURITY
+		depends on KERNEL_ZYXEL_EXT_MARK 
+		help
+			zipq using the zextension mark intead of mark.
+
+    config ZYXEL_MODSW_ZYEE
+        bool "Enable Zyxel Execution Environment (ZYEE)"
+        select ZYXEL_SUPPORT_MISC 
+        select PACKAGE_lxc
+        select PACKAGE_zyee
+        #select PACKAGE_zyee-demo
+        default n
+        help
+            Support Zyxel Execution Environment.
+
+	config ZCFG_MODULE_DEBUG
+		bool "zcfg module debug"
+		select PACKAGE_zyshcmd_wrapper
+		default n
+
+	config OUTPUT_REDIRECT
+		bool "daemon output redirect"
+		default y if ZYXEL_ZYSH_IPERF
+		default n
+
+	config ZYXEL_WIFI_DELAY_INIT
+		bool "Delay WIFI init event from zcfg_be wifi module to esmd"
+		default n
+	
+	config ZYXEL_ZYWIFID_FORCE_AFFINITY
+		bool "Force zywifid affinity"
+		default n
+        help
+            This feature can force zywifid running on specific cpu.
+
+	config ZYXEL_ZYWIFID_AFFINITY
+		int "zywifid affinity value"
+		depends on ZYXEL_ZYWIFID_FORCE_AFFINITY 
+		default 1
+        help
+            Set the zywifid to specific cpu value.
+
+	config ZYXEL_DELAY_CHK_DO_POWER_SAVE
+		int "Delay chk_do_power_save.sh execution"
+		default 0
+        help
+            Delay chk_do_power_save.sh execution.
+			
+    config ZYXEL_TR69_XMPP_CONNECTION_REQUEST
+        bool "Enable XMPP connection request"
+        select PACKAGE_libstrophe
+        select PACKAGE_zxmppc
+        default n
+        help
+            Support XMPP connection request.
+
+	config ZYXEL_ANY_PORT_ANY_SERVICE
+		bool "Any port any service feature by AM"
+		default n
+
+	config ZYXEL_ANY_PORT_ANY_SERVICE_INTFGRP
+		bool "Any port any service in interface group by AM."
+		default n
+
+	config ZYXEL_CERT_STORE
+		bool "Support certificate storage by AM."
+		default n
+
+	config ZYXEL_WAN_KEEPALIVE
+		bool "Wan Keep alive to avoid MAC aging timeout on certain switch/OLT by AM"
+		default n
+	
+	config ZYXEL_ZTR69_COMMON_LIB
+        bool "Build TR181 WRAPPER LIBRARY"
+        select PACKAGE_ztr69
+        select PACKAGE_libztr69_common
+        default n
+        help
+            Build tr181 wrapper library.
+
+	config ZYXEL_ZTR69_CLI
+        bool "Build ZTR68CLI"
+        select ZYXEL_ZTR69_COMMON_LIB
+        default n
+        help
+            Build ztr69cli for RD development only.
+
+	config ZYXEL_RESTFUL_API_REMOMGMT
+		bool "Support RESTful API which is controlled by remoteMGMT"
+		select PACKAGE_zhttpd_rest
+		default n
+
+	config ZYXEL_PARTIAL_RESET
+		bool "Reset system patially according to the unpurged list"
+		default n
+
+endmenu

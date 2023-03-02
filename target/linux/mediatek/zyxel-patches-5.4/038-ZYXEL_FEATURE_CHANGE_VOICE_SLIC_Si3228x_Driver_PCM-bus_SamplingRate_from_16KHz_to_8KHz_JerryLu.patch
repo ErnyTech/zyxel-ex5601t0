@@ -1,0 +1,26 @@
+Index: linux-5.4.171/sound/soc/codecs/si3218x/si3218x.c
+===================================================================
+--- linux-5.4.171.orig/sound/soc/codecs/si3218x/si3218x.c	2022-06-01 17:21:46.093206782 +0800
++++ linux-5.4.171/sound/soc/codecs/si3218x/si3218x.c	2022-06-01 17:24:14.772840230 +0800
+@@ -25,7 +25,7 @@
+ 
+ #include "spi.h"
+ 
+-#define PCM_16K // D2 MOD.
++//#define PCM_16K // D2 MOD.
+ 
+ #ifdef SI3218X
+ #include "inc/si3218x.h"
+Index: linux-5.4.171/sound/soc/mediatek/mt79xx/mt79xx-afe-common.h
+===================================================================
+--- linux-5.4.171.orig/sound/soc/mediatek/mt79xx/mt79xx-afe-common.h	2022-06-01 17:21:46.081207026 +0800
++++ linux-5.4.171/sound/soc/mediatek/mt79xx/mt79xx-afe-common.h	2022-06-01 17:24:33.079025553 +0800
+@@ -14,7 +14,7 @@
+ #include <linux/regmap.h>
+ #include "../common/mtk-base-afe.h"
+ 
+-#define PCM_16K // D2 MOD.
++//#define PCM_16K // D2 MOD.
+ 
+ enum {
+ 	MT79XX_MEMIF_DL1,

@@ -1,0 +1,29 @@
+Index: busybox-1.31.1/networking/wget.c
+===================================================================
+--- busybox-1.31.1.orig/networking/wget.c	2021-04-13 20:47:18.513891058 +0800
++++ busybox-1.31.1/networking/wget.c	2021-04-13 20:47:55.873889980 +0800
+@@ -343,6 +343,8 @@
+ 	struct json_object *diag_result = NULL;
+ 	const char *payload = NULL;
+ 	int payloadLen = 0;
++	char testByteRecv[21] = {0};
++	char totalByteRecv[21] = {0};
+ 
+ 	if(!strcmp(DiagnosticsState, "Requested")) {
+ 		strcpy(DiagnosticsState, "Completed");
+@@ -355,8 +357,13 @@
+ 	json_object_object_add(diag_result, "ROMTime", json_object_new_string(ROMTime));
+ 	json_object_object_add(diag_result, "BOMTime", json_object_new_string(BOMTime));
+ 	json_object_object_add(diag_result, "EOMTime", json_object_new_string(EOMTime));
+-	json_object_object_add(diag_result, "TotalBytesReceived", json_object_new_int(TotalBytesReceived));
+-	json_object_object_add(diag_result, "TestBytesReceived", json_object_new_int(TestBytesReceived));
++
++	// 20160705 Max fix
++	sprintf(totalByteRecv, "%lu", TotalBytesReceived);
++	json_object_object_add(diag_result, "TotalBytesReceived", json_object_new_string(totalByteRecv));
++	sprintf(testByteRecv, "%lu", TestBytesReceived);
++	json_object_object_add(diag_result, "TestBytesReceived", json_object_new_string(testByteRecv));
++
+ 	json_object_object_add(diag_result, "TCPOpenRequestTime", json_object_new_string(TCPOpenRequestTime));
+ 	json_object_object_add(diag_result, "TCPOpenResponseTime", json_object_new_string(TCPOpenResponseTime));
+ 

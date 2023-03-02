@@ -1,0 +1,1002 @@
+Index: libedit-20210419-3.1/src/chared.c
+===================================================================
+--- libedit-20210419-3.1.orig/src/chared.c
++++ libedit-20210419-3.1/src/chared.c
+@@ -476,9 +476,10 @@ ch_reset(EditLine *el)
+  *	Enlarge line buffer to be able to hold twice as much characters.
+  *	Returns 1 if successful, 0 if not.
+  */
+-libedit_private int
+-ch_enlargebufs(EditLine *el, size_t addlen)
++libedit_private int ch_enlargebufs(EditLine *el, size_t addlen)
+ {
++	return 0;
++#if 0 // ZYXEL
+ 	size_t sz, newsz;
+ 	wchar_t *newbuffer, *oldbuf, *oldkbuf;
+ 
+@@ -560,6 +561,7 @@ ch_enlargebufs(EditLine *el, size_t addl
+ 	if (el->el_chared.c_resizefun)
+ 		(*el->el_chared.c_resizefun)(el, el->el_chared.c_resizearg);
+ 	return 1;
++#endif
+ }
+ 
+ /* ch_end():
+Index: libedit-20210419-3.1/src/common.c
+===================================================================
+--- libedit-20210419-3.1.orig/src/common.c
++++ libedit-20210419-3.1/src/common.c
+@@ -51,7 +51,7 @@ __RCSID("$NetBSD: common.c,v 1.49 2020/0
+ #include "common.h"
+ #include "fcns.h"
+ #include "parse.h"
+-#include "vi.h"
++//#include "vi.h" /* ZYXEL */
+ 
+ /* ed_end_of_file():
+  *	Indicate end of file
+@@ -102,10 +102,10 @@ ed_insert(EditLine *el, wint_t c)
+ 			*el->el_line.cursor++ = c;
+ 		re_refresh(el);
+ 	}
+-
++#if 0 // ZYXEL
+ 	if (el->el_state.inputmode == MODE_REPLACE_1)
+ 		return vi_command_mode(el, 0);
+-
++#endif
+ 	return CC_NORM;
+ }
+ 
+@@ -155,6 +155,7 @@ ed_delete_next_char(EditLine *el, wint_t
+ #endif
+ 	if (el->el_line.cursor == el->el_line.lastchar) {
+ 			/* if I'm at the end */
++#if 0 // ZYXEL
+ 		if (el->el_map.type == MAP_VI) {
+ 			if (el->el_line.cursor == el->el_line.buffer) {
+ 				/* if I'm also at the beginning */
+@@ -173,6 +174,7 @@ ed_delete_next_char(EditLine *el, wint_t
+ #endif
+ 			}
+ 		} else
++#endif
+ 				return CC_ERROR;
+ 	}
+ 	c_delafter(el, el->el_state.argument);	/* delete after dot */
+@@ -216,6 +218,7 @@ ed_move_to_end(EditLine *el, wint_t c __
+ {
+ 
+ 	el->el_line.cursor = el->el_line.lastchar;
++#if 0 // ZYXEL
+ 	if (el->el_map.type == MAP_VI) {
+ 		if (el->el_chared.c_vcmd.action != NOP) {
+ 			cv_delfini(el);
+@@ -225,6 +228,7 @@ ed_move_to_end(EditLine *el, wint_t c __
+ 		el->el_line.cursor--;
+ #endif
+ 	}
++#endif
+ 	return CC_CURSOR;
+ }
+ 
+@@ -239,7 +243,7 @@ ed_move_to_beg(EditLine *el, wint_t c __
+ {
+ 
+ 	el->el_line.cursor = el->el_line.buffer;
+-
++#if 0 // ZYXEL
+ 	if (el->el_map.type == MAP_VI) {
+ 			/* We want FIRST non space character */
+ 		while (iswspace(*el->el_line.cursor))
+@@ -249,6 +253,7 @@ ed_move_to_beg(EditLine *el, wint_t c __
+ 			return CC_REFRESH;
+ 		}
+ 	}
++#endif
+ 	return CC_CURSOR;
+ }
+ 
+@@ -287,22 +292,25 @@ libedit_private el_action_t
+ ed_next_char(EditLine *el, wint_t c __attribute__((__unused__)))
+ {
+ 	wchar_t *lim = el->el_line.lastchar;
+-
++#if 0 // ZYXEL
+ 	if (el->el_line.cursor >= lim ||
+ 	    (el->el_line.cursor == lim - 1 &&
+ 	    el->el_map.type == MAP_VI &&
+ 	    el->el_chared.c_vcmd.action == NOP))
+ 		return CC_ERROR;
++#endif
+ 
+ 	el->el_line.cursor += el->el_state.argument;
+ 	if (el->el_line.cursor > lim)
+ 		el->el_line.cursor = lim;
+ 
++#if 0 // ZYXEL
+ 	if (el->el_map.type == MAP_VI)
+ 		if (el->el_chared.c_vcmd.action != NOP) {
+ 			cv_delfini(el);
+ 			return CC_REFRESH;
+ 		}
++#endif
+ 	return CC_CURSOR;
+ }
+ 
+@@ -323,12 +331,13 @@ ed_prev_word(EditLine *el, wint_t c __at
+ 	    el->el_line.buffer,
+ 	    el->el_state.argument,
+ 	    ce__isword);
+-
++#if 0 // ZYXEL
+ 	if (el->el_map.type == MAP_VI)
+ 		if (el->el_chared.c_vcmd.action != NOP) {
+ 			cv_delfini(el);
+ 			return CC_REFRESH;
+ 		}
++#endif
+ 	return CC_CURSOR;
+ }
+ 
+@@ -346,12 +355,13 @@ ed_prev_char(EditLine *el, wint_t c __at
+ 		el->el_line.cursor -= el->el_state.argument;
+ 		if (el->el_line.cursor < el->el_line.buffer)
+ 			el->el_line.cursor = el->el_line.buffer;
+-
++#if 0 // ZYXEL
+ 		if (el->el_map.type == MAP_VI)
+ 			if (el->el_chared.c_vcmd.action != NOP) {
+ 				cv_delfini(el);
+ 				return CC_REFRESH;
+ 			}
++#endif
+ 		return CC_CURSOR;
+ 	} else
+ 		return CC_ERROR;
+@@ -575,9 +585,11 @@ ed_prev_history(EditLine *el, wint_t c _
+ 	el->el_history.eventno += el->el_state.argument;
+ 
+ 	if (hist_get(el) == CC_ERROR) {
++#if 0 // ZYXEL
+ 		if (el->el_map.type == MAP_VI) {
+ 			el->el_history.eventno = sv_event;
+ 		}
++#endif
+ 		beep = 1;
+ 		/* el->el_history.eventno was fixed by first call */
+ 		(void) hist_get(el);
+Index: libedit-20210419-3.1/src/el.h
+===================================================================
+--- libedit-20210419-3.1.orig/src/el.h
++++ libedit-20210419-3.1/src/el.h
+@@ -49,7 +49,11 @@
+ #include "histedit.h"
+ #include "chartype.h"
+ 
++#ifdef  ZYSH_BUFSIZE                    /* ZYXEL */
++#define EL_BUFSIZ       ZYSH_BUFSIZE
++#else
+ #define	EL_BUFSIZ	((size_t)1024)	/* Maximum line size		*/
++#endif
+ 
+ #define	HANDLE_SIGNALS	0x01
+ #define	NO_TTY		0x02
+Index: libedit-20210419-3.1/src/emacs.c
+===================================================================
+--- libedit-20210419-3.1.orig/src/emacs.c
++++ libedit-20210419-3.1/src/emacs.c
+@@ -270,12 +270,13 @@ em_next_word(EditLine *el, wint_t c __at
+ 	    el->el_line.lastchar,
+ 	    el->el_state.argument,
+ 	    ce__isword);
+-
++#if 0 // ZYXEL
+ 	if (el->el_map.type == MAP_VI)
+ 		if (el->el_chared.c_vcmd.action != NOP) {
+ 			cv_delfini(el);
+ 			return CC_REFRESH;
+ 		}
++#endif
+ 	return CC_CURSOR;
+ }
+ 
+Index: libedit-20210419-3.1/src/hist.c
+===================================================================
+--- libedit-20210419-3.1.orig/src/hist.c
++++ libedit-20210419-3.1/src/hist.c
+@@ -109,12 +109,13 @@ hist_get(EditLine *el)
+ 		    el->el_history.sz);
+ 		el->el_line.lastchar = el->el_line.buffer +
+ 		    (el->el_history.last - el->el_history.buf);
+-
++#if 0 // ZYXEL
+ #ifdef KSHVI
+ 		if (el->el_map.type == MAP_VI)
+ 			el->el_line.cursor = el->el_line.buffer;
+ 		else
+ #endif /* KSHVI */
++#endif
+ 			el->el_line.cursor = el->el_line.lastchar;
+ 
+ 		return CC_REFRESH;
+@@ -145,11 +146,13 @@ hist_get(EditLine *el)
+ 	if (el->el_line.lastchar > el->el_line.buffer
+ 	    && el->el_line.lastchar[-1] == ' ')
+ 		el->el_line.lastchar--;
++#if 0 // ZYXEL
+ #ifdef KSHVI
+ 	if (el->el_map.type == MAP_VI)
+ 		el->el_line.cursor = el->el_line.buffer;
+ 	else
+ #endif /* KSHVI */
++#endif
+ 		el->el_line.cursor = el->el_line.lastchar;
+ 
+ 	return CC_REFRESH;
+Index: libedit-20210419-3.1/src/histedit.h
+===================================================================
+--- libedit-20210419-3.1.orig/src/histedit.h
++++ libedit-20210419-3.1/src/histedit.h
+@@ -97,6 +97,11 @@ int		 el_getc(EditLine *, char *);
+ void		 el_push(EditLine *, const char *);
+ 
+ /*
++Zyxel
++*/
++const char *el_gets_zysh(EditLine *, int *, int);
++
++/*
+  * Beep!
+  */
+ void		 el_beep(EditLine *);
+@@ -246,6 +251,7 @@ int		 tok_line(Tokenizer *, const LineIn
+ 		    int *, const char ***, int *, int *);
+ int		 tok_str(Tokenizer *, const char *,
+ 		    int *, const char ***);
++int		 tok_relist(Tokenizer *, const LineInfo *);     /* ZYXEL */
+ 
+ /*
+  * Begin Wide Character Support
+Index: libedit-20210419-3.1/src/Makefile.in
+===================================================================
+--- libedit-20210419-3.1.orig/src/Makefile.in
++++ libedit-20210419-3.1/src/Makefile.in
+@@ -152,13 +152,23 @@ am__libedit_la_SOURCES_DIST = chared.c c
+ @HAVE_GETLINE_FALSE@am__objects_3 = getline.lo
+ @HAVE_VIS_FALSE@am__objects_4 = vis.lo
+ @HAVE_UNVIS_FALSE@am__objects_5 = unvis.lo
+-am_libedit_la_OBJECTS = chared.lo common.lo el.lo eln.lo emacs.lo \
++# ZYXEL
++#am_libedit_la_OBJECTS = chared.lo common.lo el.lo eln.lo emacs.lo \
+ 	hist.lo keymacro.lo map.lo chartype.lo parse.lo prompt.lo \
+ 	read.lo refresh.lo search.lo sig.lo terminal.lo tty.lo vi.lo \
+ 	wcsdup.lo tokenizer.lo tokenizern.lo history.lo historyn.lo \
+ 	filecomplete.lo readline.lo literal.lo $(am__objects_1) \
+ 	$(am__objects_2) $(am__objects_3) $(am__objects_4) \
+ 	$(am__objects_5)
++
++am_libedit_la_OBJECTS = chared.lo common.lo el.lo eln.lo emacs.lo \
++	hist.lo keymacro.lo map.lo chartype.lo parse.lo prompt.lo \
++	read.lo refresh.lo search.lo sig.lo terminal.lo tty.lo \
++	wcsdup.lo tokenizer.lo tokenizern.lo history.lo historyn.lo \
++	filecomplete.lo readline.lo literal.lo $(am__objects_1) \
++	$(am__objects_2) $(am__objects_3) $(am__objects_4) \
++	$(am__objects_5)
++
+ am__objects_6 =
+ nodist_libedit_la_OBJECTS = $(am__objects_6)
+ libedit_la_OBJECTS = $(am_libedit_la_OBJECTS) \
+@@ -367,12 +377,16 @@ target_alias = @target_alias@
+ top_build_prefix = @top_build_prefix@
+ top_builddir = @top_builddir@
+ top_srcdir = @top_srcdir@
+-BUILT_SOURCES = vi.h emacs.h common.h fcns.h help.h func.h
+-AHDR = vi.h emacs.h common.h 
+-ASRC = $(srcdir)/vi.c $(srcdir)/emacs.c $(srcdir)/common.c
++#BUILT_SOURCES = vi.h emacs.h common.h fcns.h help.h func.h
++#AHDR = vi.h emacs.h common.h
++#ASRC = $(srcdir)/vi.c $(srcdir)/emacs.c $(srcdir)/common.c
++BUILT_SOURCES = emacs.h common.h fcns.h help.h func.h
++AHDR = emacs.h common.h
++ASRC = $(srcdir)/emacs.c $(srcdir)/common.c
+ CLEANFILES = $(BUILT_SOURCES)
+ lib_LTLIBRARIES = libedit.la
+-libedit_la_SOURCES = chared.c common.c el.c eln.c emacs.c hist.c \
++# ZYXEL
++#libedit_la_SOURCES = chared.c common.c el.c eln.c emacs.c hist.c \
+ 	keymacro.c map.c chartype.c parse.c prompt.c read.c refresh.c \
+ 	search.c sig.c terminal.c tty.c vi.c wcsdup.c tokenizer.c \
+ 	tokenizern.c history.c historyn.c filecomplete.c readline.c \
+@@ -381,6 +395,17 @@ libedit_la_SOURCES = chared.c common.c e
+ 	sys.h terminal.h tty.h vis.h filecomplete.h \
+ 	editline/readline.h literal.h $(am__append_1) $(am__append_2) \
+ 	$(am__append_3) $(am__append_4) $(am__append_5)
++
++libedit_la_SOURCES = chared.c common.c el.c eln.c emacs.c hist.c \
++	keymacro.c map.c chartype.c parse.c prompt.c read.c refresh.c \
++	search.c sig.c terminal.c tty.c wcsdup.c tokenizer.c \
++	tokenizern.c history.c historyn.c filecomplete.c readline.c \
++	chared.h literal.c el.h hist.h histedit.h keymacro.h map.h \
++	chartype.h parse.h prompt.h read.h refresh.h search.h sig.h \
++	sys.h terminal.h tty.h vis.h filecomplete.h \
++	editline/readline.h literal.h $(am__append_1) $(am__append_2) \
++	$(am__append_3) $(am__append_4) $(am__append_5)
++
+ EXTRA_DIST = makelist shlib_version
+ nobase_include_HEADERS = histedit.h editline/readline.h
+ nodist_libedit_la_SOURCES = $(BUILT_SOURCES)
+Index: libedit-20210419-3.1/src/map.c
+===================================================================
+--- libedit-20210419-3.1.orig/src/map.c
++++ libedit-20210419-3.1/src/map.c
+@@ -51,7 +51,7 @@ __RCSID("$NetBSD: map.c,v 1.53 2020/03/3
+ #include "el.h"
+ #include "common.h"
+ #include "emacs.h"
+-#include "vi.h"
++//#include "vi.h" /* ZYXEL */
+ #include "fcns.h"
+ #include "func.h"
+ #include "help.h"
+@@ -326,7 +326,7 @@ static const el_action_t  el_map_emacs[]
+ 	/* 255 */
+ };
+ 
+-
++#if 0 // ZYXEL
+ /*
+  * keymap table for vi.  Each index into above tbl; should be
+  * N_KEYS entries long.  Vi mode uses a sticky-extend to do command mode:
+@@ -892,7 +892,7 @@ static const el_action_t el_map_vi_comma
+ 	/* 254 */	ED_UNASSIGNED,		/* M-~ */
+ 	/* 255 */	ED_UNASSIGNED		/* M-^? */
+ };
+-
++#endif
+ 
+ /* map_init():
+  *	Initialize and allocate the maps
+@@ -907,11 +907,13 @@ map_init(EditLine *el)
+ #ifdef MAP_DEBUG
+ 	if (sizeof(el_map_emacs) != N_KEYS * sizeof(el_action_t))
+ 		EL_ABORT((el->el_errfile, "Emacs map incorrect\n"));
++#if 0 // ZYXEL
+ 	if (sizeof(el_map_vi_command) != N_KEYS * sizeof(el_action_t))
+ 		EL_ABORT((el->el_errfile, "Vi command map incorrect\n"));
+ 	if (sizeof(el_map_vi_insert) != N_KEYS * sizeof(el_action_t))
+ 		EL_ABORT((el->el_errfile, "Vi insert map incorrect\n"));
+ #endif
++#endif
+ 
+ 	el->el_map.alt = el_calloc(N_KEYS, sizeof(*el->el_map.alt));
+ 	if (el->el_map.alt == NULL)
+@@ -920,8 +922,10 @@ map_init(EditLine *el)
+ 	if (el->el_map.key == NULL)
+ 		return -1;
+ 	el->el_map.emacs = el_map_emacs;
++#if 0 // ZYXEL
+ 	el->el_map.vic = el_map_vi_command;
+ 	el->el_map.vii = el_map_vi_insert;
++#endif
+ 	el->el_map.help = el_calloc(EL_NUM_FCNS, sizeof(*el->el_map.help));
+ 	if (el->el_map.help == NULL)
+ 		return -1;
+@@ -933,12 +937,15 @@ map_init(EditLine *el)
+ 	memcpy(el->el_map.func, el_func, sizeof(*el->el_map.func)
+ 	    * EL_NUM_FCNS);
+ 	el->el_map.nfunc = EL_NUM_FCNS;
+-
++#if 0 // ZYXEL
+ #ifdef VIDEFAULT
+ 	map_init_vi(el);
+ #else
+ 	map_init_emacs(el);
+ #endif /* VIDEFAULT */
++#endif
++	map_init_emacs(el); // ZYXEL
++
+ 	return 0;
+ }
+ 
+@@ -955,8 +962,10 @@ map_end(EditLine *el)
+ 	el_free(el->el_map.key);
+ 	el->el_map.key = NULL;
+ 	el->el_map.emacs = NULL;
++#if 0 // ZYXEL
+ 	el->el_map.vic = NULL;
+ 	el->el_map.vii = NULL;
++#endif
+ 	el_free(el->el_map.help);
+ 	el->el_map.help = NULL;
+ 	el_free(el->el_map.func);
+@@ -999,8 +1008,10 @@ map_init_meta(EditLine *el)
+ 			continue;
+ 		if (i > 0377) {
+ 			i = 033;
++#if 0 // ZYXEL
+ 			if (el->el_map.type == MAP_VI)
+ 				map = alt;
++#endif
+ 		} else
+ 			map = alt;
+ 	}
+@@ -1020,7 +1031,7 @@ map_init_meta(EditLine *el)
+ 	map[(int) buf[0]] = ED_SEQUENCE_LEAD_IN;
+ }
+ 
+-
++#if 0 // ZYXEL
+ /* map_init_vi():
+  *	Initialize the vi bindings
+  */
+@@ -1049,7 +1060,7 @@ map_init_vi(EditLine *el)
+ 	tty_bind_char(el, 1);
+ 	terminal_bind_arrow(el);
+ }
+-
++#endif
+ 
+ /* map_init_emacs():
+  *	Initialize the emacs bindings
+@@ -1096,10 +1107,12 @@ map_set_editor(EditLine *el, wchar_t *ed
+ 		map_init_emacs(el);
+ 		return 0;
+ 	}
++#if 0 // ZYXEL
+ 	if (wcscmp(editor, L"vi") == 0) {
+ 		map_init_vi(el);
+ 		return 0;
+ 	}
++#endif
+ 	return -1;
+ }
+ 
+@@ -1117,9 +1130,12 @@ map_get_editor(EditLine *el, const wchar
+ 	case MAP_EMACS:
+ 		*editor = L"emacs";
+ 		return 0;
++#if 0 // ZYXEL
+ 	case MAP_VI:
+ 		*editor = L"vi";
+ 		return 0;
++#endif
++	default: break; // ZYXEL
+ 	}
+ 	return -1;
+ }
+@@ -1287,11 +1303,11 @@ map_bind(EditLine *el, int argc, const w
+ 			case 'r':
+ 				rem = 1;
+ 				break;
+-
++#if 0 // ZYXEL
+ 			case 'v':
+ 				map_init_vi(el);
+ 				return 0;
+-
++#endif
+ 			case 'e':
+ 				map_init_emacs(el);
+ 				return 0;
+Index: libedit-20210419-3.1/src/map.h
+===================================================================
+--- libedit-20210419-3.1.orig/src/map.h
++++ libedit-20210419-3.1/src/map.h
+@@ -53,8 +53,10 @@ typedef struct el_map_t {
+ 	el_action_t	*key;		/* The current normal key map	*/
+ 	el_action_t	*current;	/* The keymap we are using	*/
+ 	const el_action_t *emacs;	/* The default emacs key map	*/
++#if 0 // ZYXEL
+ 	const el_action_t *vic;		/* The vi command mode key map	*/
+ 	const el_action_t *vii;		/* The vi insert mode key map	*/
++#endif
+ 	int		 type;		/* Emacs or vi			*/
+ 	el_bindings_t	*help;		/* The help for the editor functions */
+ 	el_func_t	*func;		/* List of available functions	*/
+@@ -69,7 +71,9 @@ typedef struct el_map_t {
+ libedit_private int	map_bind(EditLine *, int, const wchar_t **);
+ libedit_private int	map_init(EditLine *);
+ libedit_private void	map_end(EditLine *);
++#if 0 // ZYXEL
+ libedit_private void	map_init_vi(EditLine *);
++#endif
+ libedit_private void	map_init_emacs(EditLine *);
+ libedit_private int	map_set_editor(EditLine *, wchar_t *);
+ libedit_private int	map_get_editor(EditLine *, const wchar_t **);
+Index: libedit-20210419-3.1/src/terminal.c
+===================================================================
+--- libedit-20210419-3.1.orig/src/terminal.c
++++ libedit-20210419-3.1/src/terminal.c
+@@ -89,6 +89,16 @@ __RCSID("$NetBSD: terminal.c,v 1.43 2020
+ #define	Str(a)		el->el_terminal.t_str[a]
+ #define	Val(a)		el->el_terminal.t_val[a]
+ 
++#ifdef __cplusplus
++extern "C" {
++#endif
++int column; // ZYXEL
++int row; // ZYXEL
++#ifdef __cplusplus
++}
++#endif
++
++
+ static const struct termcapstr {
+ 	const char *name;
+ 	const char *long_name;
+@@ -956,6 +966,9 @@ terminal_get_size(EditLine *el, int *lin
+ }
+ 
+ 
++//extern int column; // ZYXEL
++//extern int row; // ZYXEL
++
+ /* terminal_change_size():
+  *	Change the size of the terminal
+  */
+@@ -966,9 +979,12 @@ terminal_change_size(EditLine *el, int l
+ 	/*
+ 	 * Just in case
+ 	 */
++	column = Val(T_co) = (cols < 2) ? 80 : cols; // ZYXEL
++	row = Val(T_li) = (lins < 1) ? 24 : lins; // ZYXEL
++#if 0 // ZYXEL
+ 	Val(T_co) = (cols < 2) ? 80 : cols;
+ 	Val(T_li) = (lins < 1) ? 24 : lins;
+-
++#endif
+ 	/* re-make display buffers */
+ 	if (terminal_rebuffer_display(el) == -1)
+ 		return -1;
+@@ -1058,6 +1074,7 @@ terminal_reset_arrow(EditLine *el)
+ 
+ 	if (el->el_map.type != MAP_VI)
+ 		return;
++#if 0 // ZYXEL
+ 	keymacro_add(el, &strA[1], &arrow[A_K_UP].fun, arrow[A_K_UP].type);
+ 	keymacro_add(el, &strB[1], &arrow[A_K_DN].fun, arrow[A_K_DN].type);
+ 	keymacro_add(el, &strC[1], &arrow[A_K_RT].fun, arrow[A_K_RT].type);
+@@ -1070,6 +1087,7 @@ terminal_reset_arrow(EditLine *el)
+ 	keymacro_add(el, &stOD[1], &arrow[A_K_LT].fun, arrow[A_K_LT].type);
+ 	keymacro_add(el, &stOH[1], &arrow[A_K_HO].fun, arrow[A_K_HO].type);
+ 	keymacro_add(el, &stOF[1], &arrow[A_K_EN].fun, arrow[A_K_EN].type);
++#endif
+ }
+ 
+ 
+@@ -1143,9 +1161,13 @@ terminal_bind_arrow(EditLine *el)
+ 	/* Check if the components needed are initialized */
+ 	if (el->el_terminal.t_buf == NULL || el->el_map.key == NULL)
+ 		return;
+-
++#if 0 // ZYXEL
+ 	map = el->el_map.type == MAP_VI ? el->el_map.alt : el->el_map.key;
+ 	dmap = el->el_map.type == MAP_VI ? el->el_map.vic : el->el_map.emacs;
++#endif
++
++	map = el->el_map.key; // ZYXEL
++	dmap = el->el_map.emacs; // ZYXEL
+ 
+ 	terminal_reset_arrow(el);
+ 
+Index: libedit-20210419-3.1/src/read.c
+===================================================================
+--- libedit-20210419-3.1.orig/src/read.c
++++ libedit-20210419-3.1/src/read.c
+@@ -56,6 +56,10 @@ __RCSID("$NetBSD: read.c,v 1.106 2019/07
+ #include "fcns.h"
+ #include "read.h"
+ 
++#ifdef ZYXEL_CLI_IDLE_TIMEOUT
++#include <sys/times.h>
++#endif
++#define OKCMD   -1
+ #define	EL_MAXMACRO	10
+ 
+ struct macros {
+@@ -524,6 +528,7 @@ el_wgets(EditLine *el, int *nread)
+ 		/* vi redo needs these way down the levels... */
+ 		el->el_state.thiscmd = cmdnum;
+ 		el->el_state.thisch = ch;
++#if 0 // ZYXEL
+ 		if (el->el_map.type == MAP_VI &&
+ 		    el->el_map.current == el->el_map.key &&
+ 		    el->el_chared.c_redo.pos < el->el_chared.c_redo.lim) {
+@@ -534,6 +539,7 @@ el_wgets(EditLine *el, int *nread)
+ 			else
+ 				*el->el_chared.c_redo.pos++ = ch;
+ 		}
++#endif
+ 		retval = (*el->el_map.func[cmdnum]) (el, ch);
+ 
+ 		/* save the last command here */
+@@ -619,3 +625,164 @@ el_wgets(EditLine *el, int *nread)
+ 	} else
+ 		return el->el_line.buffer;
+ }
++
++
++
++
++
++const wchar_t *
++el_wgets_zysh(EditLine *el, int *nread, int idle_times)
++{
++    int retval;
++    el_action_t cmdnum = 0;
++    int num;        /* how many chars we have read at NL */
++    wchar_t ch;
++    int nrb;
++
++    if (nread == NULL)
++        nread = &nrb;
++    *nread = 0;
++    el->el_read->read_errno = 0;
++
++    if (el->el_flags & NO_TTY) {
++        el->el_line.lastchar = el->el_line.buffer;
++        return noedit_wgets(el, nread);
++    }
++
++#ifdef FIONREAD
++    if (el->el_tty.t_mode == EX_IO && el->el_read->macros.level < 0) {
++        int chrs = 0;
++
++        (void) ioctl(el->el_infd, FIONREAD, &chrs);
++        if (chrs == 0) {
++            if (tty_rawmode(el) < 0) {
++                errno = 0;
++                *nread = 0;
++                return NULL;
++            }
++        }
++    }
++#endif /* FIONREAD */
++
++    if ((el->el_flags & UNBUFFERED) == 0)
++        read_prepare(el);
++
++    if (el->el_flags & EDIT_DISABLED) {
++        if ((el->el_flags & UNBUFFERED) == 0)
++            el->el_line.lastchar = el->el_line.buffer;
++        terminal__flush(el);
++        return noedit_wgets(el, nread);
++    }
++
++    for (num = OKCMD; num == OKCMD;) {  /* while still editing this line */
++#ifdef ZYXEL_CLI_IDLE_TIMEOUT
++        if(idle_times >= 0) {
++            alarm(idle_times);
++        }
++#endif
++        /* if EOF or error */
++        if (read_getcmd(el, &cmdnum, &ch) == -1)
++            break;
++        if ((size_t)cmdnum >= el->el_map.nfunc) /* BUG CHECK command */
++            continue;   /* try again */
++        /* now do the real command */
++        /* vi redo needs these way down the levels... */
++        el->el_state.thiscmd = cmdnum;
++        el->el_state.thisch = ch;
++#if 0 // ZYXEL
++        if (el->el_map.type == MAP_VI &&
++            el->el_map.current == el->el_map.key &&
++            el->el_chared.c_redo.pos < el->el_chared.c_redo.lim) {
++            if (cmdnum == VI_DELETE_PREV_CHAR &&
++                el->el_chared.c_redo.pos != el->el_chared.c_redo.buf
++                && iswprint(el->el_chared.c_redo.pos[-1]))
++                el->el_chared.c_redo.pos--;
++            else
++                *el->el_chared.c_redo.pos++ = ch;
++        }
++#endif
++        retval = (*el->el_map.func[cmdnum]) (el, ch);
++
++        /* save the last command here */
++        el->el_state.lastcmd = cmdnum;
++
++        /* use any return value */
++        switch (retval) {
++        case CC_CURSOR:
++            re_refresh_cursor(el);
++            break;
++
++        case CC_REDISPLAY:
++            re_clear_lines(el);
++            re_clear_display(el);
++            /* FALLTHROUGH */
++
++        case CC_REFRESH:
++            re_refresh(el);
++            break;
++
++        case CC_REFRESH_BEEP:
++            re_refresh(el);
++            terminal_beep(el);
++            break;
++
++        case CC_NORM:   /* normal char */
++            break;
++
++        case CC_ARGHACK:    /* Suggested by Rich Salz */
++            /* <rsalz@pineapple.bbn.com> */
++            continue;   /* keep going... */
++
++        case CC_EOF:    /* end of file typed */
++            if ((el->el_flags & UNBUFFERED) == 0)
++                num = 0;
++            else if (num == -1) {
++                *el->el_line.lastchar++ = CONTROL('d');
++                el->el_line.cursor = el->el_line.lastchar;
++                num = 1;
++            }
++            break;
++
++        case CC_NEWLINE:    /* normal end of line */
++            num = (int)(el->el_line.lastchar - el->el_line.buffer);
++            break;
++
++        case CC_FATAL:  /* fatal error, reset to known state */
++            /* put (real) cursor in a known place */
++            re_clear_display(el);   /* reset the display stuff */
++            ch_reset(el);   /* reset the input pointers */
++            read_clearmacros(&el->el_read->macros);
++            re_refresh(el); /* print the prompt again */
++            break;
++
++        case CC_ERROR:
++        default:    /* functions we don't know about */
++            terminal_beep(el);
++            terminal__flush(el);
++            break;
++        }
++        el->el_state.argument = 1;
++        el->el_state.doingarg = 0;
++        el->el_chared.c_vcmd.action = NOP;
++        if (el->el_flags & UNBUFFERED)
++            break;
++    }
++
++    terminal__flush(el);        /* flush any buffered output */
++    /* make sure the tty is set up correctly */
++    if ((el->el_flags & UNBUFFERED) == 0) {
++        read_finish(el);
++        *nread = num != -1 ? num : 0;
++    } else
++        *nread = (int)(el->el_line.lastchar - el->el_line.buffer);
++
++    if (*nread == 0) {
++        if (num == -1) {
++            *nread = -1;
++            if (el->el_read->read_errno)
++                errno = el->el_read->read_errno;
++        }
++        return NULL;
++    } else
++        return el->el_line.buffer;
++}
+Index: libedit-20210419-3.1/src/tokenizer.c
+===================================================================
+--- libedit-20210419-3.1.orig/src/tokenizer.c
++++ libedit-20210419-3.1/src/tokenizer.c
+@@ -186,6 +186,91 @@ FUN(tok,end)(TYPE(Tokenizer) *tok)
+ 	tok_free(tok);
+ }
+ 
++/* ZYXEL */
++/* add a new function : tok_relist */
++static int g_len = 0;
++
++int
++FUN(tok,relist)(TYPE(Tokenizer) *tok, const TYPE(LineInfo) *line)
++{
++	const wchar_t *ptr;
++	const wchar_t *o_ptr;
++	wchar_t *new_line;	/* new line->buffer */
++	wchar_t *n_ptr;
++	wchar_t t_c; /* target character */
++	int count_pp; /* counter for pipe */
++	int state;
++	int len;
++	int buffer_size;
++
++	ptr = line->buffer;
++	count_pp = 0;
++
++	while ( *ptr != '\0' ) {
++		if ( *ptr == '|' || *ptr == ';' )
++			count_pp += 2;
++		ptr++;
++	}
++
++	if ( !count_pp )
++		return 0;
++
++	new_line = calloc(strlen(line->buffer)+count_pp+1, sizeof(wchar_t));
++	ptr = o_ptr = line->buffer;
++	n_ptr = new_line;
++	state = Q_none;
++
++	while ( *ptr != '\0' ) {
++		switch( *ptr ) {
++		case '"':
++			if ( state == Q_none ) {
++				state = Q_single;
++			} else {
++				state = Q_none;
++			}
++			*n_ptr = *ptr;
++			n_ptr++;
++			break;
++
++		case '|':
++		case ';':
++			t_c = *ptr;
++			if ( state == Q_none ) {
++				if ( *(ptr-1) == ' ' ) {
++					//*n_ptr = '|';
++					*n_ptr = t_c;
++				} else {
++					*n_ptr = ' ';
++					n_ptr++;
++					//*n_ptr = '|';
++					*n_ptr = t_c;
++				}
++				n_ptr++;
++				if ( *(ptr+1) != ' ' ) {
++					*n_ptr = ' ';
++					n_ptr++;
++				}
++			} else {
++				*n_ptr = *ptr;
++				n_ptr++;
++				/* do nothing */
++			}
++			break;
++
++		default:
++			*n_ptr = *ptr;
++			n_ptr++;
++			break;
++		}
++		ptr++;
++	}
++
++	strcpy((char *)line->buffer, new_line); /* ZyXEL */
++	//strcpy(line->buffer, new_line);
++	g_len = (n_ptr - new_line) - (line->buffer - line->lastchar);
++	tok_free(new_line);
++	return 0;
++}
+ 
+ 
+ /* FUN(tok,line)():
+@@ -213,9 +298,10 @@ FUN(tok,line)(TYPE(Tokenizer) *tok, cons
+ 	int cc, co;
+ 
+ 	cc = co = -1;
++	tok_relist(tok, line);
+ 	ptr = line->buffer;
+ 	for (ptr = line->buffer; ;ptr++) {
+-		if (ptr >= line->lastchar)
++		if (ptr >= (line->lastchar+g_len))	/* ZYXEL */
+ 			ptr = STR("");
+ 		if (ptr == line->cursor) {
+ 			cc = (int)tok->argc;
+@@ -324,7 +410,8 @@ FUN(tok,line)(TYPE(Tokenizer) *tok, cons
+ 
+ 			case Q_single:
+ 			case Q_double:
+-				*tok->wptr++ = *ptr;	/* Add the return */
++				//*tok->wptr++ = *ptr;	/* Add the return */
++				*tok->wptr = *ptr;      /* ZYXEL */
+ 				break;
+ 
+ 			case Q_doubleone:   /* Back to double, eat the '\n' */
+@@ -373,6 +460,39 @@ FUN(tok,line)(TYPE(Tokenizer) *tok, cons
+ 			}
+ 			break;
+ 
++		case '#':	/* ZYXEL */
++			tok->flags &= ~TOK_EAT;
++			switch (tok->quote) {
++			case Q_none:
++				if ( *(ptr-1) != ' ' ) {
++					*tok->wptr++ = *ptr;
++				} else if ( *(ptr-2) == '\\' ) {
++					*tok->wptr++ = *ptr;
++				} else {
++					goto tok_line_outok;
++				}
++				break;
++
++			case Q_single:
++			case Q_double:
++				*tok->wptr++ = *ptr;
++				break;
++
++			case Q_doubleone:
++				tok->flags |= TOK_EAT;
++				tok->quote = Q_double;
++				break;
++
++			case Q_one:
++				tok->quote = Q_none;
++				*tok->wptr++ = *ptr;
++				break;
++
++			default:
++				return (0);
++			}
++			break;
++
+ 		default:
+ 			tok->flags &= ~TOK_EAT;
+ 			switch (tok->quote) {
+Index: libedit-20210419-3.1/src/tty.c
+===================================================================
+--- libedit-20210419-3.1.orig/src/tty.c
++++ libedit-20210419-3.1/src/tty.c
+@@ -126,6 +126,7 @@ static const ttychar_t ttychar = {
+ };
+ 
+ static const ttymap_t tty_map[] = {
++#if 0 // ZYXEL
+ #ifdef VERASE
+ 	{C_ERASE, VERASE,
+ 	{EM_DELETE_PREV_CHAR, VI_DELETE_PREV_CHAR, ED_PREV_CHAR}},
+@@ -146,6 +147,7 @@ static const ttymap_t tty_map[] = {
+ 	{C_EOF, VEOF,
+ 	{EM_DELETE_OR_LIST, VI_LIST_OR_EOF, ED_UNASSIGNED}},
+ #endif /* VEOF */
++#endif
+ #ifdef VWERASE
+ 	{C_WERASE, VWERASE,
+ 	{ED_DELETE_PREV_WORD, ED_DELETE_PREV_WORD, ED_PREV_WORD}},
+@@ -906,10 +908,14 @@ tty_bind_char(EditLine *el, int force)
+ 
+ 	map = el->el_map.key;
+ 	alt = el->el_map.alt;
++#if 0 // ZYXEL
+ 	if (el->el_map.type == MAP_VI) {
+ 		dmap = el->el_map.vii;
+ 		dalt = el->el_map.vic;
+-	} else {
++	}
++	else
++#endif
++	{
+ 		dmap = el->el_map.emacs;
+ 		dalt = NULL;
+ 	}
+Index: libedit-20210419-3.1/src/eln.c
+===================================================================
+--- libedit-20210419-3.1.orig/src/eln.c
++++ libedit-20210419-3.1/src/eln.c
+@@ -84,6 +84,24 @@ el_gets(EditLine *el, int *nread)
+ 	return ct_encode_string(tmp, &el->el_lgcyconv);
+ }
+ 
++//Zyxel
++const char *
++el_gets_zysh(EditLine *el, int *nread, int idle_times)
++{
++    const wchar_t *tmp;
++
++    tmp = el_wgets_zysh(el, nread, idle_times);
++    if (tmp != NULL) {
++        int i;
++        size_t nwread = 0;
++
++        for (i = 0; i < *nread; i++)
++        nwread += ct_enc_width(tmp[i]);
++        *nread = (int)nwread;
++    }
++    return ct_encode_string(tmp, &el->el_lgcyconv);
++}
++
+ 
+ int
+ el_parse(EditLine *el, int argc, const char *argv[])

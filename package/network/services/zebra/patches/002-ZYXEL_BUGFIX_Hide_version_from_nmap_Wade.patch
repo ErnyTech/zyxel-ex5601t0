@@ -1,0 +1,13 @@
+Index: zebra-0.95a/lib/vty.c
+===================================================================
+--- zebra-0.95a.orig/lib/vty.c
++++ zebra-0.95a/lib/vty.c
+@@ -1621,7 +1621,7 @@ vty_create (int vty_sock, union sockunio
+       /* Vty is not available if password isn't set. */
+       if (host.password == NULL && host.password_encrypt == NULL)
+ 	{
+-	  vty_out (vty, "Vty password is not set.%s", VTY_NEWLINE);
++	  vty_out (vty, "Vty password isn't set.%s", VTY_NEWLINE);
+ 	  vty->status = VTY_CLOSE;
+ 	  vty_close (vty);
+ 	  return NULL;

@@ -1,0 +1,28 @@
+Index: busybox-1.31.1/init/init.c
+===================================================================
+--- busybox-1.31.1.orig/init/init.c	2021-03-31 20:14:21.328140381 +0800
++++ busybox-1.31.1/init/init.c	2021-03-31 19:50:29.405070800 +0800
+@@ -136,6 +136,10 @@
+ #endif
+ #include "reboot.h" /* reboot() constants */
+ 
++#ifdef CONFIG_TT_CUSTOMIZATION_TR069
++#include "zcfg_fe_rdm_access.h"
++#endif
++
+ #if DEBUG_SEGV_HANDLER
+ # undef _GNU_SOURCE
+ # define _GNU_SOURCE 1
+@@ -1054,6 +1058,12 @@
+ 	 */
+ 
+ /* __ZyXEL__, Albert, 20150909, Save System and Security Log to Flash. */
++#ifdef CONFIG_TT_CUSTOMIZATION_TR069
++	if(access("/data/RebootforTT", F_OK) != 0){
++		SetRebootCode_TT("1");
++	}
++#endif
++
+ #ifdef ZYXEL_SAVE_LOG_TO_FLASH
+ 	if (sig == SIGTERM) {
+ 

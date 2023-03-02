@@ -1,0 +1,34 @@
+Index: curl-7.72.0/lib/setup-vms.h
+===================================================================
+--- curl-7.72.0.orig/lib/setup-vms.h	2020-08-07 23:38:12.000000000 +0800
++++ curl-7.72.0/lib/setup-vms.h	2021-01-18 16:47:14.786488691 +0800
+@@ -310,7 +310,9 @@
+ #define SSL_write SSL_WRITE
+ #define SSLeay SSLEAY
+ #define SSLv23_client_method SSLV23_CLIENT_METHOD
++#if 0
+ #define SSLv3_client_method SSLV3_CLIENT_METHOD
++#endif
+ #define TLSv1_client_method TLSV1_CLIENT_METHOD
+ #define UI_create_method UI_CREATE_METHOD
+ #define UI_destroy_method UI_DESTROY_METHOD
+Index: curl-7.72.0/lib/vtls/openssl.c
+===================================================================
+--- curl-7.72.0.orig/lib/vtls/openssl.c	2021-01-18 16:40:10.685972678 +0800
++++ curl-7.72.0/lib/vtls/openssl.c	2021-01-18 16:47:14.786488691 +0800
+@@ -2557,6 +2557,7 @@
+     use_sni(FALSE);
+     break;
+ #endif
++#if 0
+   case CURL_SSLVERSION_SSLv3:
+ #ifdef OPENSSL_NO_SSL3_METHOD
+     failf(data, OSSL_PACKAGE " was built without SSLv3 support");
+@@ -2570,6 +2571,7 @@
+     use_sni(FALSE);
+     break;
+ #endif
++#endif //0
+   default:
+     failf(data, "Unrecognized parameter passed via CURLOPT_SSLVERSION");
+     return CURLE_SSL_CONNECT_ERROR;

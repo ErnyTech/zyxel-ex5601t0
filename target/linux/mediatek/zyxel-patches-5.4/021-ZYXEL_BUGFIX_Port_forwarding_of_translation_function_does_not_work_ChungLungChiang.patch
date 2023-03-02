@@ -1,0 +1,13 @@
+Index: linux-5.4.171/net/netfilter/nf_nat_core.c
+===================================================================
+--- linux-5.4.171.orig/net/netfilter/nf_nat_core.c
++++ linux-5.4.171/net/netfilter/nf_nat_core.c
+@@ -509,7 +509,7 @@ find_free_id:
+ 	 */
+ another_round:
+ #if 1 /* Support one-to-one port mapping. __TELEFONICA__, ZyXEL Stan Su, 20120308. */
+-	mappingOffset = tuple->dst.u.all - range->mappingMin.all;
++	mappingOffset = ntohs(tuple->dst.u.all) - ntohs(range->mappingMin.all);
+ 	for (i = 0; i < attempts; i++, off++, mappingOffset++) {
+ #else
+ 	for (i = 0; i < attempts; i++, off++) {

@@ -1,0 +1,42 @@
+Index: lxc-2.0.4/src/lxc/bdev/lxcaufs.h
+===================================================================
+--- lxc-2.0.4.orig/src/lxc/bdev/lxcaufs.h
++++ lxc-2.0.4/src/lxc/bdev/lxcaufs.h
+@@ -24,7 +24,9 @@
+ #ifndef __LXC_AUFS_H
+ #define __LXC_AUFS_H
+ 
++#ifndef _GNU_SOURCE
+ #define _GNU_SOURCE
++#endif
+ #include <stdint.h>
+ 
+ #if IS_BIONIC
+Index: lxc-2.0.4/src/lxc/lsm/selinux.c
+===================================================================
+--- lxc-2.0.4.orig/src/lxc/lsm/selinux.c
++++ lxc-2.0.4/src/lxc/lsm/selinux.c
+@@ -47,15 +47,21 @@ lxc_log_define(lxc_lsm_selinux, lxc);
+  */
+ static char *selinux_process_label_get(pid_t pid)
+ {
+-	security_context_t ctx;
+-	char *label;
+ 
++	char *label;
++#if 0
++	security_context_t ctx;
+ 	if (getpidcon_raw(pid, &ctx) < 0) {
+ 		SYSERROR("failed to get SELinux context for pid %d", pid);
+ 		return NULL;
+ 	}
+ 	label = strdup((char *)ctx);
+ 	freecon(ctx);
++#else
++	if (getpidcon_raw(pid, &label) < 0)
++		SYSERROR("failed to get SELinux context for pid %d", pid);
++		return NULL;
++#endif
+ 	return label;
+ }
+ 

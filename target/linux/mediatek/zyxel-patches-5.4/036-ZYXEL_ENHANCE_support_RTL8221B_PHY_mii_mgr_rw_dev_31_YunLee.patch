@@ -1,0 +1,71 @@
+Index: linux-5.4.171/drivers/net/ethernet/mediatek/mtk_eth_soc.c
+===================================================================
+--- linux-5.4.171.orig/drivers/net/ethernet/mediatek/mtk_eth_soc.c
++++ linux-5.4.171/drivers/net/ethernet/mediatek/mtk_eth_soc.c
+@@ -155,11 +155,24 @@ static int mtk_mdio_read(struct mii_bus
+ u32 mtk_cl45_ind_read(struct mtk_eth *eth, u16 port, u16 devad, u16 reg, u16 *data)
+ {
+         mutex_lock(&eth->mii_bus->mdio_lock);
+-
++#ifdef CONFIG_RTL8221B_PHY
++		if(devad == 0x1f){
++			/*printk(KERN_INFO "[%s]devad: %x, phy_register: %x, phy_addr: %x\n",
++				     __func__, devad, reg, port);
++			  printk(KERN_INFO "[%s] reg/16 = %x, reg%%16 = %x\n",
++				     __func__, reg/16, reg%16);
++			*/
++ 
++			_mtk_mdio_write(eth, port, devad, reg/16);
++			*data = _mtk_mdio_read(eth, port, 16+((reg%16)/2));	
++		}else
++#endif
++		{
+         _mtk_mdio_write(eth, port, MII_MMD_ACC_CTL_REG, devad);
+         _mtk_mdio_write(eth, port, MII_MMD_ADDR_DATA_REG, reg);
+         _mtk_mdio_write(eth, port, MII_MMD_ACC_CTL_REG, MMD_OP_MODE_DATA | devad);
+         *data = _mtk_mdio_read(eth, port, MII_MMD_ADDR_DATA_REG);
++		}
+ 
+         mutex_unlock(&eth->mii_bus->mdio_lock);
+ 
+@@ -169,11 +182,24 @@ u32 mtk_cl45_ind_read(struct mtk_eth *et
+ u32 mtk_cl45_ind_write(struct mtk_eth *eth, u16 port, u16 devad, u16 reg, u16 data)
+ {
+         mutex_lock(&eth->mii_bus->mdio_lock);
+-
++#ifdef CONFIG_RTL8221B_PHY
++		if(devad == 0x1f){
++			/*printk(KERN_INFO "[%s]devad: %x, phy_register: %x, phy_addr: %x, data: %x\n",
++				     __func__, devad, reg, port, data );
++			  printk(KERN_INFO "[%s] reg/16 = %x, reg%%16 = %x\n",
++				     __func__, reg/16, reg%16);
++			*/
++			
++			_mtk_mdio_write(eth, port, devad, reg/16);
++			_mtk_mdio_write(eth, port, 16+((reg%16)/2), data);	
++		}else
++#endif
++		{
+         _mtk_mdio_write(eth, port, MII_MMD_ACC_CTL_REG, devad);
+         _mtk_mdio_write(eth, port, MII_MMD_ADDR_DATA_REG, reg);
+         _mtk_mdio_write(eth, port, MII_MMD_ACC_CTL_REG, MMD_OP_MODE_DATA | devad);
+         _mtk_mdio_write(eth, port, MII_MMD_ADDR_DATA_REG, data);
++		}
+ 
+         mutex_unlock(&eth->mii_bus->mdio_lock);
+ 
+Index: linux-5.4.171/drivers/net/phy/Kconfig
+===================================================================
+--- linux-5.4.171.orig/drivers/net/phy/Kconfig
++++ linux-5.4.171/drivers/net/phy/Kconfig
+@@ -335,6 +335,10 @@ config RTL8367B_PHY
+ 
+ endif # RTL8366_SMI
+ 
++config RTL8221B_PHY
++	tristate "Driver for Realtek RTL8221B_PHY switches"
++	select SWCONFIG
++
+ source "drivers/net/phy/mtk/mt753x/Kconfig"
+ 
+ comment "MII PHY device drivers"

@@ -1,0 +1,14 @@
+Index: samba-4.14.7/source3/param/loadparm.c
+===================================================================
+--- samba-4.14.7.orig/source3/param/loadparm.c
++++ samba-4.14.7/source3/param/loadparm.c
+@@ -733,7 +733,8 @@ static void init_globals(struct loadparm
+ 	Globals.change_notify = true,
+ 	Globals.kernel_change_notify = true,
+ 
+-	lpcfg_string_set(Globals.ctx, &Globals.passdb_backend, "tdbsam");
++	//lpcfg_string_set(Globals.ctx, &Globals.passdb_backend, "tdbsam");
++	lpcfg_string_set(Globals.ctx, &Globals.passdb_backend, "smbpasswd");
+ 	lpcfg_string_set(Globals.ctx, &Globals.ldap_suffix, "");
+ 	lpcfg_string_set(Globals.ctx, &Globals._ldap_machine_suffix, "");
+ 	lpcfg_string_set(Globals.ctx, &Globals._ldap_user_suffix, "");

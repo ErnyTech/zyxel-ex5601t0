@@ -1,0 +1,97 @@
+Index: busybox-1.31.1/loginutils/login.c
+===================================================================
+--- busybox-1.31.1.orig/loginutils/login.c	2021-03-29 15:47:30.019227820 +0800
++++ busybox-1.31.1/loginutils/login.c	2021-03-29 15:47:30.027227820 +0800
+@@ -636,15 +636,15 @@
+ #endif
+ 
+ #ifdef MSTC_TTNET_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
+-bool checkIsFromWan(char *addr);
++bool checkIsFromLan(char *addr);
+ bool queryUserInfo(char *userName,char *addr);
+ int UserAllow(char *username,char *addr);
+ 
+ //Send message to ssk for get some information of User info.
+-bool checkIsFromWan(char *addr){
++bool checkIsFromLan(char *addr){
+ 
+ 	char localAddr[64] = {0};
+-	bool isFromWan = false;
++	bool isFromLan = false;
+ 	objIndex_t ipIfaceIid, ipv4AddressIid;
+ 	rdm_IpIface_t *ipIfaceJobj = NULL;
+ 	rdm_IpIfaceV4Addr_t *ipIfacev4AddressJobj = NULL;
+@@ -659,7 +659,7 @@
+ 	if(ipType(localAddr) == AF_INET)//if is v4 address, need to check
+ 	{
+ 		while((zcfgFeObjStructGetNextWithoutUpdate(RDM_OID_IP_IFACE, &ipIfaceIid, (void **)&ipIfaceJobj)) == ZCFG_SUCCESS){
+-			if(strstr(ipIfaceJobj->X_ZYXEL_IfName, "br") == NULL){
++			if(strstr(ipIfaceJobj->X_ZYXEL_IfName, "br") != NULL){
+ 				ipv4AddressIid.idx[0] = ipIfaceIid.idx[0];
+ 				ipv4AddressIid.idx[1] = 1;
+ 				ipv4AddressIid.level = 2;
+@@ -676,7 +676,7 @@
+ 					sprintf(perfix, "%d", i);
+ 
+ 					if((localAddr) && (checkCidrBlock(ipIfacev4AddressJobj->IPAddress, perfix, localAddr) == 1)){
+-						isFromWan = true;
++						isFromLan = true;
+ 						//strcpy(userName, (char *)json_object_get_string(json_object_object_get(logCfgJobj, "Username")));
+ 						zcfgFeObjStructFree(ipIfaceJobj);
+ 						zcfgFeObjStructFree(ipIfacev4AddressJobj);
+@@ -687,12 +687,9 @@
+ 			}
+ 			zcfgFeObjStructFree(ipIfaceJobj);
+ 		}
+-	}else{
+-		/*Not support the IPv6 yet*/
+-		printf("%s(%d): [CBT] IPv6 are not support user_login_process_v4 yet.. \n",__FUNCTION__,__LINE__);
+-		isFromWan = false;
+ 	}
+-	if(isFromWan)
++
++	if(isFromLan)
+ 		return true;
+ 	else
+ 		return false;
+@@ -724,8 +721,11 @@
+ 			if(UsersUserObj->Level == 1)//Level 1
+ 			{
+ 				userIid.idx[0] = 2;
+-				userIid.idx[1] = 1;
+ 				//user_iidStack.idx[0] = 1
++				if(iidStack.idx[0] == 1)
++					userIid.idx[1] = iidStack.idx[0];
++				else
++					userIid.idx[1] = iidStack.idx[0] - 1;
+ 			}
+ 			else//Level 2
+ 			{
+@@ -734,14 +734,14 @@
+ 				//user_iidStack.idx[0] = 1
+ 			}
+ 			if(zcfgFeObjStructGet(RDM_OID_ZY_LOG_CFG_GP_ACCOUNT, &userIid, (void **)&UserLoginInfoObj) == ZCFG_SUCCESS) {
+-				bool isFromWAN = false;
+-				if(checkIsFromWan(addr)){
+-					isFromWAN = true;
++				bool isFromLAN = false;
++				if(checkIsFromLan(addr)){
++					isFromLAN = true;
+ 				}
+ 
+ 				if(UsersUserObj->Enable == 1){
+ 					//LAN
+-					if( (isFromWAN == false) && (UsersUserObj->LocalAccessCapable == 1))
++					if( (isFromLAN == true) && (UsersUserObj->LocalAccessCapable == 1))
+ 					{
+ 						copy_protocol = strdup(UsersUserObj->Allowed_LA_Protocols);
+ 						if(copy_protocol !=NULL){
+@@ -757,7 +757,7 @@
+ 						}
+ 					}
+ 					//WAN
+-					else if( (isFromWAN == true) && (UsersUserObj->RemoteAccessCapable == 1))
++					else if( (isFromLAN == false) && (UsersUserObj->RemoteAccessCapable == 1))
+ 					{
+ 						copy_protocol = strdup(UsersUserObj->Allowed_RA_Protocols);
+ 						if(copy_protocol !=NULL){

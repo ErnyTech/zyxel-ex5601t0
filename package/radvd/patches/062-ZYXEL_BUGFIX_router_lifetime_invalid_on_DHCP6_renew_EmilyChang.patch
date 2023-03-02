@@ -1,0 +1,13 @@
+Index: radvd-1.8/defaults.h
+===================================================================
+--- radvd-1.8.orig/defaults.h
++++ radvd-1.8/defaults.h
+@@ -57,7 +57,7 @@
+ #define DFLT_AdvPreferredLifetime	14400 /* seconds */
+ #define DFLT_AdvAutonomousFlag		1
+ #define DFLT_DeprecatePrefixFlag	0
+-#define DFLT_DecrementLifetimesFlag	0
++#define DFLT_DecrementLifetimesFlag	1 /* for SIGUSR1 signal usage */
+ 
+ /* Each route has an associated: */
+ #define DFLT_AdvRouteLifetime(iface)	(3 * (iface)->MaxRtrAdvInterval)

@@ -1,0 +1,20 @@
+Index: wide-dhcpv6-20080615/dhcp6c.c
+===================================================================
+--- wide-dhcpv6-20080615.orig/dhcp6c.c
++++ wide-dhcpv6-20080615/dhcp6c.c
+@@ -2021,6 +2021,7 @@ dprintf(LOG_ERR, FNAME, "client6_recvadv
+ 		 * The client MUST ignore any Advertise message that includes a Status
+ 		 * Code option containing the value NoAddrsAvail.
+   		 */
++#ifndef ZYXEL_WAN_DHCPV6_MODE 
+ 		if (evd->type == DHCP6_EVDATA_IANA) {
+ 			iaparam.iaid = 0;
+ 			for (iac = TAILQ_FIRST(&ifp->iaconf_list); 
+@@ -2080,6 +2081,7 @@ dprintf(LOG_ERR, FNAME, "client6_recvadv
+ 				}
+ 			}
+ 		}
++#endif
+ 	}
+ 
+ 	if (ev->state != DHCP6S_SOLICIT ||

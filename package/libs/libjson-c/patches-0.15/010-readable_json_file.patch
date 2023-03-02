@@ -1,0 +1,32 @@
+Index: json-c-0.15/json_object.c
+===================================================================
+--- json-c-0.15.orig/json_object.c
++++ json-c-0.15/json_object.c
+@@ -483,7 +483,7 @@ const char *json_object_to_json_string_e
+ 
+ const char *json_object_to_json_string(struct json_object *jso)
+ {
+-	return json_object_to_json_string_ext(jso, JSON_C_TO_STRING_SPACED);
++	return json_object_to_json_string_ext(jso, JSON_C_TO_STRING_SPACED | JSON_C_TO_STRING_PRETTY);
+ }
+ 
+ static void indent(struct printbuf *pb, int level, int flags)
+Index: json-c-0.15/json_util.c
+===================================================================
+--- json-c-0.15.orig/json_util.c
++++ json-c-0.15/json_util.c
+@@ -215,11 +215,13 @@ static int _json_object_to_fd(int fd, st
+ 	return 0;
+ }
+ 
++
+ // backwards compatible "format and write to file" function
+ 
+ int json_object_to_file(const char *filename, struct json_object *obj)
+ {
+-	return json_object_to_file_ext(filename, obj, JSON_C_TO_STRING_PLAIN);
++
++	return json_object_to_file_ext(filename, obj, JSON_C_TO_STRING_PLAIN | JSON_C_TO_STRING_PRETTY);
+ }
+ 
+ // Deprecated json_parse_double function.  See json_tokener_parse_double instead.

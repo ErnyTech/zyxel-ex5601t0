@@ -1,0 +1,69 @@
+Index: udhcp-0.9.8/Makefile
+===================================================================
+--- udhcp-0.9.8.orig/Makefile	2020-12-01 12:20:20.876303626 +0800
++++ udhcp-0.9.8/Makefile	2020-12-01 13:18:09.840958613 +0800
+@@ -102,6 +102,10 @@
+ CFLAGS += -DCONFIG_ZYXEL_CUSTOMIZATION_DEVICELOG
+ endif
+ 
++ifneq ($(strip $(CONFIG_TT_CUSTOMIZATION_TR069)),)
++CFLAGS += -DCONFIG_TT_CUSTOMIZATION_TR069
++endif
++
+ all: clean $(EXEC1) $(EXEC2) $(EXEC3)
+ 	$(STRIP) --remove-section=.note --remove-section=.comment $(EXEC1) $(EXEC2) $(EXEC3)
+ 
+Index: udhcp-0.9.8/options.c
+===================================================================
+--- udhcp-0.9.8.orig/options.c	2020-12-01 12:20:20.860303626 +0800
++++ udhcp-0.9.8/options.c	2020-12-01 13:18:28.755205690 +0800
+@@ -84,6 +84,10 @@
+ int last_option_index = sizeof(options)/sizeof(struct dhcp_option) - 1;
+ #endif
+ 
++#ifdef CONFIG_TT_CUSTOMIZATION_TR069
++u_int32_t  X_TTNET_Bootp_Flag = 0;
++#endif
++
+ /* get an option with bounds checking (warning, not aligned). */
+ unsigned char *get_option(struct dhcpMessage *packet, int code)
+ {
+@@ -305,6 +309,9 @@
+ 	while(zcfgFeObjStructGetNext(RDM_OID_IP_IFACE, &ipIfaceIid, (void **)&ipIface) == ZCFG_SUCCESS) {
+ 		if ( !strcmp(ipIface->X_ZYXEL_IfName, intfName) ){
+ 			sprintf(ipIntf, "IP.Interface.%d", ipIfaceIid.idx[0]);
++#ifdef CONFIG_TT_CUSTOMIZATION_TR069			
++			X_TTNET_Bootp_Flag = ipIface->X_TTNET_Bootp_Flag;
++#endif
+ 			free(ipIface);
+ 			break;
+ 		}
+Index: udhcp-0.9.8/options.h
+===================================================================
+--- udhcp-0.9.8.orig/options.h	2020-12-01 12:20:20.860303626 +0800
++++ udhcp-0.9.8/options.h	2020-12-01 13:18:43.197846851 +0800
+@@ -58,6 +58,9 @@
+ extern int optLen;
+ extern unsigned char sent_config_options[];
+ #endif
++#ifdef CONFIG_TT_CUSTOMIZATION_TR069
++extern u_int32_t  X_TTNET_Bootp_Flag;
++#endif
+ 
+ unsigned char *get_option(struct dhcpMessage *packet, int code);
+ int end_option(unsigned char *optionptr);
+Index: udhcp-0.9.8/packet.c
+===================================================================
+--- udhcp-0.9.8.orig/packet.c	2020-12-01 12:20:20.836303627 +0800
++++ udhcp-0.9.8/packet.c	2020-12-01 13:19:02.767305807 +0800
+@@ -38,6 +38,10 @@
+ 	}
+ 	packet->htype = ETH_10MB;
+ 	packet->hlen = ETH_10MB_LEN;
++#ifdef CONFIG_TT_CUSTOMIZATION_TR069
++	if(X_TTNET_Bootp_Flag == 0)
++		packet->flags |= htons(BROADCAST_FLAG);
++#endif
+ 	packet->cookie = htonl(DHCP_MAGIC);
+ 	packet->options[0] = DHCP_END;
+ 	add_simple_option(packet->options, DHCP_MESSAGE_TYPE, type);

@@ -1,0 +1,113 @@
+Index: busybox-1.31.1/loginutils/login.c
+===================================================================
+--- busybox-1.31.1.orig/loginutils/login.c	2021-03-22 20:23:54.344384861 +0800
++++ busybox-1.31.1/loginutils/login.c	2021-03-22 20:05:38.693780300 +0800
+@@ -496,6 +496,31 @@
+ 	}
+ }
+ 
++#ifdef ZYXEL_REMOMGMT_ONLY_HTTPS_ALLOWS_FOR_WLAN_CONNECT
++int ipComeFromWiFi(char *remoteIP)
++{
++	char cmd[256] = {0};
++	FILE *fp = NULL;
++	char *lst = calloc(16, sizeof(char));
++	int ret;
++
++	sprintf(cmd, "/tmp/searchIPFromWiFi.sh  %s\n", remoteIP);
++	system(cmd);
++
++	fp = fopen("/tmp/result", "r");
++	if(fp != NULL){
++		while((fgets(lst, 16, fp)) != NULL) {
++			sscanf(lst, "%d", &ret);
++		}
++
++		fclose(fp);
++	}
++	free(lst);
++
++	return ret;
++}
++#endif //ZYXEL_REMOMGMT_ONLY_HTTPS_ALLOWS_FOR_WLAN_CONNECT
++
+ int login_main(int argc, char **argv) MAIN_EXTERNALLY_VISIBLE;
+ int login_main(int argc UNUSED_PARAM, char **argv)
+ {
+@@ -856,11 +881,18 @@
+ 				}
+ 				free(logGpObj);
+ 			}
++#ifdef ZYXEL_REMOMGMT_ONLY_HTTPS_ALLOWS_FOR_WLAN_CONNECT
++
++			if (ipComeFromWiFi(addr) == 1){ // Check WLAN
++				syslog(LOG_INFO, "TELNET permission denied with WLAN connection." );
++				return EXIT_FAILURE;
++			}
++#endif //ZYXEL_REMOMGMT_ONLY_HTTPS_ALLOWS_FOR_WLAN_CONNECT
+ 
+ #ifdef ZYXEL_REMOTE_ACCESS_PRIVILEGE
+ 
+-			syslog(LOG_INFO, "Account privilege: ZYXEL_REMOTE_ACCESS_PRIVILEGE IN !!!!");
+-			syslog(LOG_INFO, "Account privilege: get remoAddr = %s ", addr);
++			//syslog(LOG_INFO, "Account privilege: ZYXEL_REMOTE_ACCESS_PRIVILEGE IN !!!!");
++			//syslog(LOG_INFO, "Account privilege: get remoAddr = %s ", addr);
+ 
+ 			// check remote IP v4/v6
+ 			addrType = ipType(addr);
+@@ -878,7 +910,7 @@
+ 
+ 				//v4 checking
+ 
+-				syslog(LOG_INFO, "Account privilege: %s remoAddr type = %d ", addr, addrType);
++				//syslog(LOG_INFO, "Account privilege: %s remoAddr type = %d ", addr, addrType);
+ 
+ 				/*Remote Ip WAN/LAN Ip check */
+ 
+@@ -902,8 +934,8 @@
+ 					free(ipv4Obj);
+ 				}
+ 
+-				syslog(LOG_INFO, "Account privilege: get lanip = %s ", lanip);
+-				syslog(LOG_INFO, "Account privilege: get subnetMask = %s ", subnetMask);
++				//syslog(LOG_INFO, "Account privilege: get lanip = %s ", lanip);
++				//syslog(LOG_INFO, "Account privilege: get subnetMask = %s ", subnetMask);
+ 				inet_pton(AF_INET, subnetMask, &n);
+ 
+ 				while (n > 0) {
+@@ -911,15 +943,14 @@
+ 					i++;
+ 				}
+ 				sprintf(perfix, "%d", i);
+-				syslog(LOG_INFO, "Account privilege: subnetMask suffix = %s ", perfix);
+-				#if 1 //Chris Test
++				//syslog(LOG_INFO, "Account privilege: subnetMask suffix = %s ", perfix);
+ 				if (checkCidrBlock(lanip, perfix, addr) == 1){
+ 					strcpy(remoAddr_Type, "LAN");
+ 				}
+ 				else{
+ 					strcpy(remoAddr_Type, "WAN");
+ 				}
+-				syslog(LOG_INFO, "Account privilege: %s remoAddr_Type = %s ", addr, remoAddr_Type);
++				//syslog(LOG_INFO, "Account privilege: %s remoAddr_Type = %s ", addr, remoAddr_Type);
+ 
+ 				if (strstr(userPriviege, remoAddr_Type) == NULL){
+ 					snprintf(logStr, sizeof(logStr), "Account privilege: '%s' TELNET permission denied.", username);
+@@ -927,17 +958,13 @@
+ 					syslog(LOG_INFO, "Account privilege:'%s' TELNET permission denied.", username);
+ 					return EXIT_FAILURE;
+ 				}
+-				#endif
+ 
+ 			}
+ 			else if (addrType == AF_INET6){
+ 				//not support V6 for WIND Italy
+-				syslog(LOG_INFO, "Account privilege: %s remoAddr type = %d ", addr, addrType);
+ 			}
+ 			else{
+ 				//skip check unknow IP type
+-				syslog(LOG_INFO, "Account privilege: %s remoAddr type is invalid !!!! ", addr);
+-				syslog(LOG_INFO, "Account privilege: Account:'%s' TELNET permission denied.", username);
+ 			}
+ 
+ #endif

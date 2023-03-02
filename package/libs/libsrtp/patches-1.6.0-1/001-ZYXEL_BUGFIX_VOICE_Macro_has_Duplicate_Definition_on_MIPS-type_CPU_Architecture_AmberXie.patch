@@ -1,0 +1,63 @@
+Index: libsrtp-1.6.0/test/srtp_driver.c
+===================================================================
+--- libsrtp-1.6.0.orig/test/srtp_driver.c	2017-08-01 19:57:38.000000000 +0800
++++ libsrtp-1.6.0/test/srtp_driver.c	2020-11-18 16:30:05.923184849 +0800
+@@ -341,7 +341,9 @@
+   if (do_codec_timing) {
+     srtp_policy_t policy;
+     int ignore;
+-    double mips = mips_estimate(1000000000, &ignore);
++    //Amber.20201125: Modify the variable name to not conflict definition on MIPS-type CPU architecture. Reference from libsrtp-1.4.2.
++    //double mips = mips_estimate(1000000000, &ignore);
++    double mipsv = mips_estimate(1000000000, &ignore);
+ 
+     crypto_policy_set_rtp_default(&policy.rtp);
+     crypto_policy_set_rtcp_default(&policy.rtcp);
+@@ -353,10 +355,13 @@
+     policy.allow_repeat_tx = 0;
+     policy.next = NULL;
+ 
+-    printf("mips estimate: %e\n", mips);
++    //Amber.20201125: Modify the variable name to not conflict definition on MIPS-type CPU architecture. Reference from libsrtp-1.4.2.
++    //printf("mips estimate: %e\n", mips);
++    printf("mipsv estimate: %e\n", mipsv);
+ 
+     printf("testing srtp processing time for voice codecs:\n");
+     printf("codec\t\tlength (octets)\t\tsrtp instructions/second\n");
++#if 0 //Amber.20201125: Modify the variable name to not conflict definition on MIPS-type CPU architecture. Reference from libsrtp-1.4.2.
+     printf("G.711\t\t%d\t\t\t%e\n", 80, 
+            (double) mips * (80 * 8) / 
+ 	   srtp_bits_per_second(80, &policy) / .01 );
+@@ -381,6 +386,32 @@
+     printf("Wideband\t%d\t\t\t%e\n", 640, 
+            (double) mips * (640 * 8) /
+ 	   srtp_bits_per_second(640, &policy) / .02 );
++#else // 1.
++    printf("G.711\t\t%d\t\t\t%e\n", 80, 
++           (double) mipsv * (80 * 8) / 
++	   srtp_bits_per_second(80, &policy) / .01 );
++    printf("G.711\t\t%d\t\t\t%e\n", 160, 
++           (double) mipsv * (160 * 8) / 
++	   srtp_bits_per_second(160, &policy) / .02);
++    printf("G.726-32\t%d\t\t\t%e\n", 40, 
++           (double) mipsv * (40 * 8) / 
++	   srtp_bits_per_second(40, &policy) / .01 );
++    printf("G.726-32\t%d\t\t\t%e\n", 80, 
++           (double) mipsv * (80 * 8) / 
++	   srtp_bits_per_second(80, &policy) / .02);
++    printf("G.729\t\t%d\t\t\t%e\n", 10, 
++           (double) mipsv * (10 * 8) / 
++	   srtp_bits_per_second(10, &policy) / .01 );
++    printf("G.729\t\t%d\t\t\t%e\n", 20, 
++           (double) mipsv * (20 * 8) /
++	   srtp_bits_per_second(20, &policy) / .02 );
++    printf("Wideband\t%d\t\t\t%e\n", 320, 
++           (double) mipsv * (320 * 8) /
++	   srtp_bits_per_second(320, &policy) / .01 );
++    printf("Wideband\t%d\t\t\t%e\n", 640, 
++           (double) mipsv * (640 * 8) /
++	   srtp_bits_per_second(640, &policy) / .02 );
++#endif // 0.
+   }
+ 
+   status = srtp_shutdown();

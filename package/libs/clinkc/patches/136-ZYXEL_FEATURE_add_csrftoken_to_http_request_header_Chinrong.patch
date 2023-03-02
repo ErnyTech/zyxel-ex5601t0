@@ -1,0 +1,43 @@
+diff -urN clinkc.org/include/cybergarage/http/chttp.h clinkc/include/cybergarage/http/chttp.h
+--- clinkc.org/include/cybergarage/http/chttp.h	2020-12-28 09:39:38.641723200 +0800
++++ clinkc/include/cybergarage/http/chttp.h	2020-12-29 16:42:15.117139094 +0800
+@@ -71,6 +71,8 @@
+ #define BOUNDARY_SIZE 256
+ #define HTTPD_TMP_PATH "/tmp"
+ //#define HTTPD_MAX_UPLOAD_SIZE 41943040
++#define CSRFTOKEN_SIZE 64
++#define HTTPD_CSRFTOKEN "CSRFToken"
+ #endif
+ 
+ #if 1 /*Work-around compressed file for "Improve the remote GUI access via remote management VLAN time" issue*/
+@@ -358,6 +360,7 @@
+ 	char loginUserName[32];
+ 	char loginLevel[16];
+ 	char sessionID[32+1];
++	char CSRFToken[CSRFTOKEN_SIZE];
+ 	BOOL needChgPasswd;
+ 	BOOL showSkipBtn; /* show skip button in change password page if password is automatically generated */
+ 	BOOL needQuickStart;
+diff -urN clinkc.org/src/cybergarage/http/chttp_request.c clinkc/src/cybergarage/http/chttp_request.c
+--- clinkc.org/src/cybergarage/http/chttp_request.c	2020-12-28 09:39:38.641723200 +0800
++++ clinkc/src/cybergarage/http/chttp_request.c	2020-12-29 16:43:53.140559608 +0800
+@@ -808,6 +808,7 @@
+ 	char *contentType = NULL;
+ 	char boundary[BOUNDARY_SIZE] = {0};
+ 	char *method = NULL;
++	char *tokenvalue = NULL;
+ #endif
+ 
+ 	cg_log_debug_l4("Entering...\n");
+@@ -903,7 +904,10 @@
+ 			
+ 		if(contentType) free(contentType);
+ 	}
+-	
++
++	if(tokenvalue = cg_http_packet_getheadervalue((CgHttpPacket *)httpReq, HTTPD_CSRFTOKEN)){
++		strncpy(httpReq->CSRFToken, tokenvalue, CSRFTOKEN_SIZE);
++	}
+ 	if (failed == TRUE) return FALSE;
+ #if 0
+ 	requestUri = cg_http_request_geturi(httpReq);

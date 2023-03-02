@@ -1,0 +1,182 @@
+Index: iptables-1.8.7/extensions/libxt_MARK.c
+===================================================================
+--- iptables-1.8.7.orig/extensions/libxt_MARK.c
++++ iptables-1.8.7/extensions/libxt_MARK.c
+@@ -14,6 +14,7 @@ enum {
+ 	XT_MARK_SET=0,
+ 	XT_MARK_AND,
+ 	XT_MARK_OR,
++	XT_MARK_VTAG_SET
+ };
+ 
+ struct xt_mark_target_info_v1 {
+@@ -25,11 +26,17 @@ enum {
+ 	O_SET_MARK = 0,
+ 	O_AND_MARK,
+ 	O_OR_MARK,
++#if 1 /* ZyXEL QoS, John */
++    O_VTAG_SET,
++#endif
+ 	O_XOR_MARK,
+ 	O_SET_XMARK,
+ 	F_SET_MARK  = 1 << O_SET_MARK,
+ 	F_AND_MARK  = 1 << O_AND_MARK,
+ 	F_OR_MARK   = 1 << O_OR_MARK,
++#if 1 /* ZyXEL QoS, John */
++    F_VTAG_SET  = 1 << O_VTAG_SET,
++#endif
+ 	F_XOR_MARK  = 1 << O_XOR_MARK,
+ 	F_SET_XMARK = 1 << O_SET_XMARK,
+ 	F_ANY       = F_SET_MARK | F_AND_MARK | F_OR_MARK |
+@@ -55,6 +62,31 @@ static const struct xt_option_entry MARK
+ 	XTOPT_TABLEEND,
+ };
+ 
++#if 1 /* ZyXEL QoS, John (porting from MSTC) */
++static const struct xt_option_entry mark_tg_opts[] = {
++	{.name = "set-mark", .id = O_SET_MARK, .type = XTTYPE_MARKMASK32,
++	.excl = F_ANY},
++	{.name = "and-mark", .id = O_AND_MARK, .type = XTTYPE_UINT32,
++	.excl = F_ANY},
++	{.name = "or-mark", .id = O_OR_MARK, .type = XTTYPE_UINT32,
++	.excl = F_ANY},
++	{.name = "vtag-set", .id = O_VTAG_SET, .type = XTTYPE_UINT32,
++	.excl = F_ANY},
++	XTOPT_TABLEEND,
++};
++
++
++static void mark_tg_help(void)
++{
++	printf(
++		"MARK target options:\n"
++		"  --set-mark value[/mask]   Clear bits in mask and OR value into nfmark\n"
++		"  --and-mark bits           Binary AND the nfmark with bits\n"
++		"  --or-mark bits            Binary OR the nfmark with bits\n"
++		"  --vtag-set value                   Set Vlan tag value\n"
++		"\n");
++}
++#else
+ static const struct xt_option_entry mark_tg_opts[] = {
+ 	{.name = "set-xmark", .id = O_SET_XMARK, .type = XTTYPE_MARKMASK32,
+ 	 .excl = F_ANY},
+@@ -80,6 +112,7 @@ static void mark_tg_help(void)
+ "  --xor-mark bits           Binary XOR the nfmark with bits\n"
+ "\n");
+ }
++#endif
+ 
+ static void MARK_parse_v0(struct xt_option_call *cb)
+ {
+@@ -124,6 +157,29 @@ static void MARK_parse_v1(struct xt_opti
+ 	markinfo->mark = cb->val.u32;
+ }
+ 
++#if 1 /* ZyXEL QoS, John (porting from MSTC) */
++static void mark_tg_parse(struct xt_option_call *cb)
++{
++	struct xt_mark_tginfo2 *info = cb->data;
++
++	xtables_option_parse(cb);
++	switch (cb->entry->id) {
++	case O_SET_MARK:
++		info->mode = XT_MARK_SET;
++		break;
++	case O_AND_MARK:
++		info->mode = XT_MARK_AND;
++		break;
++	case O_OR_MARK:
++		info->mode = XT_MARK_OR;
++		break;
++	case O_VTAG_SET:
++		info->mode = XT_MARK_VTAG_SET;
++		break;
++	}
++	info->mark = cb->val.u32;
++}
++#else
+ static void mark_tg_parse(struct xt_option_call *cb)
+ {
+ 	struct xt_mark_tginfo2 *info = cb->data;
+@@ -151,7 +207,7 @@ static void mark_tg_parse(struct xt_opti
+ 		break;
+ 	}
+ }
+-
++#endif
+ static void mark_tg_check(struct xt_fcheck_call *cb)
+ {
+ 	if (cb->xflags == 0)
+@@ -203,6 +259,28 @@ static void MARK_print_v1(const void *ip
+ 	print_mark(markinfo->mark);
+ }
+ 
++#if 1 /* ZyXEL QoS, John (porting from MSTC) */
++static void mark_tg_print(const void *ip, const struct xt_entry_target *target,
++                          int numeric)
++{
++	const struct xt_mark_tginfo2 *info = (const void *)target->data;
++	switch (info->mode) {
++	case XT_MARK_SET:
++		printf(" MARK set");
++		break;
++	case XT_MARK_AND:
++		printf(" MARK and");
++		break;
++	case XT_MARK_OR:
++		printf(" MARK or");
++		break;
++	case XT_MARK_VTAG_SET:
++		printf(" vtag set ");
++		break;
++	}
++	print_mark(info->mark);
++}
++#else
+ static void mark_tg_print(const void *ip, const struct xt_entry_target *target,
+                           int numeric)
+ {
+@@ -219,7 +297,7 @@ static void mark_tg_print(const void *ip
+ 	else
+ 		printf(" MARK xset 0x%x/0x%x", info->mark, info->mask);
+ }
+-
++#endif
+ static void MARK_save_v1(const void *ip, const struct xt_entry_target *target)
+ {
+ 	const struct xt_mark_target_info_v1 *markinfo =
+@@ -239,12 +317,34 @@ static void MARK_save_v1(const void *ip,
+ 	print_mark(markinfo->mark);
+ }
+ 
++#if 1 /* ZyXEL QoS, John (porting from MSTC) */
++static void mark_tg_save(const void *ip, const struct xt_entry_target *target)
++{
++	const struct xt_mark_tginfo2 *info = (const void *)target->data;
++	switch (info->mode) {
++	case XT_MARK_SET:
++		printf(" --set-mark");
++		break;
++	case XT_MARK_AND:
++		printf(" --and-mark");
++		break;
++	case XT_MARK_OR:
++		printf(" --or-mark");
++		break;
++	case XT_MARK_VTAG_SET:
++		printf("--vtag-set ");
++		break;
++	}
++	print_mark(info->mark);
++}
++#else
+ static void mark_tg_save(const void *ip, const struct xt_entry_target *target)
+ {
+ 	const struct xt_mark_tginfo2 *info = (const void *)target->data;
+ 
+ 	printf(" --set-xmark 0x%x/0x%x", info->mark, info->mask);
+ }
++#endif
+ 
+ static void mark_tg_arp_save(const void *ip, const struct xt_entry_target *target)
+ {

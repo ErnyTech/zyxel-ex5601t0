@@ -1,0 +1,93 @@
+Index: omcproxy-2018-12-14-722151f0/src/groups.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/groups.c
++++ omcproxy-2018-12-14-722151f0/src/groups.c
+@@ -23,6 +23,8 @@
+ #include "groups.h"
+ 
+ #include "omcpzcfg.h"
++static int host_limit = 0;
++
+ 
+ // Group comparator for AVL-tree
+ static int compare_groups(const void *k1, const void *k2, __unused void *ptr)
+@@ -299,7 +301,20 @@ static struct group* groups_get_group(st
+ 		const struct in6_addr *addr, bool *created)
+ {
+ 	struct group *group = avl_find_element(&groups->groups, addr, group, node);
+-	if (!group && created && (group = calloc(1, sizeof(*group)))) {
++	if (!group && created) {
++		if(groups->groups.count < (unsigned int)groups->group_limit) {
++			group = calloc(1, sizeof(*group));
++		}
++		else {
++			L_WARN("%s: maximum group count (%d) exceeded", __FUNCTION__, (unsigned int)groups->group_limit);
++			return NULL;
++		}
++
++		if(!group) {
++			//L_WARN("%s: can't creat more group", __FUNCTION__);
++			return NULL;
++		}
++
+ 		group->addr = *addr;
+ 		group->node.key = &group->addr;
+ 		avl_insert(&groups->groups, &group->node);
+@@ -328,8 +343,20 @@ static struct group_source* groups_get_s
+ 		if (IN6_ARE_ADDR_EQUAL(&c->addr, addr))
+ 			source = c;
+ 
+-	if (!source && created && group->source_count < groups->source_limit &&
+-			(source = calloc(1, sizeof(*source)))) {
++	if (!source && created) {
++		if (group->source_count < groups->source_limit) {
++			source = calloc(1, sizeof(*source));
++		}
++		else {
++			L_WARN("%s: maximum source count (%lu) exceeded", __FUNCTION__, groups->source_limit);
++			return NULL;
++		}
++
++		if(!source) {
++			//L_WARN("%s: can't creat more group source", __FUNCTION__);
++			return NULL;
++		}
++
+ 		source->addr = *addr;
+ 		list_add_tail(&source->head, &group->sources);
+ 		++group->source_count;
+@@ -350,12 +377,22 @@ struct group_host *group_retrieve_host(s
+ 	if(!group || !hosts)
+ 		return NULL;
+ 
++	if(!host_limit) {
++		int value;
++		host_limit = ((value = omcpzcfg_param_value("MaxMembers")) > 0 && value <= OMCPROXY_MAX_GROUP_HOSTS) ? value : OMCPROXY_MAX_GROUP_HOSTS;
++	}
++
+ 	inet_ntop(AF_INET6, group, groupbuf, INET6_ADDRSTRLEN);
+ 	inet_ntop(AF_INET6, hostaddr, hostaddrbuf, INET6_ADDRSTRLEN);
+ 
+ 	struct lh_entry *entry = lh_table_lookup_entry(hosts, hostaddrbuf);
+ 	if(!entry) {
+ 		if(creat) {
++			if(hosts->count >= host_limit) {
++				L_WARN("%s: add host count than limit %d", __FUNCTION__, host_limit);
++				return NULL;
++			}
++
+ 			char *addr = calloc(1, INET6_ADDRSTRLEN);
+ 			memcpy(addr, hostaddrbuf, INET6_ADDRSTRLEN);
+ 
+Index: omcproxy-2018-12-14-722151f0/src/groups.h
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/groups.h
++++ omcproxy-2018-12-14-722151f0/src/groups.h
+@@ -29,6 +29,7 @@
+ #ifdef ZYXEL_OMCPROXY
+ #include <json/linkhash.h>
+ #define OMCPROXY_DEFAULT_GROUP_HOSTS	20
++#define OMCPROXY_MAX_GROUP_HOSTS		10000
+ #endif
+ 
+ struct group {

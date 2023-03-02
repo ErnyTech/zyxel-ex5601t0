@@ -1,0 +1,41 @@
+diff -urN pure-ftpd-1.0.30.org/src/ftpd.c pure-ftpd-1.0.30/src/ftpd.c
+--- pure-ftpd-1.0.30.org/src/ftpd.c	2020-10-07 00:48:32.036046000 +0800
++++ pure-ftpd-1.0.30/src/ftpd.c	2020-10-07 14:20:08.709460472 +0800
+@@ -2236,6 +2236,11 @@
+ 	int cur_user_idx[2] = {-1};
+ 	int login_fail_cnt = 0; 
+ 	int last_login_time = 0;
++#ifdef ABUU_CUSTOMIZATION
++    bool autoDisableHighUser = false;
++    objIndex_t logCfgIid;
++    rdm_ZyLogCfg_t *logCfgObj = NULL;
++#endif
+ 
+ #if defined(NGROUPS_MAX) && NGROUPS_MAX > 0
+     int ngroups_max = NGROUPS_MAX; /* Use the compile time value */
+@@ -2315,6 +2320,13 @@
+ 		free(accountObj);
+ 	}
+ 	if (authGpPrivilege){
++#ifdef ABUU_CUSTOMIZATION
++        IID_INIT(logCfgIid);
++        if(zcfgFeObjStructGet(RDM_OID_ZY_LOG_CFG, &logCfgIid, (void **) &logCfgObj) == ZCFG_SUCCESS){
++            autoDisableHighUser = logCfgObj->AutoDisableHighUser;
++            zcfgFeObjStructFree(logCfgObj);
++        }
++#endif          
+ 		/*Authentication GP_Privilege*/
+ 		char logStr[128] = {0};
+ 		objIndex_t logGpObjIid;
+@@ -2327,7 +2339,10 @@
+ 			if (strstr(logGpObj->GP_Privilege,"ftp")== NULL
+ #ifdef ZYXEL_REMOTE_ACCOUNT_ACCESS_PRIVILEGE				
+ 			|| strstr(accountObj->Privilege,"ftp")== NULL
+-#endif				
++#endif			
++#ifdef ABUU_CUSTOMIZATION
++            || (autoDisableHighUser == true && !strcmp("root", account))
++#endif	
+ 			){
+ 				snprintf(logStr, sizeof(logStr), "Account:'%s' FTP permission denied.", account);
+ 				puts(logStr);

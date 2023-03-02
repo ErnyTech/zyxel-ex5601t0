@@ -1,0 +1,13 @@
+Index: udhcp-0.9.8/debug.h
+===================================================================
+--- udhcp-0.9.8.orig/debug.h	2021-04-14 15:56:48.665377221 +0800
++++ udhcp-0.9.8/debug.h	2021-04-14 15:58:50.718092924 +0800
+@@ -16,7 +16,7 @@
+ #ifdef CONFIG_ZYXEL_CUSTOMIZATION_DEVICELOG
+ # define TTDHCPLOG(level, str, args...) syslog(level, str, ## args)
+ #endif
+-# define OPEN_LOG(name) openlog(name, LOG_PID, 0)
++# define OPEN_LOG(name) openlog(name, LOG_PID, LOG_DAEMON)
+ #define CLOSE_LOG() closelog()
+ #else
+ # define LOG_EMERG	"EMERGENCY!"

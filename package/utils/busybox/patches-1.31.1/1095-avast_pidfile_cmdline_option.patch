@@ -1,0 +1,76 @@
+Index: busybox-1.31.1/miscutils/crond.c
+===================================================================
+--- busybox-1.31.1.orig/miscutils/crond.c	2021-04-01 18:02:00.570226000 +0800
++++ busybox-1.31.1/miscutils/crond.c	2021-04-01 18:30:02.992527721 +0800
+@@ -74,6 +74,8 @@
+ //usage:	)
+ //usage:     "\n	-L FILE	Log to FILE"
+ //usage:     "\n	-c DIR	Cron dir. Default:"CONFIG_FEATURE_CROND_DIR"/crontabs"
++//usage:     "\n	-p PID	file (default is /var/run/crond.pid)"
++
+ 
+ #include "libbb.h"
+ #include "common_bufsiz.h"
+@@ -103,6 +105,9 @@
+ #ifndef MAXLINES
+ # define MAXLINES       256  /* max lines in non-root crontabs */
+ #endif
++#ifndef PIDFILENAME
++#define PIDFILENAME     "/var/run/crond.pid"
++#endif
+ 
+ 
+ typedef struct CronFile {
+@@ -145,6 +150,7 @@
+ 	OPT_S = (1 << 4),
+ 	OPT_c = (1 << 5),
+ 	OPT_d = (1 << 6) * ENABLE_FEATURE_CROND_D,
++	OPT_p = (1 << 7)
+ };
+ 
+ struct globals {
+@@ -160,12 +166,14 @@
+ 	char *env_var_shell;
+ 	char *env_var_logname;
+ #endif
++	char *pid_filename;
+ } FIX_ALIASING;
+ #define G (*(struct globals*)bb_common_bufsiz1)
+ #define INIT_G() do { \
+ 	setup_common_bufsiz(); \
+ 	G.log_level = 8; \
+ 	G.crontab_dir_name = CRONTABS; \
++	G.pid_filename = (char *)PIDFILENAME; \
+ } while (0)
+ 
+ /* Log levels:
+@@ -1020,7 +1028,7 @@
+ 	INIT_G();
+ 
+ 	opts = getopt32(argv, "^"
+-			"l:L:fbSc:" IF_FEATURE_CROND_D("d:")
++			"l:L:fbSc:p:" IF_FEATURE_CROND_D("d:")
+ 			"\0"
+ 			/* "-b after -f is ignored", and so on for every pair a-b */
+ 			"f-b:b-f:S-L:L-S" IF_FEATURE_CROND_D(":d-l")
+@@ -1028,7 +1036,7 @@
+ 			":l+" IF_FEATURE_CROND_D(":d+")
+ 			,
+ 			&G.log_level, &G.log_filename, &G.crontab_dir_name
+-			IF_FEATURE_CROND_D(,&G.log_level)
++			IF_FEATURE_CROND_D(,&G.log_level), &G.pid_filename
+ 	);
+ 	/* both -d N and -l N set the same variable: G.log_level */
+ 
+@@ -1054,7 +1062,10 @@
+ 
+ 	log8("crond (busybox "BB_VER") started, log level %d", G.log_level);
+ 	rescan_crontab_dir();
+-	write_pidfile_std_path_and_ext("crond");
++	if(strlen(G.pid_filename))
++		write_pidfile((const char *)G.pid_filename);
++	else
++		write_pidfile_std_path_and_ext("crond");
+ #if ENABLE_FEATURE_CROND_SPECIAL_TIMES
+ 	if (touch_reboot_file())
+ 		start_jobs(START_ME_REBOOT); /* start @reboot entries, if any */

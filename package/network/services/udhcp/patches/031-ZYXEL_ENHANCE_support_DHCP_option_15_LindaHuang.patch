@@ -1,0 +1,13 @@
+Index: udhcp-0.9.8/script.c
+===================================================================
+--- udhcp-0.9.8.orig/script.c	2020-03-20 14:29:10.180616346 +0800
++++ udhcp-0.9.8/script.c	2020-03-20 14:30:56.958366858 +0800
+@@ -207,7 +207,7 @@
+ 		case OPTION_STRING:
+ #if 1 /* ZyXEL DHCP option support (porting from BRCM and MSTC), John */
+ 			/* DHCP option 43 */
+-			if(type_p->code == 0x2b || type_p->code == 0x79){
++			if(type_p->code == 0x2b || type_p->code == 0x79 || type_p->code == 0x0f){
+ 				if(type_p->code == 0x79){
+ 					//RFC3442, if option 121 contain default route, the priority is higher than option3.
+ 					if(getDefaultRouteFromOption121((char *)(option - 2), optStr) == true)

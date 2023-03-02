@@ -1,0 +1,25 @@
+Index: clinkc/src/cybergarage/http/chttp_md5.c
+===================================================================
+--- clinkc.orig/src/cybergarage/http/chttp_md5.c
++++ clinkc/src/cybergarage/http/chttp_md5.c
+@@ -20,6 +20,7 @@ documentation and/or software.
+  */
+ 
+ #include <stdio.h>
++#include <stdint.h>
+ #include <string.h>
+ #include <cybergarage/util/cstring.h>
+ #include <cybergarage/http/cmd5.h>
+@@ -32,10 +33,10 @@ documentation and/or software.
+ typedef unsigned char *POINTER;
+ 
+ /* UINT2 defines a two byte word */
+-typedef unsigned short int UINT2;
++typedef uint16_t UINT2;
+ 
+ /* UINT4 defines a four byte word */
+-typedef unsigned long int UINT4;
++typedef uint32_t UINT4;
+ 
+ /* PROTO_LIST is defined depending on how PROTOTYPES is defined above.
+ If using PROTOTYPES, then PROTO_LIST returns the list, otherwise it

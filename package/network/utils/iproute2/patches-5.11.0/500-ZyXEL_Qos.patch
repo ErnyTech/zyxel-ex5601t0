@@ -1,0 +1,74 @@
+Index: iproute2-5.11.0/include/uapi/linux/gen_stats.h
+===================================================================
+--- iproute2-5.11.0.orig/include/uapi/linux/gen_stats.h
++++ iproute2-5.11.0/include/uapi/linux/gen_stats.h
+@@ -26,6 +26,9 @@ enum {
+ struct gnet_stats_basic {
+ 	__u64	bytes;
+ 	__u32	packets;
++#if 1 /* ZyXEL QoS, porting from MSTC */
++	__u64   dropbytes;
++#endif
+ };
+ 
+ /**
+@@ -36,6 +39,9 @@ struct gnet_stats_basic {
+ struct gnet_stats_rate_est {
+ 	__u32	bps;
+ 	__u32	pps;
++#if 1 /* ZyXEL QoS, porting from MSTC */
++	__u32   dropbps;
++#endif
+ };
+ 
+ /**
+@@ -46,6 +52,9 @@ struct gnet_stats_rate_est {
+ struct gnet_stats_rate_est64 {
+ 	__u64	bps;
+ 	__u64	pps;
++#if 1 /* ZyXEL QoS, porting from MSTC */
++	__u64   dropbps;
++#endif
+ };
+ 
+ /**
+Index: iproute2-5.11.0/include/uapi/linux/pkt_sched.h
+===================================================================
+--- iproute2-5.11.0.orig/include/uapi/linux/pkt_sched.h
++++ iproute2-5.11.0/include/uapi/linux/pkt_sched.h
+@@ -39,6 +39,9 @@ struct tc_stats {
+ 					 * flow goes out of allocated bandwidth */
+ 	__u32	bps;			/* Current flow byte rate */
+ 	__u32	pps;			/* Current flow packet rate */
++#if 1 /* ZyXEL QoS, porting from MSTC */
++       __u32   dropbps;
++#endif
+ 	__u32	qlen;
+ 	__u32	backlog;
+ };
+Index: iproute2-5.11.0/tc/tc_util.c
+===================================================================
+--- iproute2-5.11.0.orig/tc/tc_util.c
++++ iproute2-5.11.0/tc/tc_util.c
+@@ -699,6 +699,10 @@ void print_tcstats2_attr(FILE *fp, struc
+ 			   sizeof(re)));
+ 		print_string(PRINT_FP, NULL, "\n%s", prefix);
+ 		print_lluint(PRINT_JSON, "rate", NULL, re.bps);
++#if 1 /* ZyXEL QoS, porting from MSTC */
++		print_lluint(PRINT_JSON, "droprate", NULL, re.dropbps);
++		tc_print_rate(PRINT_FP, NULL, "droprate %s", re.dropbps);
++#endif
+ 		tc_print_rate(PRINT_FP, NULL, "rate %s", re.bps);
+ 		print_lluint(PRINT_ANY, "pps", " %llupps", re.pps);
+ 	} else if (tbs[TCA_STATS_RATE_EST]) {
+@@ -708,6 +712,10 @@ void print_tcstats2_attr(FILE *fp, struc
+ 		       MIN(RTA_PAYLOAD(tbs[TCA_STATS_RATE_EST]), sizeof(re)));
+ 		print_string(PRINT_FP, NULL, "\n%s", prefix);
+ 		print_uint(PRINT_JSON, "rate", NULL, re.bps);
++#if 1 /* ZyXEL QoS, porting from MSTC */
++		print_lluint(PRINT_JSON, "droprate", NULL, re.dropbps);
++		tc_print_rate(PRINT_FP, NULL, "droprate %s", re.dropbps);
++#endif
+ 		tc_print_rate(PRINT_FP, NULL, "rate %s", re.bps);
+ 		print_uint(PRINT_ANY, "pps", " %upps", re.pps);
+ 	}

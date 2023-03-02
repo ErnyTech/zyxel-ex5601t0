@@ -1,0 +1,27 @@
+Index: linux-5.4.171/drivers/net/phy/mdio_bus.c
+===================================================================
+--- linux-5.4.171.orig/drivers/net/phy/mdio_bus.c
++++ linux-5.4.171/drivers/net/phy/mdio_bus.c
+@@ -79,6 +79,7 @@ static int mdiobus_register_reset(struct
+ int mdiobus_register_device(struct mdio_device *mdiodev)
+ {
+ 	int err;
++	struct phy_device *phydev=container_of(mdiodev, struct phy_device, mdio);
+ 
+ 	if (mdiodev->bus->mdio_map[mdiodev->addr])
+ 		return -EBUSY;
+@@ -92,8 +93,12 @@ int mdiobus_register_device(struct mdio_
+ 		if (err)
+ 			return err;
+ 
+-		/* Assert the reset signal */
+-		mdio_device_reset(mdiodev, 1);
++		if( (phydev->phy_id&0xFFFF0000) == 0x67c90000 ) {
++			pr_info("(%x) Ignore assert reset signal for Intel GPY211.\n", phydev->phy_id);
++		} else {
++			/* Assert the reset signal */
++			mdio_device_reset(mdiodev, 1);
++		}
+ 	}
+ 
+ 	mdiodev->bus->mdio_map[mdiodev->addr] = mdiodev;

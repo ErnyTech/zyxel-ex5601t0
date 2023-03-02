@@ -1,0 +1,64 @@
+Index: dnsmasq-2.78/src/cache.c
+===================================================================
+--- dnsmasq-2.78.orig/src/cache.c	2020-10-12 18:13:51.876978526 +0800
++++ dnsmasq-2.78/src/cache.c	2020-10-12 18:14:13.868979384 +0800
+@@ -559,6 +559,9 @@
+ }
+ 
+ #ifdef DNS_TRAFFIC_ROUTE
++#if defined(ZYXEL_DNS_TRAFFIC_ROUTE_FUZZY_COMPARE)
++#define DNS_ROUTE_FUZZY_MATCH_HEADER	"*."
++#endif
+ void add_dns_traffic_route(uint32_t s_addr, const char *cname, int *flush)
+ {
+   char sysCmd[128] = "";
+@@ -566,6 +569,13 @@
+   srcIP.s_addr = s_addr;
+   struct server *serv = NULL;
+ 
++#if defined(ZYXEL_DNS_TRAFFIC_ROUTE_FUZZY_COMPARE)
++  char *pFuzzyName = NULL, *pRemoveHeaderCName = NULL, cTmpCName[MAXDNAME];
++  uint8_t i, uCNameLength, uMatch = 0, uFuzzyLengh = strlen (DNS_ROUTE_FUZZY_MATCH_HEADER);
++#else
++  uint8_t uMatch = 0;
++#endif //#if defined(ZYXEL_DNS_TRAFFIC_ROUTE_FUZZY_COMPARE)
++
+   if (s_addr == 0) {
+ 
+     return;
+@@ -574,7 +584,35 @@
+   serv = daemon->servers;
+ 
+   while (serv) {
++#if defined(ZYXEL_DNS_TRAFFIC_ROUTE_FUZZY_COMPARE)
++    if (serv->domain) {
++      if (strncmp (serv->domain, DNS_ROUTE_FUZZY_MATCH_HEADER, uFuzzyLengh) == 0) {
++        pFuzzyName = serv->domain + uFuzzyLengh;
++
++        pRemoveHeaderCName = NULL;
++        strncpy (cTmpCName, cname, MAXDNAME);
++        uCNameLength = strlen (cTmpCName);
++
++        for (i = 0 ; i < uCNameLength ; i++) {
++          if (cTmpCName [i] == '.') {
++            pRemoveHeaderCName = (cTmpCName + (i + 1));
++            break;
++          }
++        }
++
++        if (pRemoveHeaderCName != NULL && strcmp (pFuzzyName, pRemoveHeaderCName) == 0) {
++          uMatch = 1;
++        }
++      } else if (strcmp(cname, serv->domain) == 0) {
++        uMatch = 1;
++      }
++    }
++#else
+     if (serv->domain && (strcmp(cname, serv->domain) == 0)) {
++      uMatch = 1;
++    }
++#endif //#if defined(ZYXEL_DNS_TRAFFIC_ROUTE_FUZZY_COMPARE)
++    if (uMatch == 1) {
+       if (*flush) {
+         /* deledt */
+         sprintf(sysCmd,

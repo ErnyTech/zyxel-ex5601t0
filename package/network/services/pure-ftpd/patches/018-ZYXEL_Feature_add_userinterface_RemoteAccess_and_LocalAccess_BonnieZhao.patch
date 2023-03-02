@@ -1,0 +1,159 @@
+Index: pure-ftpd-1.0.30/src/ftp_parser.c
+===================================================================
+--- pure-ftpd-1.0.30.orig/src/ftp_parser.c	2014-01-15 13:20:12.000000000 +0800
++++ pure-ftpd-1.0.30/src/ftp_parser.c	2020-08-25 13:24:50.295440478 +0800
+@@ -352,7 +352,17 @@
+             if (guest == 0) {
+                 randomdelay();
+             }
++#ifdef MSTC_TTNET_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
++			char *ReturnLoginValue[16] = {0}; 
++			dopass(arg,ReturnLoginValue);
++			if ( strcmp(ReturnLoginValue, "2")) {
++				//control_printf(SL_FAILURE, "421 This user is not allow to log in.");
++				printf("104051 FTP Server Login UserName or Password Error\n");
++				exit(0);
++			}
++#else			
+             dopass(arg);
++#endif
+         } else if (!strcmp(cmd, "quit")) {
+             addreply(221, MSG_GOODBYE,
+                      (unsigned long long) ((uploaded + 1023ULL) / 1024ULL),
+Index: pure-ftpd-1.0.30/src/ftpd.c
+===================================================================
+--- pure-ftpd-1.0.30.orig/src/ftpd.c	2020-08-25 11:01:52.838497018 +0800
++++ pure-ftpd-1.0.30/src/ftpd.c	2020-08-25 13:25:35.988258918 +0800
+@@ -41,6 +41,9 @@
+ #include "zcfg_rdm_obj.h"
+ #include "zcfg_rdm_oid.h"
+ #include "zcfg_fe_rdm_struct.h"
++#ifdef MSTC_TTNET_MULTI_USER
++#include "zcfg_msg.h"
++#endif
+ 
+ enum{		
+ 	GROUP_IID=0,
+@@ -50,6 +53,10 @@
+ 	SIZE_OF_VALUE = 64 // maximum supported username length is 64
+ };
+ 
++#ifdef MSTC_TTNET_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
++extern void *msgHandle;
++#endif
++
+ int ischeck = 0;
+ char uploadfilename[128] = {0};
+ int free_memory_size;
+@@ -2005,7 +2012,76 @@
+ }
+ #endif
+ 
++#ifdef MSTC_TTNET_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
++//Send message to ssk for get some information of User info.
++zcfgRet_t queryUserInfo(GetUserInfoMsgBody *GetUserInfo,char *password)
++{
++	void *msgBuf[sizeof(zcfgMsg_t) + sizeof(GetUserInfoMsgBody)] ={0};
++	zcfgMsg_t *msg = (zcfgMsg_t *)msgBuf;
++	GetUserInfoMsgBody *body = (GetUserInfoMsgBody*) (msg+1);
++   	void *re_msgBuf;
++   	zcfgRet_t ret = ZCFG_SUCCESS;
++   
++	msg->type = ZCFG_MSG_FTP_USER_INFO;
++	msg->srcEid = ZCFG_EID_PUREFTPD;  	
++	msg->dstEid = ZCFG_EID_ESMD;
++	msg->length = sizeof(GetUserInfoMsgBody);
++
++   	strncpy(body->username,account, 257);
++   	strncpy(body->password,password, 257);
++
++   	if ((ret = zcfgMsgRepSend(msg)) != ZCFG_SUCCESS)
++   	{
++		printf("Failed to send message (ret=%d)", ret);
++   	}
++  	else
++   	{
++		if ((ret = zcfgMsgReqRecv(&msg, 140)) != ZCFG_SUCCESS)
++      	{
++         	printf("Failed to receive message (ret=%d)", ret);
++      	}
++      	else
++      	{
++			switch(msg->type)
++         	{
++         		case ZCFG_MSG_FTP_USER_INFO:
++         			if(msg->length != sizeof(GetUserInfoMsgBody))
++         			{
++         				printf("Invalid Data Length: received %d != expected %d", msg->length, sizeof(GetUserInfoMsgBody));               
++         				ret = ZCFG_INTERNAL_ERROR;
++         				break;
++         			}
++         			re_msgBuf = (GetUserInfoMsgBody *)(msg + 1);
++         			memcpy(GetUserInfo,re_msgBuf,sizeof(GetUserInfoMsgBody));
++         			break;
++         	
++         		default:
++         			printf("Invalid message type (%x), expects CMS_MSG_FTP_USER_INFO (%x)", (unsigned int)msg->type,ZCFG_MSG_FTP_USER_INFO);
++         			ret = ZCFG_INTERNAL_ERROR;
++         	}
++      	} 
++	}
++   	return ret;
++}
++int UserAllow(char *password) 
++{
++	GetUserInfoMsgBody *GetUserInfo;
++	
++	if (queryUserInfo(GetUserInfo,password) != ZCFG_SUCCESS)
++		return -1;
++
++	if(GetUserInfo->IsAllow == 1)
++		return 0;
++
++	return -1;
++}
++#endif	/* _MSTC_, Linda, CPE User Definitions and Rights_END. */
++
++#ifdef MSTC_TTNET_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
++void dopass(char *password, char *val)
++#else
+ void dopass(char *password)
++#endif
+ {
+     static unsigned int tapping;    
+     gid_t *groups = NULL;
+@@ -2149,6 +2225,18 @@
+ 		logfile(LOG_WARNING, "Account has been blocked temporarily, please try later!");
+ 		return;
+ 	}
++	
++#ifdef MSTC_TTNET_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
++	//Determine user can log in or not by using FTP.
++	if (UserAllow(password) == -1)
++	{
++		logfile(LOG_WARNING, "This user is not allow to log in.");
++		printf("This user is not allow to log in.");
++		strcpy(val, "2");
++		return;
++	}
++#endif	/*_MSTC_, Linda, CPE User Definitions and Rights_END.*/
++	
+     authresult = pw_check(account, password, &ctrlconn, &peer);
+     {
+         /* Clear password from memory, paranoia */        
+Index: pure-ftpd-1.0.30/src/ftpd.h
+===================================================================
+--- pure-ftpd-1.0.30.orig/src/ftpd.h	2014-01-15 13:20:12.000000000 +0800
++++ pure-ftpd-1.0.30/src/ftpd.h	2020-08-25 13:25:55.310909036 +0800
+@@ -323,7 +323,11 @@
+ void stripctrl(char * const buf, size_t len);
+ void dobanner(const int type);
+ void douser(const char *name);
++#ifdef MSTC_TTNET_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
++void dopass(char *password, char *val);
++#else
+ void dopass(char *password);
++#endif
+ void docwd(const char *dir);
+ void doretr(char *name);
+ void dorest(const char *name);

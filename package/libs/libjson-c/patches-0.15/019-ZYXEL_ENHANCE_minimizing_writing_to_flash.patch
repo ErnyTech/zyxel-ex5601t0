@@ -1,0 +1,39 @@
+Index: json-c-0.15/json_util.c
+===================================================================
+--- json-c-0.15.orig/json_util.c
++++ json-c-0.15/json_util.c
+@@ -212,6 +212,11 @@ static int _json_object_to_fd(int fd, st
+ 		wpos += (unsigned int)ret;
+ 	}
+ 	fsync(fd);
++#if 0 /* cpwang, minimize number of writing to flash, 2017-03-17 09:57:19 */
++	printf("****  %s line %d, %s() : write %s to flash successfully\n",
++		__FILE__, __LINE__, __FUNCTION__, filename);
++#endif /* cpwang, minimize number of writing to flash, 2017-03-17 09:57:19 */
++
+ 	return 0;
+ }
+ 
+Index: json-c-0.15/json_tokener.c
+===================================================================
+--- json-c-0.15.orig/json_tokener.c
++++ json-c-0.15/json_tokener.c
+@@ -175,10 +175,18 @@ void json_tokener_reset(struct json_toke
+ 	tok->err = json_tokener_success;
+ }
+ 
++
+ struct json_object *json_tokener_parse(const char *str)
+ {
+ 	enum json_tokener_error jerr_ignored;
+ 	struct json_object *obj;
++
++#if 1 /* cpwang, minimize number of writing to flash, 2017-03-17 09:57:19 */
++	// return ASAP to avoid overhead
++	if (str == NULL) {
++		return NULL;
++	}
++#endif /* cpwang, minimize number of writing to flash, 2017-03-17 09:57:19 */
+ 	obj = json_tokener_parse_verbose(str, &jerr_ignored);
+ 	return obj;
+ }

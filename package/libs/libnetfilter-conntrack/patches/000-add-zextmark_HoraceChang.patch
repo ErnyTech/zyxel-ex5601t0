@@ -1,0 +1,258 @@
+Index: libnetfilter_conntrack-1.0.8/include/internal/object.h
+===================================================================
+--- libnetfilter_conntrack-1.0.8.orig/include/internal/object.h
++++ libnetfilter_conntrack-1.0.8/include/internal/object.h
+@@ -200,6 +200,9 @@ struct nf_conntrack {
+ 
+ 	struct nfct_bitmask *connlabels;
+ 	struct nfct_bitmask *connlabels_mask;
++#ifdef ZYXEL_EXT_MARK
++	u_int32_t	zextmark;// 20180621 jessy Zyxel
++#endif
+ };
+ 
+ /*
+@@ -289,6 +292,9 @@ struct nfct_filter_dump {
+ 	struct nfct_filter_dump_mark	mark;
+ 	uint8_t				l3num;
+ 	uint32_t			set;
++#ifdef ZYXEL_EXT_MARK
++	struct nfct_filter_dump_mark	zextmark;//20180621 jessy zyxel
++#endif
+ };
+ 
+ /*
+Index: libnetfilter_conntrack-1.0.8/include/libnetfilter_conntrack/libnetfilter_conntrack.h
+===================================================================
+--- libnetfilter_conntrack-1.0.8.orig/include/libnetfilter_conntrack/libnetfilter_conntrack.h
++++ libnetfilter_conntrack-1.0.8/include/libnetfilter_conntrack/libnetfilter_conntrack.h
+@@ -137,6 +137,7 @@ enum nf_conntrack_attr {
+ 	ATTR_HELPER_INFO,			/* variable length */
+ 	ATTR_CONNLABELS,			/* variable length */
+ 	ATTR_CONNLABELS_MASK,			/* variable length */
++	ATTR_ZEXTMARK,				/* u32 bits */ //zyxel jessy 20180621
+ 	ATTR_ORIG_ZONE,				/* u16 bits */
+ 	ATTR_REPL_ZONE,				/* u16 bits */
+ 	ATTR_SNAT_IPV6,				/* u128 bits */
+@@ -545,6 +546,7 @@ struct nfct_filter_dump_mark {
+ enum nfct_filter_dump_attr {
+ 	NFCT_FILTER_DUMP_MARK = 0,	/* struct nfct_filter_dump_mark */
+ 	NFCT_FILTER_DUMP_L3NUM,		/* uint8_t */
++	NFCT_FILTER_DUMP_ZEXTMARK ,	/* struct nfct_filter_dump_mark */
+ 	NFCT_FILTER_DUMP_MAX
+ };
+ 
+Index: libnetfilter_conntrack-1.0.8/include/libnetfilter_conntrack/linux_nfnetlink_conntrack.h
+===================================================================
+--- libnetfilter_conntrack-1.0.8.orig/include/libnetfilter_conntrack/linux_nfnetlink_conntrack.h
++++ libnetfilter_conntrack-1.0.8/include/libnetfilter_conntrack/linux_nfnetlink_conntrack.h
+@@ -57,6 +57,8 @@ enum ctattr_type {
+ 	CTA_MARK_MASK,
+ 	CTA_LABELS,
+ 	CTA_LABELS_MASK,
++	CTA_ZEXTMARK,  // zyxel jessy 20180621
++	CTA_ZEXTMARK_MASK,  // zyxel jessy 20180621
+ 	CTA_SYNPROXY,
+ 	__CTA_MAX
+ };
+Index: libnetfilter_conntrack-1.0.8/src/conntrack/build_mnl.c
+===================================================================
+--- libnetfilter_conntrack-1.0.8.orig/src/conntrack/build_mnl.c
++++ libnetfilter_conntrack-1.0.8/src/conntrack/build_mnl.c
+@@ -394,6 +394,15 @@ nfct_build_mark(struct nlmsghdr *nlh, co
+ 	return 0;
+ }
+ 
++#ifdef ZYXEL_EXT_MARK
++//20160621 jessy zyxel
++static int
++nfct_build_zextmark(struct nlmsghdr *nlh, const struct nf_conntrack *ct)
++{
++	mnl_attr_put_u32(nlh, CTA_ZEXTMARK, htonl(ct->zextmark));
++	return 0;
++}
++#endif
+ static int
+ nfct_build_secmark(struct nlmsghdr *nlh, const struct nf_conntrack *ct)
+ {
+@@ -538,6 +547,10 @@ nfct_nlmsg_build(struct nlmsghdr *nlh, c
+ 	if (test_bit(ATTR_MARK, ct->head.set))
+ 		nfct_build_mark(nlh, ct);
+ 
++#ifdef ZYXEL_EXT_MARK
++	if (test_bit(ATTR_ZEXTMARK, ct->head.set))
++		nfct_build_zextmark(nlh, ct);
++#endif
+ 	if (test_bit(ATTR_SECMARK, ct->head.set))
+ 		nfct_build_secmark(nlh, ct);
+ 
+Index: libnetfilter_conntrack-1.0.8/src/conntrack/compare.c
+===================================================================
+--- libnetfilter_conntrack-1.0.8.orig/src/conntrack/compare.c
++++ libnetfilter_conntrack-1.0.8/src/conntrack/compare.c
+@@ -318,6 +318,15 @@ cmp_mark(const struct nf_conntrack *ct1,
+ 	       nfct_get_attr_u32(ct2, ATTR_MARK);
+ }
+ 
++#ifdef ZYXEL_EXT_MARK
++static int
++cmp_zextmark(const struct nf_conntrack *ct1,
++	 const struct nf_conntrack *ct2,
++	 unsigned int flags)
++{
++	return (ct1->zextmark == ct2->zextmark);
++}
++#endif
+ static int 
+ cmp_timeout(const struct nf_conntrack *ct1,
+ 	    const struct nf_conntrack *ct2,
+@@ -448,6 +457,10 @@ static int cmp_meta(const struct nf_conn
+ 		return 0;
+ 	if (!__cmp(ATTR_MARK, ct1, ct2, flags, cmp_mark, false))
+ 		return 0;
++#ifdef ZYXEL_EXT_MARK
++	if (!__cmp(ATTR_ZEXTMARK, ct1, ct2, flags, cmp_mark,false))
++		return 0;
++#endif
+ 	if (!__cmp(ATTR_TIMEOUT, ct1, ct2, flags, cmp_timeout, true))
+ 		return 0;
+ 	if (!__cmp(ATTR_STATUS, ct1, ct2, flags, cmp_status, true))
+Index: libnetfilter_conntrack-1.0.8/src/conntrack/copy.c
+===================================================================
+--- libnetfilter_conntrack-1.0.8.orig/src/conntrack/copy.c
++++ libnetfilter_conntrack-1.0.8/src/conntrack/copy.c
+@@ -333,6 +333,13 @@ static void copy_attr_mark(struct nf_con
+ {
+ 	dest->mark = orig->mark;
+ }
++#ifdef ZYXEL_EXT_MARK // 20180621 jessy
++static void copy_attr_zextmark(struct nf_conntrack *dest,
++			   const struct nf_conntrack *orig)
++{
++	dest->zextmark = orig->zextmark;
++}
++#endif
+ 
+ static void copy_attr_secmark(struct nf_conntrack *dest,
+ 			      const struct nf_conntrack *orig)
+@@ -587,6 +594,7 @@ const copy_attr copy_attr_array[ATTR_MAX
+ 	[ATTR_HELPER_INFO]		= copy_attr_help_info,
+ 	[ATTR_CONNLABELS]		= copy_attr_connlabels,
+ 	[ATTR_CONNLABELS_MASK]		= copy_attr_connlabels_mask,
++	[ATTR_ZEXTMARK]			= copy_attr_zextmark, // 20160621 jessy
+ 	[ATTR_SNAT_IPV6]		= copy_attr_snat_ipv6,
+ 	[ATTR_DNAT_IPV6]		= copy_attr_dnat_ipv6,
+ 	[ATTR_SYNPROXY_ITS]		= copy_attr_synproxy_its,
+Index: libnetfilter_conntrack-1.0.8/src/conntrack/filter_dump.c
+===================================================================
+--- libnetfilter_conntrack-1.0.8.orig/src/conntrack/filter_dump.c
++++ libnetfilter_conntrack-1.0.8/src/conntrack/filter_dump.c
+@@ -39,6 +39,12 @@ void __build_filter_dump(struct nfnlhdr
+ 				htonl(filter_dump->mark.val));
+ 		nfnl_addattr32(&req->nlh, size, CTA_MARK_MASK,
+ 				htonl(filter_dump->mark.mask));
++#ifdef ZYXEL_EXT_MARK	    // 20180621 jessy Zyxel
++	    nfnl_addattr32(&req->nlh, size, CTA_ZEXTMARK,
++				htonl(filter_dump->zextmark.val));
++	    nfnl_addattr32(&req->nlh, size, CTA_ZEXTMARK_MASK,
++				htonl(filter_dump->zextmark.mask));
++#endif
+ 	}
+ 	if (filter_dump->set & (1 << NFCT_FILTER_DUMP_L3NUM)) {
+ 		struct nfgenmsg *nfg = NLMSG_DATA(&req->nlh);
+Index: libnetfilter_conntrack-1.0.8/src/conntrack/getter.c
+===================================================================
+--- libnetfilter_conntrack-1.0.8.orig/src/conntrack/getter.c
++++ libnetfilter_conntrack-1.0.8/src/conntrack/getter.c
+@@ -243,7 +243,12 @@ static const void *get_attr_mark(const s
+ {
+ 	return &ct->mark;
+ }
+-
++#ifdef ZYXEL_EXT_MARK // 20180621 jessy Zyxel
++static const void *get_attr_zextmark(const struct nf_conntrack *ct)
++{
++	return &ct->zextmark;
++}
++#endif
+ static const void *get_attr_secmark(const struct nf_conntrack *ct)
+ {
+ 	return &ct->secmark;
+@@ -455,6 +460,7 @@ const get_attr get_attr_array[ATTR_MAX]
+ 	[ATTR_HELPER_INFO]		= get_attr_helper_info,
+ 	[ATTR_CONNLABELS]		= get_attr_connlabels,
+ 	[ATTR_CONNLABELS_MASK]		= get_attr_connlabels_mask,
++	[ATTR_ZEXTMARK]			= get_attr_zextmark, // 20180621 jessy Zyxel
+ 	[ATTR_SNAT_IPV6]		= get_attr_snat_ipv6,
+ 	[ATTR_DNAT_IPV6]		= get_attr_dnat_ipv6,
+ 	[ATTR_SYNPROXY_ISN]		= get_attr_synproxy_isn,
+Index: libnetfilter_conntrack-1.0.8/src/conntrack/parse_mnl.c
+===================================================================
+--- libnetfilter_conntrack-1.0.8.orig/src/conntrack/parse_mnl.c
++++ libnetfilter_conntrack-1.0.8/src/conntrack/parse_mnl.c
+@@ -885,6 +885,7 @@ nfct_parse_conntrack_attr_cb(const struc
+ 	case CTA_TIMEOUT:
+ 	case CTA_MARK:
+ 	case CTA_SECMARK:
++	case CTA_ZEXTMARK: //20180621 jessy xyzel
+ 	case CTA_USE:
+ 	case CTA_ID:
+ 		if (mnl_attr_validate(attr, MNL_TYPE_U32) < 0)
+@@ -972,6 +973,12 @@ nfct_payload_parse(const void *payload,
+ 		set_bit(ATTR_MARK, ct->head.set);
+ 	}
+ 
++#ifdef ZYXEL_EXT_MARK    // 20180621 jessy zyxel
++	if (tb[CTA_ZEXTMARK]) {
++		ct->zextmark = ntohl(mnl_attr_get_u32(tb[CTA_ZEXTMARK]));
++		set_bit(ATTR_ZEXTMARK, ct->head.set);
++	}
++#endif
+ 	if (tb[CTA_SECMARK]) {
+ 		ct->secmark = ntohl(mnl_attr_get_u32(tb[CTA_SECMARK]));
+ 		set_bit(ATTR_SECMARK, ct->head.set);
+Index: libnetfilter_conntrack-1.0.8/src/conntrack/snprintf_default.c
+===================================================================
+--- libnetfilter_conntrack-1.0.8.orig/src/conntrack/snprintf_default.c
++++ libnetfilter_conntrack-1.0.8/src/conntrack/snprintf_default.c
+@@ -220,6 +220,13 @@ __snprintf_mark(char *buf, unsigned int
+ 	return (snprintf(buf, len, "mark=%u ", ct->mark));
+ }
+ 
++#ifdef ZYXEL_EXT_MARK // 20180621 jessy zyxel
++static int
++__snprintf_zextmark(char *buf, unsigned int len, const struct nf_conntrack *ct)
++{
++	return (snprintf(buf, len, "zextmark=%u ", ct->zextmark));
++}
++#endif
+ static int
+ __snprintf_secmark(char *buf, unsigned int len, const struct nf_conntrack *ct)
+ {
+@@ -449,6 +456,12 @@ int __snprintf_conntrack_default(char *b
+ 		BUFFER_SIZE(ret, size, len, offset);
+ 	}
+ 
++#ifdef ZYXEL_EXT_MARK
++	if (test_bit(ATTR_ZEXTMARK, ct->head.set)) { //20180621 jessy zyxel
++		ret = __snprintf_zextmark(buf+offset, len, ct);
++		BUFFER_SIZE(ret, size, len, offset);
++	}
++#endif
+ 	if (test_bit(ATTR_SECMARK, ct->head.set)) {
+ 		ret = __snprintf_secmark(buf+offset, len, ct);
+ 		BUFFER_SIZE(ret, size, len, offset);
+Index: libnetfilter_conntrack-1.0.8/src/conntrack/snprintf_xml.c
+===================================================================
+--- libnetfilter_conntrack-1.0.8.orig/src/conntrack/snprintf_xml.c
++++ libnetfilter_conntrack-1.0.8/src/conntrack/snprintf_xml.c
+@@ -549,7 +549,8 @@ int __snprintf_conntrack_xml(char *buf,
+ 	    test_bit(ATTR_ID, ct->head.set) ||
+ 	    test_bit(ATTR_CONNLABELS, ct->head.set) ||
+ 	    test_bit(ATTR_TIMESTAMP_START, ct->head.set) ||
+-	    test_bit(ATTR_TIMESTAMP_STOP, ct->head.set)) {
++	    test_bit(ATTR_TIMESTAMP_STOP, ct->head.set) ||
++	    test_bit(ATTR_ZEXTMARK, ct->head.set) ) { // 20180621 jessy zyxel
+ 	    	ret = snprintf(buf+offset, len, "</meta>");
+ 		BUFFER_SIZE(ret, size, len, offset);
+ 	}

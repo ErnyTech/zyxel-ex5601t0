@@ -1,0 +1,86 @@
+Index: busybox-1.31.1/networking/traceroute.c
+===================================================================
+--- busybox-1.31.1.orig/networking/traceroute.c	2021-03-18 10:24:09.762540590 +0800
++++ busybox-1.31.1/networking/traceroute.c	2021-03-18 10:24:29.370540684 +0800
+@@ -344,8 +344,8 @@
+ #endif
+ /*End ZyXEL zcfg*/
+ 
+-#define OPT_STRING \
+-	"FIlnrdvxt:i:m:p:q:s:w:z:f:" \
++
++#define OPT_STRING "FIlnrdvxt:i:m:p:q:s:w:z:f:k:" \
+ 	"4" IF_TRACEROUTE6("6")
+ enum {
+ 	OPT_DONT_FRAGMNT = (1 << 0),    /* F */
+@@ -365,8 +365,9 @@
+ 	OPT_WAITTIME     = (1 << 14),   /* w */
+ 	OPT_PAUSE_MS     = (1 << 15),   /* z */
+ 	OPT_FIRST_TTL    = (1 << 16),   /* f */
+-	OPT_IPV4         = (1 << 17),   /* 4 */
+-	OPT_IPV6         = (1 << 18) * ENABLE_TRACEROUTE6, /* 6 */
++	OPT_OUTPUT_RDM   = (1 << 17),  /* k */
++	OPT_IPV4         = (1 << 18),   /* 4 */
++	OPT_IPV6         = (1 << 19) * ENABLE_TRACEROUTE6, /* 6 */
+ };
+ #define verbose (option_mask32 & OPT_VERBOSE)
+ 
+@@ -405,6 +406,7 @@
+ 	uint16_t port; // 33434;        /* start udp dest port # for probe packets */
+ 	int waittime; // 5;             /* time to wait for response (in seconds) */
+ 	unsigned char recv_pkt[512];    /* last inbound (icmp) packet */
++	int outputRDM;
+ };
+ 
+ #define G (*ptr_to_globals)
+@@ -418,6 +420,8 @@
+ #define waittime  (G.waittime )
+ #define recv_pkt  (G.recv_pkt )
+ #define gwlist    (G.gwlist   )
++#define outputRDM (G.outputRDM)
++
+ #define INIT_G() do { \
+ 	SET_PTR_TO_GLOBALS(xzalloc(sizeof(G))); \
+ 	port = 33434; \
+@@ -898,6 +902,13 @@
+ 	char *recv_str = NULL;
+ 	int buf_size = 0;
+ 
++
++	if(!outputRDM) {
++		printf("Standard output only\n");
++
++		return ZCFG_SUCCESS;
++	}
++
+ 	buf_size = sizeof(zcfgMsg_t)+payloadLen;
+ 	sendBuf = malloc(buf_size);
+ 	sendMsgHdr = (zcfgMsg_t*)sendBuf;
+@@ -956,6 +967,7 @@
+ 	len_and_sockaddr *from_lsa;
+ 	struct sockaddr *lastaddr;
+ 	struct sockaddr *to;
++	char *outputrdm_str = NULL;
+ #ifdef ZCFG_SUPPORT
+ 	//struct json_object *tracert_msg = NULL, *rt_hops = NULL, *result = NULL;
+ 	struct json_object *rt_hops = NULL, *result = NULL;
+@@ -970,7 +982,7 @@
+ 		OPT_STRING
+ 		"\0" "-1:x-x" /* minimum 1 arg */
+ 		, &tos_str, &device, &max_ttl_str, &port_str, &nprobes_str
+-		, &source, &waittime_str, &pausemsecs_str, &first_ttl_str
++		, &source, &waittime_str, &pausemsecs_str, &first_ttl_str, &outputrdm_str
+ 	);
+ 	argv += optind;
+ 
+@@ -992,6 +1004,10 @@
+ 		port = xatou16(port_str);
+ 	if (op & OPT_NPROBES)
+ 		nprobes = xatou_range(nprobes_str, 1, INT_MAX);
++#ifdef ZCFG_SUPPORT
++	if (op & OPT_OUTPUT_RDM)
++		outputRDM = xatou_range(outputrdm_str, 0, 1);
++#endif
+ 	if (op & OPT_SOURCE) {
+ 		/*
+ 		 * set the ip source address of the outbound

@@ -1,0 +1,49 @@
+Index: busybox-1.31.1/modutils/depmod.c
+===================================================================
+--- busybox-1.31.1.orig/modutils/depmod.c	2021-04-07 17:05:45.465229946 +0800
++++ busybox-1.31.1/modutils/depmod.c	2021-04-07 17:05:45.625229941 +0800
+@@ -26,7 +26,7 @@
+ #include "modutils.h"
+ #include <sys/utsname.h> /* uname() */
+ 
+-#if 1 /* <JoannaSu>, <20180420>, <modify buffer for filepath to avoid segfault> */
++#if defined(ZCFG_SUPPORT) /* <JoannaSu>, <20180420>, <modify buffer for filepath to avoid segfault> */
+ #include "zos_api.h"
+ #include "zlog_api.h"
+ #define   ZYXEL_TMP_BASE_PATH "/var/"
+@@ -118,7 +118,7 @@
+ static void xfreopen_write(const char *file, FILE *f)
+ {
+ #if 1 //due to depmod can't generate file at read-only file system, so modify the path that generate file
+-    #if 1 /* <JoannaSu>, <20180420>, <modify buffer for filepath to avoid segfault> */
++    #if defined(ZCFG_SUPPORT) /* <JoannaSu>, <20180420>, <modify buffer for filepath to avoid segfault> */
+     char *modulePath = NULL;
+ 
+     modulePath = ZOS_MALLOC(strlen(ZYXEL_TMP_BASE_PATH) + strlen(file) + 1);
+Index: busybox-1.31.1/loginutils/login.c
+===================================================================
+--- busybox-1.31.1.orig/loginutils/login.c	2021-04-07 17:05:45.601229942 +0800
++++ busybox-1.31.1/loginutils/login.c	2021-04-07 17:09:02.869224251 +0800
+@@ -906,10 +906,11 @@
+ 		 * Note that reads (in no-echo mode) trash tty attributes.
+ 		 * If we get interrupted by SIGALRM, we need to restore attrs.
+ 		 */
+-		if (ask_and_check_password(pw) > 0){
++		if (ask_and_check_password(pw) > 0)
++		{
+ #ifdef ZCFG_SUPPORT
+ 			reset_authorize_fail_cnt(cur_user_idx);
+-#endif
++
+ 			if (authGpPrivilege){
+ 				objIndex_t logAccountObjIid;
+ 				objIndex_t logGpObjIid;
+@@ -1060,7 +1061,7 @@
+ 
+ #endif
+ 			}
+-
++#endif
+ 			break;
+ 		}
+ #endif /* ENABLE_PAM */

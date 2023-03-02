@@ -1,0 +1,16 @@
+Index: busybox-1.31.1/init/init.c
+===================================================================
+--- busybox-1.31.1.orig/init/init.c	2021-04-12 11:43:33.165324837 +0800
++++ busybox-1.31.1/init/init.c	2021-04-12 11:17:01.037212100 +0800
+@@ -1276,7 +1276,11 @@
+ {
+ #ifdef PLATFORM_ECONET
+ 	unsigned i = 0;
++#ifdef TCSUPPORT_3_18_21_KERNEL
++	unsigned long aff = 0x8;
++#else
+ 	unsigned long aff = 0x2;
++#endif
+ 	cpu_set_t new_mask;
+ #endif
+ 

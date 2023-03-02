@@ -1,0 +1,22 @@
+Index: linux-5.4.171/drivers/net/ethernet/mediatek/mtk_hnat/hnat_debugfs.c
+===================================================================
+--- linux-5.4.171.orig/drivers/net/ethernet/mediatek/mtk_hnat/hnat_debugfs.c
++++ linux-5.4.171/drivers/net/ethernet/mediatek/mtk_hnat/hnat_debugfs.c
+@@ -27,7 +27,7 @@ int debug_level;
+ int dbg_cpu_reason;
+ int hook_toggle;
+ int mape_toggle;
+-int qos_toggle;
++int qos_toggle=2;	// let default value from 0 to 2.
+ unsigned int dbg_cpu_reason_cnt[MAX_CRSN_NUM];
+ 
+ static const char * const entry_state[] = { "INVALID", "UNBIND", "BIND", "FIN" };
+@@ -1985,7 +1985,7 @@ static const struct file_operations hnat
+ 
+ static int hnat_qos_toggle_read(struct seq_file *m, void *private)
+ {
+-	pr_info("value=%d, HQoS is %s now!\n", qos_toggle, (qos_toggle) ? "enabled" : "disabled");
++	pr_info("value=%d, %s is %s now!\n", qos_toggle, (qos_toggle==2)?"Pppq":"HQoS", (qos_toggle) ? "enabled" : "disabled");
+ 
+ 	return 0;
+ }

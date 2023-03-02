@@ -1,0 +1,154 @@
+diff -urN clinkc.org/src/cybergarage/http/chttp_packet.c clinkc/src/cybergarage/http/chttp_packet.c
+--- clinkc.org/src/cybergarage/http/chttp_packet.c	2021-03-22 10:49:18.208060800 +0800
++++ clinkc/src/cybergarage/http/chttp_packet.c	2021-03-22 16:30:22.163690900 +0800
+@@ -59,6 +59,9 @@
+ #include "zyutil.h"
+ #include "zcfg_system.h"
+ 
++// for changing zhttpd process owner
++#include "zcfg_fe_rdm_access.h"
++
+ #define READBUF_LENGTH 4096
+ #define MAX_PATITION_SIZE 56*1024*1024
+ 
+@@ -866,6 +869,38 @@
+ #define ISFROMLAN 2
+ #define ISFROMWAN 0
+ 
++zcfgRet_t clinkcReqSendWithoutResponse(uint32_t msgType, char *payload)
++{
++	zcfgRet_t ret = ZCFG_SUCCESS;
++	int payloadLen = 0;
++	void *sendBuf = NULL;
++	zcfgMsg_t *sendMsgHdr = NULL;
++
++	payloadLen = sizeof(zcfgMsg_t) + strlen(payload) + 1;
++	sendBuf = (void *)malloc(sizeof(zcfgMsg_t) + payloadLen);
++	sendMsgHdr = (zcfgMsg_t *)sendBuf;
++	sendMsgHdr->type = msgType;
++	sendMsgHdr->length = payloadLen;
++	sendMsgHdr->dstEid = ZCFG_EID_ESMD;
++
++	if(payloadLen > 0)
++		strcpy((char *)(sendMsgHdr + 1), payload);
++
++	ret = zcfgMsgSendAndGetReply(sendMsgHdr, NULL, 0);
++	if(ret == ZCFG_SUCCESS) {
++		//didn`t expect return response
++		return ZCFG_INTERNAL_ERROR;
++	}
++	else if(ret == ZCFG_SUCCESS_AND_NO_REPLY) {
++		ret = ZCFG_SUCCESS;
++	}
++	else {
++		return ZCFG_INTERNAL_ERROR;
++	}
++ 
++	return ret;
++}
++
+ void removeDaemonsWLModule(int clientSrc)
+ {
+ 	int i;
+@@ -873,38 +908,50 @@
+ 
+ 	printf("killall processes to release memory\n");
+ 	bRemoveDaemonsWirelessModule = TRUE;
+-	system("killall -q proftpd swmdk smbd zupnp.sh snmpd ramonitor zhotplugd wwanbackupd vcautohunt syslog-ng zybtnchk dropbear ztzu zebra bcmmserver acsd wps_monitor zstun ntpclient ntfs-3g mcpd telnetd pure-ftpd tty_log_echo lld2d eapd nas crond");
++	// system("killall -q proftpd swmdk smbd zupnp.sh snmpd ramonitor zhotplugd wwanbackupd vcautohunt syslog-ng zybtnchk dropbear ztzu zebra bcmmserver acsd wps_monitor zstun ntpclient ntfs-3g mcpd telnetd pure-ftpd tty_log_echo lld2d eapd nas crond");
++	clinkcReqSendWithoutResponse(ZCFG_MSG_FAKEROOT_COMMAND, "killall -q proftpd swmdk smbd zupnp.sh snmpd ramonitor zhotplugd wwanbackupd vcautohunt syslog-ng zybtnchk dropbear ztzu zebra bcmmserver acsd wps_monitor zstun ntpclient ntfs-3g mcpd telnetd pure-ftpd tty_log_echo lld2d eapd nas crond");
+ 
+ #ifdef ZYIMS_SUPPORT
+ 	/*Stop Voice Service. 2017.03.20 Steve*/
+ 	printf("Stop voice service.\n");
+-	system("zyims.sh stop");
++	// system("zyims.sh stop");
++	clinkcReqSendWithoutResponse(ZCFG_MSG_FAKEROOT_COMMAND, "zyims.sh stop");
+ 
+ #endif //#ifdef ZYIMS_SUPPORT
+ 
+-	system("echo 768 > /proc/sys/vm/min_free_kbytes");
+-	system("echo 1 > /proc/sys/vm/drop_caches");
++	// system("echo 768 > /proc/sys/vm/min_free_kbytes");
++	// system("echo 1 > /proc/sys/vm/drop_caches");
++	clinkcReqSendWithoutResponse(ZCFG_MSG_FAKEROOT_COMMAND, "echo 768 > /proc/sys/vm/min_free_kbytes");
++	clinkcReqSendWithoutResponse(ZCFG_MSG_FAKEROOT_COMMAND, "echo 1 > /proc/sys/vm/drop_caches");
++	sleep(2);
++#if 0
+ 	if(clientSrc == ISFROMWIFI){
+-		system("/tmp/interface_down.sh lanwan");
++		// system("/tmp/interface_down.sh lanwan");
++		clinkcReqSendWithoutResponse(ZCFG_MSG_FAKEROOT_COMMAND, "/tmp/interface_down.sh lanwan");
+ 		sleep(3);
+ 	}
+ 	else if(clientSrc == ISFROMLAN) {		
+-		system("/tmp/interface_down.sh wan");
++		// system("/tmp/interface_down.sh wan");
++		clinkcReqSendWithoutResponse(ZCFG_MSG_FAKEROOT_COMMAND, "/tmp/interface_down.sh wan");
+ 		sleep(3);
+ #if defined (ZYPRJ_VMG1312) || defined (UPGRADE_FW_RM_WIFI_MODULE) 
+-		sprintf(cmd, "/tmp/shutDownWifi.sh\n");
+-		system(cmd);
++		// sprintf(cmd, "/tmp/shutDownWifi.sh\n");
++		// system(cmd);
++		clinkcReqSendWithoutResponse(ZCFG_MSG_FAKEROOT_COMMAND, "/tmp/shutDownWifi.sh\n");
+ #endif
+ 	}
+ 	else{//From WAN
+ #ifndef UPGRADE_FW_RM_WIFI_MODULE
+-		system("/tmp/interface_down.sh lan");
++		// system("/tmp/interface_down.sh lan");
++		clinkcReqSendWithoutResponse(ZCFG_MSG_FAKEROOT_COMMAND, "/tmp/interface_down.sh lan");
+ #endif
+ #if defined (ZYPRJ_VMG1312) || defined (UPGRADE_FW_RM_WIFI_MODULE)
+-		sprintf(cmd, "/tmp/shutDownWifi.sh\n");
+-		system(cmd);
++		// sprintf(cmd, "/tmp/shutDownWifi.sh\n");
++		// system(cmd);
++		clinkcReqSendWithoutResponse(ZCFG_MSG_FAKEROOT_COMMAND, "/tmp/shutDownWifi.sh\n");
+ #endif
+ 	}
++#endif
+ }
+ 
+ static int ipComeFromWiFi(char *remoteIP)
+@@ -915,7 +962,8 @@
+ 	int ret;
+ 
+ 	sprintf(cmd, "/tmp/searchIPFromWiFi.sh  %s\n", remoteIP);
+-	system(cmd);
++	// system(cmd);
++	clinkcReqSendWithoutResponse(ZCFG_MSG_FAKEROOT_COMMAND, cmd);
+ 
+ 	fp = fopen("/tmp/result", "r");
+ 	if(fp != NULL){
+@@ -973,12 +1021,16 @@
+ 	}
+ check_again:
+ 	if(buflen >= get_free_memory()){
+-        system("echo 1 > /proc/sys/vm/drop_caches");
++        // system("echo 1 > /proc/sys/vm/drop_caches");
++        clinkcReqSendWithoutResponse(ZCFG_MSG_FAKEROOT_COMMAND, "echo 1 > /proc/sys/vm/drop_caches");
+         /* require more to hit the threshold of process killer easier */
+         if((buflen+(2*1024*1024)) >= (get_free_memory())) {
+-            system("/usr/sbin/logrotate /etc/logrotate.d/sys_logrotate.conf");
+-            system("rm /var/log/*.1");
+-            system("rm /var/log/zcfg.log");
++            // system("/usr/sbin/logrotate /etc/logrotate.d/sys_logrotate.conf");
++            // system("rm /var/log/*.1");
++            // system("rm /var/log/zcfg.log");
++            clinkcReqSendWithoutResponse(ZCFG_MSG_FAKEROOT_COMMAND, "/usr/sbin/logrotate /etc/logrotate.d/sys_logrotate.conf");
++            clinkcReqSendWithoutResponse(ZCFG_MSG_FAKEROOT_COMMAND, "rm /var/log/*.1");
++            clinkcReqSendWithoutResponse(ZCFG_MSG_FAKEROOT_COMMAND, "rm /var/log/zcfg.log");
+             removeDaemonsWLModule(ipComeFromWiFi(remoteIP));
+             if((buflen+(2*1024*1024)) >= (get_free_memory()))
+                 goto check_again1;
+@@ -994,7 +1046,7 @@
+ 	}
+ 	// Daemons/wireless module have been removed, CPE must reboot if upgrade firmware fail.
+ 	printf("upgrade firmware fail: out of memory!!!\n");
+-	system("reboot");
++	reboot();
+ 	return FALSE;
+ }
+ 

@@ -1,0 +1,72 @@
+Index: musl-1.1.24/src/time/__tz.c
+===================================================================
+--- musl-1.1.24.orig/src/time/__tz.c
++++ musl-1.1.24/src/time/__tz.c
+@@ -3,6 +3,8 @@
+ #include <limits.h>
+ #include <stdlib.h>
+ #include <string.h>
++#include <fcntl.h>
++#include <unistd.h>
+ #include <sys/mman.h>
+ #include "libc.h"
+ #include "lock.h"
+@@ -11,6 +13,8 @@ long  __timezone = 0;
+ int   __daylight = 0;
+ char *__tzname[2] = { 0, 0 };
+ 
++#define TZ_BUFLEN (2*TZNAME_MAX + 56)
++
+ weak_alias(__timezone, timezone);
+ weak_alias(__daylight, daylight);
+ weak_alias(__tzname, tzname);
+@@ -115,9 +119,37 @@ static size_t zi_dotprod(const unsigned
+ 	return y;
+ }
+ 
++/* Reference from uClibc, remove unnecessary parts */
++static char *read_TZ_file(char *buf)
++{
++	int r;
++	int fd;
++	char *p = NULL;
++
++	fd = open("/etc/TZ", O_RDONLY);
++	if (fd >= 0) {
++		/* Shorter, and does one fewer read syscall */
++		r = read(fd, buf, TZ_BUFLEN);
++		if (r < 0)
++			goto ERROR;
++		p = buf + r;
++
++		if ((p > buf) && (p[-1] == '\n')) { /* Must end with newline */
++			p[-1] = 0;
++			p = buf;
++		} else {
++ERROR:
++			p = NULL;
++		}
++		close(fd);
++	}
++	return p;
++}
++
+ static void do_tzset()
+ {
+ 	char buf[NAME_MAX+25], *pathname=buf+24;
++	char tz_file_buf[TZ_BUFLEN];
+ 	const char *try, *s, *p;
+ 	const unsigned char *map = 0;
+ 	size_t i;
+@@ -125,6 +157,11 @@ static void do_tzset()
+ 		"/usr/share/zoneinfo/\0/share/zoneinfo/\0/etc/zoneinfo/\0";
+ 
+ 	s = getenv("TZ");
++	/* if TZ is empty try to read it from /etc/TZ */
++	if (!s || !*s) {
++		s = read_TZ_file(tz_file_buf); /* Reference from uClibc */
++	}
++	
+ 	if (!s) s = "/etc/localtime";
+ 	if (!*s) s = __utc;
+ 

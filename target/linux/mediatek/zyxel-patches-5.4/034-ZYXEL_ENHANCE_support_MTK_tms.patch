@@ -1,0 +1,143 @@
+Index: linux-5.4.171/include/linux/if_vlan.h
+===================================================================
+--- linux-5.4.171.orig/include/linux/if_vlan.h
++++ linux-5.4.171/include/linux/if_vlan.h
+@@ -65,6 +65,9 @@ static inline struct vlan_ethhdr *vlan_e
+ #define VLAN_CFI_MASK		0x1000 /* Canonical Format Indicator / Drop Eligible Indicator */
+ #define VLAN_VID_MASK		0x0fff /* VLAN Identifier */
+ #define VLAN_N_VID		4096
++#if 1 //defined(ZYXEL_KF_TMS)
++#define VLAN_TAG_PRESENT	VLAN_CFI_MASK
++#endif
+ 
+ /* found in socket.c */
+ extern void vlan_ioctl_set(int (*hook)(struct net *, void __user *));
+Index: linux-5.4.171/include/uapi/linux/if_ether.h
+===================================================================
+--- linux-5.4.171.orig/include/uapi/linux/if_ether.h
++++ linux-5.4.171/include/uapi/linux/if_ether.h
+@@ -116,6 +116,10 @@
+ 
+ #define ETH_P_802_3_MIN	0x0600		/* If the value in the ethernet type is less than this value
+ 					 * then the frame is Ethernet II. Else it is 802.3 */
++#if 1 //defined(ZYXEL_KF_TMS)
++#define ETH_P_8021AG    0x8902      /* 802.1ag Connectivity Fault Mgmt */
++#define ETH_P_8023AH    0x8809      /* 802.3ah Ethernet OAM */
++#endif
+ 
+ /*
+  *	Non DIX types. Won't clash for 1500 types.
+Index: linux-5.4.171/net/core/dev.c
+===================================================================
+--- linux-5.4.171.orig/net/core/dev.c
++++ linux-5.4.171/net/core/dev.c
+@@ -4731,6 +4731,12 @@ int netdev_rx_handler_register(struct ne
+ }
+ EXPORT_SYMBOL_GPL(netdev_rx_handler_register);
+ 
++#if defined(CONFIG_ZYXEL_KF_TMS)
++unsigned char oam_skip_smux = 0; //OAM packet don't into smux when service started.
++int (*bcm_1ag_handle_frame_check_hook)(struct sk_buff *) = NULL;
++int (*bcm_3ah_handle_frame_check_hook)(struct sk_buff *, struct net_device *) = NULL;
++#endif
++
+ /**
+  *	netdev_rx_handler_unregister - unregister receive handler
+  *	@dev: device to unregister a handler from
+@@ -4810,6 +4816,34 @@ static int __netif_receive_skb_core(stru
+ 	orig_dev = skb->dev;
+ 	skb->original_dev = skb->dev;	/* Zyxel: PPP demand dial for LAN only */
+ 
++#if defined(CONFIG_ZYXEL_KF_TMS)
++	/*******************************
++	   for ECONET 7.3.245.300 with TMS module 6.86,
++	   move this part of TMS code before ecnt_netif_recv_inline_hook(),
++	   because oam_skip_smux will be accessed by ecnt_netif_recv_inline_hook()
++	   Trevor, 20180706
++	*************************************************************** */
++    oam_skip_smux = 0;
++    /* Check if 802.1ag service is started. */
++    if (bcm_1ag_handle_frame_check_hook)
++	{
++        /* We want to skip vlanctl for 1ag packet. */
++        if (bcm_1ag_handle_frame_check_hook(skb))
++        {
++            oam_skip_smux = 1;
++        }
++    }
++    /* Check if 802.3ah service is started. */
++    if (bcm_3ah_handle_frame_check_hook)
++    {
++        /* We want to skip vlanctl for 3ah packet, or for any packet when 3ah loopback was enabled. */
++        if ((bcm_3ah_handle_frame_check_hook(skb, skb->dev)))
++        {
++            oam_skip_smux = 1;
++        }
++    }
++#endif /* #if defined(ZYXEL_KF_TMS) */
++
+ 	skb_reset_network_header(skb);
+ 	if (!skb_transport_header_was_set(skb))
+ 		skb_reset_transport_header(skb);
+@@ -4838,9 +4872,29 @@ another_round:
+ 
+ 	if (skb->protocol == cpu_to_be16(ETH_P_8021Q) ||
+ 	    skb->protocol == cpu_to_be16(ETH_P_8021AD)) {
++#if defined(CONFIG_ZYXEL_KF_TMS)
++        /************************************
++            TMS Module 6.86 will handle VLAN manipulation,
++            if remvoe VLAN tag, will cause TMS module receive 1ag packet fail=>1ag loopback fail,
++            so bybass skb_vlan_untag() setting for 1ag packet.
++
++            Trevor, 20180717
++         ***********************************/
++        struct vlan_hdr *vh = (struct vlan_hdr *)skb->data;
++        if (vh->h_vlan_encapsulated_proto != htons(ETH_P_8021AG))
++        {
++            skb = skb_vlan_untag(skb);
++            if (unlikely(!skb))
++            {
++                goto out;
++            }
++        }
++#else /*defined(ZYXEL_KF_TMS)*/
++        /* original code */
+ 		skb = skb_vlan_untag(skb);
+ 		if (unlikely(!skb))
+ 			goto out;
++#endif /*defined(ZYXEL_KF_TMS)*/
+ 	}
+ 
+ 	if (skb_skip_tc_classify(skb))
+@@ -4944,6 +4998,9 @@ check_vlan_id:
+ 		 * and set skb->priority like in vlan_do_receive()
+ 		 * For the time being, just ignore Priority Code Point
+ 		 */
++#if defined(CONFIG_ZYXEL_KF_TMS)
++        if (skb->protocol != htons(ETH_P_8021AG) && skb->protocol != htons(ETH_P_8023AH))
++#endif //defined(ZYXEL_KF_TMS)
+ 		__vlan_hwaccel_clear_tag(skb);
+ 	}
+ 
+@@ -10573,3 +10630,8 @@ out:
+ }
+ 
+ subsys_initcall(net_dev_init);
++#if defined(CONFIG_ZYXEL_KF_TMS)
++EXPORT_SYMBOL(oam_skip_smux);
++EXPORT_SYMBOL(bcm_1ag_handle_frame_check_hook);
++EXPORT_SYMBOL(bcm_3ah_handle_frame_check_hook);
++#endif
+\ No newline at end of file
+Index: linux-5.4.171/Kconfig.zyxel
+===================================================================
+--- linux-5.4.171.orig/Kconfig.zyxel
++++ linux-5.4.171/Kconfig.zyxel
+@@ -63,3 +63,7 @@ config ZYXEL_RECORD_CALL_TRACE
+ config ZYXEL_DEC_AND_GZIP_CORE
+ 	bool "Support kernel coredump files saving after booting"
+ 	default n
++
++config ZYXEL_KF_TMS
++	bool "Support NComm TMS Module"
++	default n

@@ -1,0 +1,13 @@
+Index: udhcp-0.9.8/options.c
+===================================================================
+--- udhcp-0.9.8.orig/options.c
++++ udhcp-0.9.8/options.c
+@@ -326,7 +326,7 @@ int read_config_options(const char* intf
+ 		free(ipIface);
+ 	}
+ 
+-	if (strlen(ipIntf) == 0)//can't find corresponding ip interface
++	if (strlen(ipIntf) == 0 && !IsVlanHuntEnable)//can't find corresponding ip interface and it is not VlanHuntEnable
+ 		return 0;
+ 
+ 	IID_INIT(dhcpIid);

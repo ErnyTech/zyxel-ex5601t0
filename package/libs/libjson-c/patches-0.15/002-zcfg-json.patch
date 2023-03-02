@@ -1,0 +1,185 @@
+Index: json-c-0.15/arraylist.c
+===================================================================
+--- json-c-0.15.orig/arraylist.c
++++ json-c-0.15/arraylist.c
+@@ -144,7 +144,11 @@ int array_list_put_idx(struct array_list
+ 	}
+ 	if (arr->length <= idx)
+ 		arr->length = idx + 1;
++#if 0 /* ZyXEL, john */
+ 	return 0;
++#else
++	return idx + 1;
++#endif
+ }
+ 
+ int array_list_add(struct array_list *arr, void *data)
+@@ -199,3 +203,25 @@ int array_list_del_idx(struct array_list
+ 	arr->length -= count;
+ 	return 0;
+ }
++
++
++#if 1 /* zyxel, john */
++#include "json_object.h"
++int array_list_delete_idx(struct array_list *arr, size_t idx)
++{
++	if(idx > arr->length) return -1;
++
++	if(arr->array[idx]) arr->free_fn(arr->array[idx]);
++
++	if((idx + 1) == arr->length) {
++		arr->array[idx] = NULL;
++		arr->length--;
++	}
++	else {
++		arr->array[idx] = json_object_new_object();
++		json_object_object_add(arr->array[idx], "emptyIns", json_object_new_boolean(1));
++	}
++
++	return 0;
++}
++#endif
+Index: json-c-0.15/arraylist.h
+===================================================================
+--- json-c-0.15.orig/arraylist.h
++++ json-c-0.15/arraylist.h
+@@ -75,6 +75,8 @@ extern void *array_list_bsearch(const vo
+ 
+ extern int array_list_del_idx(struct array_list *arr, size_t idx, size_t count);
+ 
++extern int
++array_list_delete_idx(struct array_list *arr, size_t idx);
+ /**
+  * Shrink the array list to just enough to fit the number of elements in it,
+  * plus empty_slots.
+Index: json-c-0.15/json_object.c
+===================================================================
+--- json-c-0.15.orig/json_object.c
++++ json-c-0.15/json_object.c
+@@ -422,6 +422,10 @@ void json_object_set_serializer(json_obj
+ 		case json_type_double:
+ 			jso->_to_json_string = &json_object_double_to_json_string_default;
+ 			break;
++		case json_type_uint32:
++		case json_type_uint16:
++		case json_type_uint8:
++		case json_type_ulong:
+ 		case json_type_int: jso->_to_json_string = &json_object_int_to_json_string; break;
+ 		case json_type_object:
+ 			jso->_to_json_string = &json_object_object_to_json_string;
+@@ -429,6 +433,9 @@ void json_object_set_serializer(json_obj
+ 		case json_type_array:
+ 			jso->_to_json_string = &json_object_array_to_json_string;
+ 			break;
++		case json_type_time:
++		case json_type_base64:
++		case json_type_hex:
+ 		case json_type_string:
+ 			jso->_to_json_string = &json_object_string_to_json_string;
+ 			break;
+@@ -1447,6 +1454,13 @@ struct json_object *json_object_new_arra
+ 	return &jso->base;
+ }
+ 
++#if 1 /* zyxel, john */
++int json_object_array_delete_idx(struct json_object *jso, size_t idx)
++{
++  return array_list_delete_idx(JC_ARRAY(jso)->c_array, idx);
++}
++#endif
++
+ struct array_list *json_object_get_array(const struct json_object *jso)
+ {
+ 	if (!jso)
+@@ -1584,6 +1598,10 @@ int json_object_equal(struct json_object
+ 	case json_type_double: return (JC_DOUBLE(jso1)->c_double == JC_DOUBLE(jso2)->c_double);
+ 
+ 	case json_type_int:
++	case json_type_uint32:
++	case json_type_uint16:
++	case json_type_uint8:
++	case json_type_ulong:
+ 	{
+ 		struct json_object_int *int1 = JC_INT(jso1);
+ 		struct json_object_int *int2 = JC_INT(jso2);
+@@ -1603,6 +1621,9 @@ int json_object_equal(struct json_object
+ 		return (int1->cint.c_uint64 == (uint64_t)int2->cint.c_int64);
+ 	}
+ 
++	case json_type_time:
++	case json_type_base64:
++	case json_type_hex:
+ 	case json_type_string:
+ 	{
+ 		return (json_object_get_string_len(jso1) == json_object_get_string_len(jso2) &&
+Index: json-c-0.15/json_object.h
+===================================================================
+--- json-c-0.15.orig/json_object.h
++++ json-c-0.15/json_object.h
+@@ -1061,6 +1061,18 @@ JSON_EXPORT json_c_shallow_copy_fn json_
+ 
+ JSON_EXPORT int json_object_deep_copy(struct json_object *src, struct json_object **dst,
+                                       json_c_shallow_copy_fn *shallow_copy);
++
++#if 1 /* zyxel, john */
++
++/** Delete the element at specificed index of the array (a json_object of type json_type_array)
++ * @param obj the json_object array
++ * @param idx the index of the deteled element
++ * @returns 0
++ */
++JSON_EXPORT int json_object_array_delete_idx(struct json_object *jso, size_t idx);
++
++#endif
++
+ #ifdef __cplusplus
+ }
+ #endif
+Index: json-c-0.15/json_types.h
+===================================================================
+--- json-c-0.15.orig/json_types.h
++++ json-c-0.15/json_types.h
+@@ -66,9 +66,16 @@ typedef enum json_type
+ 	json_type_boolean,
+ 	json_type_double,
+ 	json_type_int,
++	json_type_uint8,
++	json_type_uint16,
++	json_type_uint32,
+ 	json_type_object,
+ 	json_type_array,
+-	json_type_string
++	json_type_string,
++	json_type_time,
++	json_type_base64,
++	json_type_hex,
++	json_type_ulong
+ } json_type;
+ 
+ #ifdef __cplusplus
+Index: json-c-0.15/json_util.c
+===================================================================
+--- json-c-0.15.orig/json_util.c
++++ json-c-0.15/json_util.c
+@@ -211,7 +211,7 @@ static int _json_object_to_fd(int fd, st
+ 		/* because of the above check for ret < 0, we can safely cast and add */
+ 		wpos += (unsigned int)ret;
+ 	}
+-
++	fsync(fd);
+ 	return 0;
+ }
+ 
+Index: json-c-0.15/json-c.sym
+===================================================================
+--- json-c-0.15.orig/json-c.sym
++++ json-c-0.15/json-c.sym
+@@ -62,6 +62,7 @@ JSONC_0.14 {
+     json_object_array_del_idx;
+     json_object_array_get_idx;
+     json_object_array_length;
++    json_object_array_delete_idx;
+     json_object_array_put_idx;
+     json_object_array_sort;
+     json_object_deep_copy;

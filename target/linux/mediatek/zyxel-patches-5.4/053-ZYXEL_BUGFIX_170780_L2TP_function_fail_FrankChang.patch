@@ -1,0 +1,17 @@
+diff -ruN a/drivers/net/ppp/Kconfig b/drivers/net/ppp/Kconfig
+--- a/drivers/net/ppp/Kconfig	2022-01-11 22:23:33.000000000 +0800
++++ b/drivers/net/ppp/Kconfig	2022-07-28 14:19:47.203196092 +0800
+@@ -176,3 +176,13 @@
+ endif # TTY
+ 
+ endif # PPP
++
++config ZYXEL_L2TP_SUPPORT
++	tristate "Support L2TP VPN"
++	---help---
++	  Support Zyxel L2TP VPN
++
++config ZYXEL_PPTP_SUPPORT
++	tristate "Support PPTP VPN"
++	---help---
++	  Support Zyxel PPTP VPN

@@ -1,0 +1,46 @@
+Index: busybox-1.31.1/loginutils/login.c
+===================================================================
+--- busybox-1.31.1.orig/loginutils/login.c	2021-03-23 14:18:06.608696371 +0800
++++ busybox-1.31.1/loginutils/login.c	2021-03-23 13:58:35.830426800 +0800
+@@ -984,11 +984,16 @@
+ 		if(idle_times) {
+ #ifdef ZYXEL_CLI_IDLE_TIMEOUT
+ 			FILE *fp;
+-			fp=fopen("/var/accountIdleTime", "w+");
++			char sysCmd[64] = {0};
++
++			fp=fopen(IDLE_TIMEOUT_FILE, "w+");
+ 			if(fp){
+ 				fprintf( fp, "%d\n", idle_times);
+ 				fclose(fp);
+ 			}
++
++			sprintf(sysCmd,"chmod 666 %s",IDLE_TIMEOUT_FILE);
++			system(sysCmd);
+ #endif
+ 		}
+ 
+Index: busybox-1.31.1/shell/ash.c
+===================================================================
+--- busybox-1.31.1.orig/shell/ash.c	2021-03-23 14:18:06.612696371 +0800
++++ busybox-1.31.1/shell/ash.c	2021-03-23 13:59:23.789788300 +0800
+@@ -15,6 +15,10 @@
+  *
+  * Licensed under GPLv2 or later, see file LICENSE in this source tree.
+  */
++#ifdef ZYXEL_CLI_IDLE_TIMEOUT
++#include "zcfg_common.h"
++#endif
++
+ //config:config ASH
+ //config:	bool "ash (78 kb)"
+ //config:	default y
+@@ -10553,7 +10557,7 @@
+ 		/* __ZyXEL__, GraceXiao, 20180227, Add timeout mechanism by using AccountIdleTime */
+ 		FILE *fp;
+ 		int idle_times = 0;
+-		fp=fopen("/var/accountIdleTime", "r");
++		fp=fopen(IDLE_TIMEOUT_FILE, "r");
+ 		if(fp) fscanf(fp, "%d", &idle_times);
+ 
+ 		if(tmout_var)

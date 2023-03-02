@@ -1,0 +1,50 @@
+Index: linux-5.4.171/drivers/mtd/ubi/build.c
+===================================================================
+--- linux-5.4.171.orig/drivers/mtd/ubi/build.c
++++ linux-5.4.171/drivers/mtd/ubi/build.c
+@@ -46,6 +46,9 @@
+ #define ubi_is_module() 0
+ #endif
+ 
++static char * __initdata root_ubidevice_name = NULL;
++static char __initdata saved_root_ubiname[64] = { 0 };
++
+ /**
+  * struct mtd_dev_param - MTD device parameter description data structure.
+  * @name: MTD character device node path, MTD device name, or MTD device number
+@@ -1168,6 +1171,14 @@ static struct mtd_info * __init open_mtd
+ 	return mtd;
+ }
+ 
++static int __init rootubi_dev_setup(char *line)
++{
++	strlcpy(saved_root_ubiname, line, sizeof(saved_root_ubiname));
++	return 1;
++}
++
++__setup("rootubi=", rootubi_dev_setup);
++
+ /*
+  * This function tries attaching mtd partitions named either "ubi" or "data"
+  * during boot.
+@@ -1180,8 +1191,19 @@ static void __init ubi_auto_attach(void)
+ 	size_t len;
+ 	char magic[4];
+ 
++	if (saved_root_ubiname[0]) {
++		if ( !strncmp(saved_root_ubiname, "ubi", 3) ) {
++			root_ubidevice_name = saved_root_ubiname;
++			pr_notice("UBI: plan to attach %s\n", saved_root_ubiname);
++		} else
++			root_ubidevice_name = NULL;
++	}
++
+ 	/* try attaching mtd device named "ubi" or "data" */
+-	mtd = open_mtd_device("ubi");
++	if ( root_ubidevice_name )
++		mtd = open_mtd_device(root_ubidevice_name);
++	else
++		mtd = open_mtd_device("ubi");
+ 	if (IS_ERR(mtd))
+ 		mtd = open_mtd_device("data");
+ 

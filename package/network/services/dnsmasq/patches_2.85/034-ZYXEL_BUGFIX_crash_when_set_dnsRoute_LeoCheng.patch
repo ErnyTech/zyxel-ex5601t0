@@ -1,0 +1,24 @@
+Index: dnsmasq-2.85/src/forward.c
+===================================================================
+--- dnsmasq-2.85.orig/src/forward.c
++++ dnsmasq-2.85/src/forward.c
+@@ -727,13 +727,18 @@ forward_query (int udpfd, union mysockad
+             break;
+           forward->forwardall++;
+         }
+-      }else{
+ #ifdef ZYXEL_PATCH  //reject query when special domain query has no socket
+         if (type == SERV_HAS_DOMAIN
+             && hostname_isequal (domain, start->domain)) {
+           my_syslog(LOG_WARNING, _("Reject query for %s"), start->domain);
+           break;
+         }
++      }else{
++        if (type == SERV_HAS_DOMAIN
++            && start->domain!=NULL && hostname_isequal (domain, start->domain)) {
++          my_syslog(LOG_WARNING, _("Reject query for %s"), start->domain);
++          break;
++        }
+ #endif
+       }
+ 

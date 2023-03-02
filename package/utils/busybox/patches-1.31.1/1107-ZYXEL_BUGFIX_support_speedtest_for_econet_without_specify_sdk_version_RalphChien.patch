@@ -1,0 +1,193 @@
+Index: busybox-1.31.1/networking/wget.c
+===================================================================
+--- busybox-1.31.1.orig/networking/wget.c	2021-04-13 20:34:07.000000000 +0800
++++ busybox-1.31.1/networking/wget.c	2021-04-13 21:03:57.189862247 +0800
+@@ -161,7 +161,7 @@
+ #include "zcfg_msg.h"
+ #endif
+ 
+-#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET) && defined(TC_SDK_7_3_207_4)
++#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET)
+ #define TCP_WINDOW_SIZE_VARIABLE "/tmp/download_variables"
+ #define DEFAULT_TCP_SCALE 7
+ #define DEFAULT_TCP_WINDOW 50000
+@@ -266,7 +266,7 @@
+ 	char *ifName;
+ 	char *dscp;
+ 	char *ethernetPriority;
+-#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET) && defined(TC_SDK_7_3_207_4)
++#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET)
+ 	char *speedTestEnable;
+ #endif //PLATFORM_ECONET
+ #endif
+@@ -310,7 +310,7 @@
+ static unsigned long long ifBytesSentEnd = 0;
+ 
+ static char ipDscp = 0;
+-#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET) && defined(TC_SDK_7_3_207_4)
++#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET)
+ static char speedTestEnable = 0;
+ #endif //PLATFORM_ECONET
+ 
+@@ -382,7 +382,7 @@
+ void getDateTime(char *buf);
+ #endif
+ 
+-#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET) && defined(TC_SDK_7_3_207_4)
++#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET)
+ void set_qdmaRateLimit(int );
+ #endif
+ 
+@@ -463,7 +463,7 @@
+ 
+ 	json_object_put(diag_result);
+ 	set_priorityMark(0);
+-#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET) && defined(TC_SDK_7_3_207_4)
++#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET)
+ 	set_qdmaRateLimit(1);
+ #endif
+ 
+@@ -521,7 +521,7 @@
+ 		system(cmd);
+ 	}
+ }
+-#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET) && defined(TC_SDK_7_3_207_4)
++#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET)
+ void set_qdmaRateLimit(int act)
+ {
+ 	char cmd[128];
+@@ -581,7 +581,7 @@
+ #endif
+ }
+ 
+-#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET) && defined(TC_SDK_7_3_207_4)
++#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET)
+ /* New EOMTime = BOMTime + speedtest diff time */
+ void calculate_EOMTime_speedtest(char *buf, unsigned long diff_stime, unsigned long diff_ustime);
+ void calculate_EOMTime_speedtest(char *buf, unsigned long diff_stime, unsigned long diff_ustime)
+@@ -675,7 +675,7 @@
+ 	return 0;
+ }
+ 
+-#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET) && defined(TC_SDK_7_3_207_4)
++#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET)
+ void execute_speedtest(char *s, char *host_info, const char *target_path, int *rev_bytes, int *send_bytes);
+ void execute_speedtest(char *s, char *host_info, const char *target_path, int *rev_bytes, int *send_bytes)
+ {
+@@ -1066,7 +1066,7 @@
+ 		return;
+ 	}
+ 
+-#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET) && defined(TC_SDK_7_3_207_4)
++#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET)
+ 	is_ipv6 = true;
+ #endif
+ 
+@@ -1923,7 +1923,7 @@
+ 	char *redirected_path = NULL;
+ 	struct host_info server;
+ 	struct host_info target;
+-#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET) && defined(TC_SDK_7_3_207_4)
++#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET)
+ 	int rev_bytes = 0, send_bytes = 0;
+ #endif
+ 
+@@ -2009,7 +2009,7 @@
+ #if defined(ZCFG_SUPPORT) //TR143
+ 	strcpy(dstIP, inet_ntoa(lsa->u.sin.sin_addr));
+ 	set_priorityMark(1);
+-#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET) && defined(TC_SDK_7_3_207_4)
++#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET)
+ 	set_qdmaRateLimit(0);
+ #endif
+ #endif
+@@ -2054,7 +2054,7 @@
+ 					outputDiagDlData();
+ 				}
+ 				getDateTime(TCPOpenResponseTime);
+-#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET) && defined(TC_SDK_7_3_207_4)
++#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET)
+ 				if(!strcmp(G.speedTestEnable, "1") && !is_ipv6)
+ 				{
+ 					goto speed_test;
+@@ -2093,7 +2093,7 @@
+ 				outputDiagDlData();
+ 			}
+ 			getDateTime(TCPOpenResponseTime);
+-#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET) && defined(TC_SDK_7_3_207_4)
++#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET)
+ 			if(!strcmp(G.speedTestEnable, "1") && !is_ipv6)
+ 			{
+ 				goto speed_test;
+@@ -2125,7 +2125,7 @@
+ 				outputDiagDlData();
+ 			}
+ 			getDateTime(TCPOpenResponseTime);
+-#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET) && defined(TC_SDK_7_3_207_4)
++#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET)
+ 			if(!strcmp(G.speedTestEnable, "1") && !is_ipv6)
+ 			{
+ 				goto speed_test;
+@@ -2158,7 +2158,7 @@
+ 				outputDiagDlData();
+ 			}
+ 			getDateTime(TCPOpenResponseTime);
+-#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET) && defined(TC_SDK_7_3_207_4)
++#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET)
+ 			if(!strcmp(G.speedTestEnable, "1") && !is_ipv6)
+ 			{
+ 				goto speed_test;
+@@ -2490,7 +2490,7 @@
+ 	fclose(sfp);
+ 
+ #if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
+-#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET) && defined(TC_SDK_7_3_207_4)
++#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET)
+ speed_test:
+ 	if(!strcmp(G.speedTestEnable, "1") && !is_ipv6)
+ 	{
+@@ -2537,7 +2537,7 @@
+ #ifdef ZYXEL_DL_DIAG_CALCULATION
+ 	EOMTimeMs = getDateTime(EOMTime);
+ #else
+-#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET) && defined(TC_SDK_7_3_207_4)
++#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET)
+ 	if(!strcmp(G.speedTestEnable, "0") && !is_ipv6)
+ 	{
+ 		//Get user-space time
+@@ -2579,7 +2579,7 @@
+ 		"interfaceName"      Required_argument "i"
+ 		"DSCP"               Required_argument "d"
+ 		"ethernetPriority"   Required_argument "M"
+-#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET) && defined(TC_SDK_7_3_207_4)
++#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET)
+ 		"speedTestEnable"    Required_argument "E"
+ #endif //PLATFORM_ECONET
+ #endif
+@@ -2622,7 +2622,7 @@
+ 	G.user_agent = "Wget"; /* "User-Agent" header field */
+ 
+ #if defined(ZCFG_SUPPORT) //TR143
+-#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET) && defined(TC_SDK_7_3_207_4)
++#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET)
+ 	GETOPT32(argv, "^"
+ 		"cqSO:o:P:Y:U:T:i:wd:M:E:R:+"
+ #else
+@@ -2647,7 +2647,7 @@
+ 		&G.proxy_flag, &G.user_agent,
+ 		IF_FEATURE_WGET_TIMEOUT(&G.timeout_seconds) IF_NOT_FEATURE_WGET_TIMEOUT(NULL),
+ 		&G.ifName, &G.dscp, &G.ethernetPriority,
+-#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET) && defined(TC_SDK_7_3_207_4)
++#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET)
+ 		&G.speedTestEnable,
+ #endif //PLATFORM_ECONET
+ 		NULL, /* -t RETRIES */
+@@ -2658,7 +2658,7 @@
+ 
+ 	ipDscp = (G.dscp) ? xatou_range(G.dscp, 0, 255) : 0;
+ 	printf("Dscp: %u\n", ipDscp);
+-#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET) && defined(TC_SDK_7_3_207_4)
++#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET)
+ 	speedTestEnable = (G.speedTestEnable) ? xatou_range(G.speedTestEnable, 0, 255) : 0;
+ 	printf("speedTestEnable: %u\n", speedTestEnable);
+ #endif //PLATFORM_ECONET

@@ -1,0 +1,91 @@
+Index: busybox-1.31.1/networking/ping.c
+===================================================================
+--- busybox-1.31.1.orig/networking/ping.c	2021-03-18 14:48:47.862617332 +0800
++++ busybox-1.31.1/networking/ping.c	2021-03-18 14:49:09.094617434 +0800
+@@ -377,7 +377,7 @@
+ /* Full(er) version */
+ 
+ /* -c NUM, -t NUM, -w NUM, -W NUM */
+-#define OPT_STRING "qvAc:+s:t:+w:+W:+I:np:i:zf:4"IF_PING6("6")
++#define OPT_STRING "qvAc:+s:t:+w:+W:+I:np:i:zf:m:4"IF_PING6("6")
+ enum {
+ 	OPT_QUIET = 1 << 0,
+ 	OPT_VERBOSE = 1 << 1,
+@@ -393,8 +393,10 @@
+ 	OPT_i = 1 << 11,
+ 	OPT_z = (1 << 12),
+ 	OPT_f = (1 << 13),
+-	OPT_IPV4 = (1 << 14),
+-	OPT_IPV6 = (1 << 15) * ENABLE_PING6,
++	OPT_m = (1 << 14),
++	OPT_IPV4 = (1 << 15),
++	OPT_IPV6 = (1 << 16) * ENABLE_PING6,
++
+ };
+ 
+ 
+@@ -437,6 +438,7 @@
+ 	char diagstat[100];
+ 	char svrhostname[257];
+ 	char *jsonfilename;
++	uint32_t skbmark;
+ #endif
+ } FIX_ALIASING;
+ #define G (*(struct globals*)bb_common_bufsiz1)
+@@ -473,6 +475,7 @@
+ #define pingsvrs     (G.pingsvrs    )
+ #define svrhostname  (G.svrhostname )
+ #define jsonfilename (G.jsonfilename)
++#define skbmark      (G.skbmark)
+ #endif
+ 
+ #define INIT_G() do { \
+@@ -951,6 +954,10 @@
+ 	sockopt = (datalen * 2) + 7 * 1024; /* giving it a bit of extra room */
+ 	setsockopt_SOL_SOCKET_int(pingsock, SO_RCVBUF, sockopt);
+ 
++	//set skb mark to bind to non-default WAN rounting table
++	if(skbmark != 0)
++		setsockopt(pingsock, SOL_SOCKET, SO_MARK, &skbmark, sizeof(skbmark));
++
+ 	if (opt_ttl != 0) {
+ 		setsockopt_int(pingsock, IPPROTO_IP, IP_TTL, opt_ttl);
+ 		/* above doesn't affect packets sent to bcast IP, so... */
+@@ -1028,6 +1035,10 @@
+ 	sockopt = (datalen * 2) + 7 * 1024; /* giving it a bit of extra room */
+ 	setsockopt_SOL_SOCKET_int(pingsock, SO_RCVBUF, sockopt);
+ 
++	//set skb mark to bind to non-default WAN rounting table
++	if(skbmark != 0)
++		setsockopt(pingsock, SOL_SOCKET, SO_MARK, &skbmark, sizeof(skbmark));
++
+ 	sockopt = offsetof(struct icmp6_hdr, icmp6_cksum);
+ 	BUILD_BUG_ON(offsetof(struct icmp6_hdr, icmp6_cksum) != 2);
+ 	setsockopt_int(pingsock, SOL_RAW, IPV6_CHECKSUM, sockopt);
+@@ -1317,6 +1328,7 @@
+ static int common_ping_main(int opt, char **argv)
+ {
+ 	char *str_s, *str_p;
++	char *str_m;
+ 	char *str_i = (char*)"1";
+ 	duration_t interval;
+ 
+@@ -1326,7 +1338,7 @@
+ 			OPT_STRING
+ 			/* exactly one arg; -v and -q don't mix */
+ 			"\0" "=1:q--v:v--q",
+-			&pingcount, &str_s, &opt_ttl, &G.deadline_us, &timeout, &str_I, &str_p, &str_i, &jsonfilename
++			&pingcount, &str_s, &opt_ttl, &G.deadline_us, &timeout, &str_I, &str_p, &str_i, &jsonfilename, &str_m
+ 	);
+ 	if (opt & OPT_s)
+ 		datalen = xatou16(str_s); // -s
+@@ -1338,6 +1350,9 @@
+ 			str_I = NULL; /* don't try to bind to device later */
+ 		}
+ 	}
++	if (opt & OPT_m) { // -m
++		skbmark = (uint32_t)atoll(str_m);
++	}
+ 	if (opt & OPT_z) { // -z
+ 		sendzcfgmsg = 0;
+ 	}

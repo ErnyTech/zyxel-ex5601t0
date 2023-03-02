@@ -1,0 +1,13 @@
+Index: busybox-1.31.1/shell/ash.c
+===================================================================
+--- busybox-1.31.1.orig/shell/ash.c	2021-03-24 19:15:16.637200135 +0800
++++ busybox-1.31.1/shell/ash.c	2021-03-24 19:15:16.713200135 +0800
+@@ -2268,7 +2268,7 @@
+ 	/*
+ 	 * PS1 depends on uid
+ 	 */
+-#if ENABLE_FEATURE_EDITING && ENABLE_FEATURE_EDITING_FANCY_PROMPT
++#if ENABLE_FEATURE_EDITING && ENABLE_FEATURE_EDITING_FANCY_PROMPT && !defined(MSTC_TTNET_MULTI_USER)
+ 	vps1.var_text = "PS1=\\w \\$ ";
+ #else
+ 	if (!geteuid())

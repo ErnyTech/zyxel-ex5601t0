@@ -1,0 +1,545 @@
+Index: omcproxy-2018-12-14-722151f0/CMakeLists.txt
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/CMakeLists.txt
++++ omcproxy-2018-12-14-722151f0/CMakeLists.txt
+@@ -25,7 +25,10 @@ endif(WITH_LIBUBOX)
+ 
+ if(ZYXEL_OMCPROXY)
+ set(PLATFORM_LINK ${PLATFORM_LINK} json-c)
+-add_executable(omcproxy src/client.c src/mrib.c src/querier.c src/groups.c src/igmp.c src/mld.c src/proxy.c src/omcproxy.c src/omcpzcfg.c ${PLATFORM_SOURCE})
++add_executable(omcproxy src/client.c src/mrib.c src/querier.c src/groups.c src/igmp.c src/mld.c src/proxy.c src/omcproxy.c src/omcpzcfg.c src/msg.c ${PLATFORM_SOURCE})
++add_executable(omcpmsgcl src/msgcl.c)
++target_link_libraries(omcpmsgcl zyutil)
++
+ else (ZYXEL_OMCPROXY)
+ add_executable(omcproxy src/client.c src/mrib.c src/querier.c src/groups.c src/igmp.c src/mld.c src/proxy.c src/omcproxy.c ${PLATFORM_SOURCE})
+ endif(ZYXEL_OMCPROXY)
+Index: omcproxy-2018-12-14-722151f0/src/msg.c
+===================================================================
+--- /dev/null
++++ omcproxy-2018-12-14-722151f0/src/msg.c
+@@ -0,0 +1,139 @@
++/*
++ * Derived from libubox
++ */
++
++#include <sys/socket.h>
++#include <netinet/in.h>
++
++#include <stdio.h>
++#include <getopt.h>
++#include <stdlib.h>
++#include <string.h>
++#include <unistd.h>
++
++#include <libubox/ustream.h>
++#include <libubox/uloop.h>
++#include <libubox/usock.h>
++#include "proxy.h"
++#include "msg.h"
++
++static struct uloop_fd server;
++static const char *port = "10000";
++struct msg_client *next_client = NULL;
++
++
++static void client_read_cb(struct ustream *s, int datalen)
++{
++	struct msg_client *cl = container_of(s, struct msg_client, s.stream);
++	//struct ustream_buf *buf = s->r.head;
++	char *newline, *str;
++	int slen = 0;
++
++	if(datalen)
++		datalen = 0;
++
++	do {
++		str = ustream_get_read_buf(s, &slen);
++		if (!str)
++			break;
++		newline = calloc(1, slen + 1);
++		strncpy(newline, str, slen);
++		fprintf(stderr, "omcproxy: %s\n", newline);
++
++		if(strstr(newline, "igmpstatus")) {
++			proxy_dump();
++		}else if(strstr(newline, "mldstatus")) {
++
++		}
++
++		ustream_consume(s, slen);
++		cl->ctr += slen;
++	} while(1);
++
++	if (s->w.data_bytes > 256 && !ustream_read_blocked(s)) {
++		fprintf(stderr, "Block read, bytes: %d\n", s->w.data_bytes);
++		ustream_set_read_blocked(s, true);
++	}
++}
++
++static void client_close(struct ustream *s)
++{
++	struct msg_client *cl = container_of(s, struct msg_client, s.stream);
++
++	//fprintf(stderr, "Connection closed\n");
++	ustream_free(s);
++	close(cl->s.fd.fd);
++	free(cl);
++}
++
++static void client_notify_write(struct ustream *s, int bytes)
++{
++	fprintf(stderr, "Wrote %d bytes, pending: %d\n", bytes, s->w.data_bytes);
++
++	if (s->w.data_bytes < 128 && ustream_read_blocked(s)) {
++		fprintf(stderr, "Unblock read\n");
++		ustream_set_read_blocked(s, false);
++	}
++}
++
++static void client_notify_state(struct ustream *s)
++{
++	//struct msg_client *cl = container_of(s, struct msg_client, s.stream);
++
++	if (!s->eof)
++		return;
++
++	//fprintf(stderr, "eof!, pending: %d, total: %d\n", s->w.data_bytes, cl->ctr);
++	if (!s->w.data_bytes)
++		return client_close(s);
++
++}
++
++static void server_cb(struct uloop_fd *s, unsigned int events)
++{
++	struct msg_client *cl;
++	unsigned int sl = sizeof(struct sockaddr_in);
++	int sfd;
++
++	if(events)
++		events = 0;
++
++	if (!next_client)
++		next_client = calloc(1, sizeof(*next_client));
++
++	cl = next_client;
++	//sfd = accept(server.fd, (struct sockaddr *) &cl->sin, &sl);
++	sfd = accept(s->fd, (struct sockaddr *) &cl->sin, &sl);
++	if (sfd < 0) {
++		fprintf(stderr, "Accept failed\n");
++		return;
++	}
++
++	cl->s.stream.string_data = true;
++	cl->s.stream.notify_read = client_read_cb;
++	cl->s.stream.notify_state = client_notify_state;
++	cl->s.stream.notify_write = client_notify_write;
++	ustream_fd_init(&cl->s, sfd);
++	next_client = NULL;
++	//fprintf(stderr, "New connection\n");
++}
++
++
++int msg_server_init(const char *ipc_addr)
++{
++	unlink(ipc_addr);
++	server.cb = server_cb;
++	server.fd = usock(USOCK_UNIX | USOCK_TCP | USOCK_SERVER | USOCK_IPV4ONLY | USOCK_NUMERIC, ipc_addr, port);
++	if (server.fd < 0) {
++		perror("usock");
++		return -1;
++	}
++
++	//uloop_init();
++	uloop_fd_add(&server, ULOOP_READ);
++	//uloop_run();
++
++	return 0;
++}
++
++
+Index: omcproxy-2018-12-14-722151f0/src/omcproxy.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/omcproxy.c
++++ omcproxy-2018-12-14-722151f0/src/omcproxy.c
+@@ -30,6 +30,7 @@
+ #include "proxy.h"
+ #include "omcpzcfg.h"
+ 
++
+ int log_level = LOG_WARNING;
+ 
+ 
+@@ -40,6 +41,8 @@ enum {
+ 	PROXY_ATTR_MAX,
+ };
+ 
++int msg_server_init(const char *);
++
+ static struct blobmsg_policy proxy_policy[PROXY_ATTR_MAX] = {
+ 	[PROXY_ATTR_SOURCE] = { .name = "source", .type = BLOBMSG_TYPE_STRING },
+ 	[PROXY_ATTR_SCOPE] = { .name = "scope", .type = BLOBMSG_TYPE_STRING },
+@@ -139,6 +142,12 @@ int main(int argc, char **argv) {
+ 	uloop_init();
+ 	bool start = true;
+ 
++	if (argc < 2) {
++		usage(argv[0]);
++		start = false;
++	}
++
++
+ 	for (ssize_t i = 1; i < argc; ++i) {
+ 		const char *source = NULL;
+ 		const char *scope = NULL;
+@@ -194,10 +203,20 @@ int main(int argc, char **argv) {
+ 		blob_buf_free(&b);
+ 	}
+ 
+-	if (argc < 2) {
+-		usage(argv[0]);
+-		start = false;
++#ifdef ZYXEL_OMCPROXY
++	if (omcp_app_igmp) {
++		if(msg_server_init(OMCPROXY_IGMP_IPC_ADDR)) {
++			fprintf(stderr, "failed to setup msg server\n");
++			start = false;
++		}
+ 	}
++	else if (omcp_app_mld) {
++		if(msg_server_init(OMCPROXY_MLD_IPC_ADDR)) {
++			fprintf(stderr, "failed to setup msg server\n");
++			start = false;
++		}
++	}
++#endif
+ 
+ 	if (start)
+ 		uloop_run();
+Index: omcproxy-2018-12-14-722151f0/src/msg.h
+===================================================================
+--- /dev/null
++++ omcproxy-2018-12-14-722151f0/src/msg.h
+@@ -0,0 +1,13 @@
++/*
++ * Derived from libubox
++ */
++
++
++
++struct msg_client {
++	struct sockaddr_in sin;
++
++	struct ustream_fd s;
++	int ctr;
++};
++
+Index: omcproxy-2018-12-14-722151f0/src/msgcl.c
+===================================================================
+--- /dev/null
++++ omcproxy-2018-12-14-722151f0/src/msgcl.c
+@@ -0,0 +1,63 @@
++/***************************************************************************
++*  Copyright (C) 2008-2020 ZyXEL Communications, Corp.
++*  All Rights Reserved.
++****************************************************************************/
++
++#include <stdio.h>
++#include <string.h>
++#include <unistd.h>
++#include <sys/types.h>
++#include <signal.h>
++#include <sys/socket.h>
++#include <sys/un.h>
++#include <arpa/inet.h>
++#include <stdint.h>
++
++#include "zyutil.h"
++#include "omcpzcfg.h"
++
++
++int omcproxy_msg_send(const char *msg)
++{
++   size_t sent;
++   skconn_t skCltLocalConn = { AF_UNIX, SOCK_STREAM, -300, 0, 0, 0, {0}};
++
++   if(strstr(msg, "igmpstatus")) {
++      if(zyUtilTcpConnInit(AF_UNIX, OMCPROXY_IGMP_IPC_ADDR, skCltLocalConn.port, &skCltLocalConn) < 0) {
++         printf("Init igmpstatus skCltLocalConn failed\n");
++         return -1;
++      }
++   }
++   else if(strstr(msg, "mldstatus")) {
++      if(zyUtilTcpConnInit(AF_UNIX, OMCPROXY_MLD_IPC_ADDR, skCltLocalConn.port, &skCltLocalConn) < 0) {
++         printf("Init mldstatus skCltLocalConn failed\n");
++         return -1;
++      }
++   }
++
++   if(skCltLocalConn.st != -300) {
++      if((sent = (size_t)send(skCltLocalConn.st, msg, strlen(msg), 0)) == strlen(msg)) {
++         printf("%s: %s\n", __FUNCTION__, msg);
++      }
++   }else {
++      return -1;
++   }
++
++   if(skCltLocalConn.st)
++      close(skCltLocalConn.st);
++
++   return 1;
++}
++
++int main(int argc, char *argv[])
++{
++
++   if(argc < 2) exit(-1);
++
++   //printf("%s: \'%s\'\n", argv[0], argv[1]);
++   omcproxy_msg_send((const char *)argv[1]);
++
++
++   exit(0);
++
++}
+Index: omcproxy-2018-12-14-722151f0/src/proxy.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/proxy.c
++++ omcproxy-2018-12-14-722151f0/src/proxy.c
+@@ -17,6 +17,7 @@
+ 
+ #include <errno.h>
+ #include <libubox/list.h>
++#include <stdio.h>
+ 
+ #include "querier.h"
+ #include "client.h"
+@@ -218,6 +219,43 @@ static int proxy_unset(struct proxy *pro
+ 	return (found) ? 0 : -ENOENT;
+ }
+ 
++#ifdef ZYXEL_OMCPROXY
++#include <json/json_util.h>
++int groups_dump(const char *ifname, struct groups *groups, struct json_object * );
++void proxy_dump()
++{
++	struct json_object *groupsobj = NULL;
++	struct proxy *proxy, *n;
++
++	groupsobj = json_object_new_array();
++
++	list_for_each_entry_safe(proxy, n, &proxies, head) {
++		if (!(proxy->flags & _PROXY_UNUSED)) {
++			struct querier_user *user, *n;
++			list_for_each_entry_safe(user, n, &proxy->querier.ifaces, head) {
++				struct querier_user_iface *q = container_of(user, struct querier_user_iface, user);
++				int ifindex = (q && q->iface) ? q->iface->ifindex : 0;
++				char ifname[IF_NAMESIZE] = {0};
++				if(ifindex > 0 && if_indextoname((unsigned int)ifindex, ifname) && strstr(ifname, "br")) {
++					struct groups *groups = &(q->iface->groups);
++
++					printf("%s: downlink %s: groups count=%u\n", __func__, ifname, (int )groups->groups.count);
++					groups_dump(ifname, groups, groupsobj);
++
++				}
++			}
++
++		}
++	}
++
++	if(groupsobj) {
++		json_object_to_file((const char *)"/var/igmpstatus.json", groupsobj);
++		json_object_put(groupsobj);
++	}
++
++}
++#endif
++
+ // Add / update proxy
+ int proxy_set(int uplink, const int downlinks[], size_t downlinks_cnt, enum proxy_flags flags)
+ {
+Index: omcproxy-2018-12-14-722151f0/src/proxy.h
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/proxy.h
++++ omcproxy-2018-12-14-722151f0/src/proxy.h
+@@ -40,6 +40,6 @@ enum proxy_flags {
+ 
+ int proxy_set(int uplink, const int downlinks[], size_t downlinks_cnt, enum proxy_flags flags);
+ 
+-
++void proxy_dump();
+ void proxy_update(bool all);
+ void proxy_flush(void);
+Index: omcproxy-2018-12-14-722151f0/src/groups.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/groups.c
++++ omcproxy-2018-12-14-722151f0/src/groups.c
+@@ -490,8 +490,121 @@ void groups_update_timers(struct groups
+ 	rearm_timer(groups, llqt - now);
+ }
+ 
+-// Update state of a given group (on reception of node's IGMP/MLD packets)
+ #ifdef ZYXEL_OMCPROXY
++#include <json/json_tokener.h>
++void ummap_ntop(char *addr4buf, int len, struct in6_addr *addr6)
++{
++	struct in_addr addr4;
++
++	memset(&addr4, 0, sizeof(struct in_addr));
++	addr4.s_addr = addr6->s6_addr32[3];
++	inet_ntop(AF_INET, &addr4, addr4buf, len);
++}
++
++int groups_dump(const char *ifname, struct groups *groups, struct json_object *groupsobj)
++{
++	struct group *group;
++
++	if(!groupsobj)
++		return 0;
++
++
++	groups_for_each_group(group, groups) {
++		if(IN6_IS_ADDR_V4MAPPED(&group->addr)) {
++			char groupbuf[INET6_ADDRSTRLEN] = {0};
++
++			//if(!group->hosts && !group->sshosts)
++			//	continue;
++			//
++			//if((group->hosts && !group->hosts->count) && (group->sshosts && !group->sshosts->count))
++			//	continue;
++
++			struct json_object *obj = json_object_new_object();
++			ummap_ntop(groupbuf, INET6_ADDRSTRLEN, &group->addr);
++
++			json_object_object_add(obj, "intf", json_object_new_string(ifname));
++			json_object_object_add(obj, "grp", json_object_new_string((const char *)groupbuf));
++
++			struct json_object *memobjs = json_object_new_array();
++			json_object_object_add(obj, "member", memobjs);
++			json_object_array_add(groupsobj, obj);
++
++			struct json_object *sourceobjs = json_object_new_array();
++
++			struct group_source *s, *n;
++			list_for_each_entry_safe(s, n, &group->sources, head) {
++				char srcaddrbuf[INET6_ADDRSTRLEN] = {0};
++				//inet_ntop(AF_INET6, &s->addr, srcaddrbuf, INET6_ADDRSTRLEN);
++				ummap_ntop(srcaddrbuf, INET6_ADDRSTRLEN, &s->addr);
++				struct json_object *srcaddrobj = json_object_new_object();
++				json_object_object_add(srcaddrobj, "addr", json_object_new_string((const char *)srcaddrbuf));
++				json_object_array_add(sourceobjs, srcaddrobj);
++			}
++
++			struct json_object *hostobjs = json_object_new_object();
++
++			struct lh_table *hosts = group->hosts;
++			struct group_host *host;
++			struct lh_entry *entry, *next;
++			if(hosts && hosts->count) {
++				entry = hosts->head;
++				while(entry){
++					char hostaddrbuf[INET6_ADDRSTRLEN] = {0};
++
++					host = (struct group_host *)entry->v;
++					next = entry->next;
++					//inet_ntop(AF_INET6, &host->addr, hostaddrbuf, INET6_ADDRSTRLEN);
++					ummap_ntop(hostaddrbuf, INET6_ADDRSTRLEN, &host->addr);
++					struct json_object *hstobj = json_object_new_object();
++					json_object_object_add(hstobj, "host", json_object_new_string((const char *)hostaddrbuf));
++					json_object_object_add(hostobjs, hostaddrbuf, hstobj);
++					entry = next;
++				}
++			}
++
++			hosts = group->sshosts;
++			if(hosts && hosts->count) {
++				entry = hosts->head;
++				while(entry){
++					char hostaddrbuf[INET6_ADDRSTRLEN] = {0};
++
++					host = (struct group_host *)entry->v;
++					next = entry->next;
++					//inet_ntop(AF_INET6, &host->addr, hostaddrbuf, INET6_ADDRSTRLEN);
++					ummap_ntop(hostaddrbuf, INET6_ADDRSTRLEN, &host->addr);
++					struct json_object *hstobj = json_object_object_get(hostobjs, hostaddrbuf) ? json_object_object_pull(hostobjs, hostaddrbuf) : NULL;
++					if(!hstobj) {
++						hstobj = json_object_new_object();
++						json_object_object_add(hstobj, "host", json_object_new_string((const char *)hostaddrbuf));
++					}
++					if(sourceobjs) {
++						json_object_object_add(hstobj, "source", sourceobjs);
++						sourceobjs = NULL;
++					}
++					json_object_array_add(memobjs, hstobj);
++					entry = next;
++				}
++			}
++
++			json_object_object_foreach(hostobjs, paramstr, htobj) {
++				if(!strlen(paramstr))
++					continue;
++				struct json_object *hstobj = json_tokener_parse(json_object_to_json_string(htobj));
++				json_object_object_add(hstobj, "source", json_object_new_array());
++				json_object_array_add(memobjs, hstobj);
++			}
++
++			json_object_put(hostobjs);
++
++		}else {
++
++		}
++	}
++
++	return json_object_object_length(groupsobj);
++}
++
++// Update state of a given group (on reception of node's IGMP/MLD packets)
+ void groups_update_state(struct groups *groups,
+ 		const struct in6_addr *groupaddr,
+ 		const struct in6_addr *addrs, size_t len,
+Index: omcproxy-2018-12-14-722151f0/src/omcpzcfg.c
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/omcpzcfg.c
++++ omcproxy-2018-12-14-722151f0/src/omcpzcfg.c
+@@ -1,6 +1,7 @@
+ 
+ 
+ #include <stdlib.h>
++#include <stdio.h>
+ #include <sys/types.h>
+ #include <stdbool.h>
+ #include <string.h>
+@@ -36,6 +37,10 @@ void omcpzcfg_init(char *app)
+ 		omcp_app_mld = true;
+ 	}
+ 
++	if(!zcfg_omcp_obj)
++		exit(-1);
++
++
+ 	fl = ((val = (omcpzcfg_param_value((const char *)"FastLeave"))) >= 0) ? val : fl;
+ }
+ 
+@@ -89,7 +94,6 @@ int omcpzcfg_ifname(char *ifname, int le
+ 	return value ? 1 : -1;
+ }
+ 
+-
+ void omcpzcfg_set_mldv(int value)
+ {
+ 	if(mldv > 0 && mldv < 3)
+Index: omcproxy-2018-12-14-722151f0/src/omcpzcfg.h
+===================================================================
+--- omcproxy-2018-12-14-722151f0.orig/src/omcpzcfg.h
++++ omcproxy-2018-12-14-722151f0/src/omcpzcfg.h
+@@ -30,6 +30,10 @@ struct source {
+ #define omcpzcfg_app_igmp() (omcp_app_igmp)
+ #define omcpzcfg_app_mld() (omcp_app_mld)
+ 
++
++#define OMCPROXY_IGMP_IPC_ADDR "/tmp/omcproxy_igmp_ipc"
++#define OMCPROXY_MLD_IPC_ADDR "/tmp/omcproxy_mld_ipc"
++
+ void omcpzcfg_init(char *app);
+ int omcpzcfg_param_value(const char *parm_name);
+ int omcpzcfg_ifname(char *ifname, int len);

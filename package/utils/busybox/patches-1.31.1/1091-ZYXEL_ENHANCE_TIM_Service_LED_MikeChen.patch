@@ -1,0 +1,32 @@
+Index: busybox-1.31.1/loginutils/login.c
+===================================================================
+--- busybox-1.31.1.orig/loginutils/login.c	2021-03-23 14:55:18.948707161 +0800
++++ busybox-1.31.1/loginutils/login.c	2021-03-23 14:55:44.124707282 +0800
+@@ -1131,7 +1131,12 @@
+ 	if (pw->pw_uid == 0)
+ 		syslog(LOG_INFO, "root login%s", fromhost);
+ 	if (!strncmp("p",short_tty,1))
++	{
++#ifdef ABOG_CUSTOMIZATION
++		zyTouchFile(getpid(), addr);
++#endif
+ 		syslog(LOG_INFO, "Account: User '%s' login from the host %s by telnetd.", username, addr);
++	}
+ 	if (ENABLE_FEATURE_CLEAN_UP)
+ 		free(fromhost);
+ 
+Index: busybox-1.31.1/networking/telnetd.c
+===================================================================
+--- busybox-1.31.1.orig/networking/telnetd.c	2021-03-23 14:55:18.712707159 +0800
++++ busybox-1.31.1/networking/telnetd.c	2021-03-23 14:55:44.124707282 +0800
+@@ -592,6 +592,10 @@
+ {
+ 	struct tsession *t;
+ 
++#ifdef ABOG_CUSTOMIZATION
++	zyRemoveFile(ts->shell_pid);
++#endif
++
+ 	if (option_mask32 & OPT_INETD)
+ 		exit(EXIT_SUCCESS);
+ 

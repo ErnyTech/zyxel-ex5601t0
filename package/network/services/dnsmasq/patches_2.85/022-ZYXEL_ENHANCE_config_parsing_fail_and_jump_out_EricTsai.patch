@@ -1,0 +1,31 @@
+Index: dnsmasq-2.85/src/option.c
+===================================================================
+--- dnsmasq-2.85.orig/src/option.c	2021-04-21 17:43:34.642268561 +0800
++++ dnsmasq-2.85/src/option.c	2021-04-21 17:16:50.325919700 +0800
+@@ -4964,8 +4964,12 @@
+                _(" at line %d of %s"), lineno, file);
+       if (hard_opt != 0)
+         my_syslog (LOG_ERR, "%s", daemon->namebuff);
+-      else
+-        die ("%s", daemon->namebuff, EC_BADCONF);
++      else{
++        //die("%s", daemon->namebuff, EC_BADCONF);
++        my_syslog(MS_DHCP | LOG_ERR, _("%s\n"), daemon->namebuff);
++
++        continue;
++      }
+     }
+   }
+
+Index: dnsmasq-2.85/src/log.c
+===================================================================
+--- dnsmasq-2.85.orig/src/log.c	2021-04-21 17:43:34.530268564 +0800
++++ dnsmasq-2.85/src/log.c	2021-04-21 17:16:26.180591600 +0800
+@@ -336,6 +336,7 @@
+     }
+     va_start (ap, format);
+     vsyslog (priority, format, ap);
++    vprintf(format, ap);
+     va_end (ap);
+ #endif
+ 

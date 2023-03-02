@@ -1,0 +1,67 @@
+Index: linux-5.4.168/net/netfilter/nf_conntrack_standalone.c
+===================================================================
+--- linux-5.4.168.orig/net/netfilter/nf_conntrack_standalone.c
++++ linux-5.4.168/net/netfilter/nf_conntrack_standalone.c
+@@ -106,6 +106,15 @@ struct ct_iter_state {
+ 	u_int64_t time_now;
+ };
+ 
++#ifdef CONFIG_ZYXEL_NF_SESSION_CTL
++struct sc_iter_state {
++	struct seq_net_private p;
++	unsigned int bucket;
++	u_int64_t time_now;
++};
++#endif
++
++
+ static struct hlist_nulls_node *ct_get_first(struct seq_file *seq)
+ {
+ 	struct ct_iter_state *st = seq->private;
+@@ -391,11 +400,11 @@ static const struct seq_operations ct_se
+ static struct hlist_nulls_node *sess_ctl_get_first(struct seq_file *seq)
+ {
+ 	struct net *net = seq_file_net(seq);
+-	struct ct_iter_state *st = seq->private;
++	struct sc_iter_state *st = seq->private;
+ 	struct hlist_nulls_node *n;
+ 
+ 	for (st->bucket = 0;
+-	     st->bucket < st->htable_size;
++	     st->bucket < nf_conntrack_htable_size;
+ 	     st->bucket++) {
+ 		n = rcu_dereference(hlist_nulls_first_rcu(&net->ct.session_control_table[st->bucket]));
+ 		if (!is_a_nulls(n))
+@@ -407,12 +416,12 @@ static struct hlist_nulls_node *sess_ctl
+ static struct hlist_nulls_node *sess_ctl_get_next(struct seq_file *seq, struct hlist_nulls_node *head)
+ {
+ 	struct net *net = seq_file_net(seq);
+-	struct ct_iter_state *st = seq->private;
++	struct sc_iter_state *st = seq->private;
+ 
+ 	head = rcu_dereference(hlist_nulls_next_rcu(head));
+ 	while (is_a_nulls(head)) {
+ 		if (likely(get_nulls_value(head) == st->bucket)) {
+-			if (++st->bucket >= st->htable_size)
++			if (++st->bucket >= nf_conntrack_htable_size)
+ 				return NULL;
+ 		}
+ 		head = rcu_dereference(hlist_nulls_first_rcu(&net->ct.session_control_table[st->bucket]));
+@@ -433,7 +442,7 @@ static struct hlist_nulls_node *sess_ctl
+ static void *sess_ctl_seq_start(struct seq_file *seq, loff_t *pos)
+ 	__acquires(RCU)
+ {
+-		struct ct_iter_state *st = seq->private;
++		struct sc_iter_state *st = seq->private;
+ 
+ 		st->time_now = ktime_get_real_ns();
+     rcu_read_lock();
+@@ -1290,7 +1299,7 @@ static int nf_conntrack_standalone_init_
+ 	{
+         /* kernel from 4.1 to 4.19, apply new proc_create_net mechanism */
+         struct proc_dir_entry *proc;
+-        proc = proc_create_net("nf_session_ctl", 0440, net->proc_net, &sess_ctl_seq_ops, sizeof(struct ct_iter_state));
++        proc = proc_create_net("nf_session_ctl", 0440, net->proc_net, &sess_ctl_seq_ops, sizeof(struct sc_iter_state));
+         if (!proc)
+             goto out_unregister_netfilter;
+ 

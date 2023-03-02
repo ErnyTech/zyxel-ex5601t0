@@ -1,0 +1,46 @@
+Index: clinkc/include/cybergarage/http/chttp.h
+===================================================================
+--- clinkc.orig/include/cybergarage/http/chttp.h	2020-10-15 11:31:47.904303410 +0800
++++ clinkc/include/cybergarage/http/chttp.h	2020-10-15 11:32:10.216303573 +0800
+@@ -157,6 +157,10 @@
+ #define CG_HTTP_CSP "Content-Security-Policy"
+ #define CG_HTTP_CSP_SELF "frame-ancestors \'self\'"
+ #define CG_HTTP_CSP_NONE "frame-ancestors \'none\'"
++#ifdef ZYXEL_SUPPORT_NESSUS
++#define CG_HTTP_HSTS "Strict-Transport-Security"
++#define CG_HTTP_HSTS_CONTEXT "max-age=31536000; includeSubDomains"
++#endif
+ //Is a marker used by the server to indicate that the MIME types advertised in the Content-Type headers should not be changed and be followed.
+ #define CG_HTTP_X_CTO "X-Content-Type-Options"
+ #define CG_HTTP_X_CTO_NOSNIFF "nosniff"
+Index: clinkc/src/cybergarage/http/chttp_request.c
+===================================================================
+--- clinkc.orig/src/cybergarage/http/chttp_request.c	2020-10-15 11:17:38.312297209 +0800
++++ clinkc/src/cybergarage/http/chttp_request.c	2020-10-15 11:34:16.080304491 +0800
+@@ -953,6 +953,9 @@
+ 	//prevent ClickJacking attack
+ 	cg_http_response_setheadervalue(httpRes, CG_HTTP_XFRAME, CG_HTTP_XFRAME_SAMEORIGIN);
+ 	cg_http_response_setheadervalue(httpRes, CG_HTTP_CSP, CG_HTTP_CSP_SELF);
++#ifdef ZYXEL_SUPPORT_NESSUS
++	cg_http_response_setheadervalue(httpRes, CG_HTTP_HSTS, CG_HTTP_HSTS_CONTEXT);
++#endif
+ 	//is a marker used by the server to indicate that the MIME types advertised in the Content-Type headers should not be changed and be followed.
+ 	cg_http_response_setheadervalue(httpRes, CG_HTTP_X_CTO, CG_HTTP_X_CTO_NOSNIFF);
+ 	//provide protections for users of older web browsers that don't yet support CSP.
+@@ -1019,6 +1022,9 @@
+ 		//prevent ClickJacking attack
+ 		cg_http_response_setheadervalue(httpRes, CG_HTTP_XFRAME, CG_HTTP_XFRAME_SAMEORIGIN);
+ 		cg_http_response_setheadervalue(httpRes, CG_HTTP_CSP, CG_HTTP_CSP_SELF);
++#ifdef ZYXEL_SUPPORT_NESSUS
++		cg_http_response_setheadervalue(httpRes, CG_HTTP_HSTS, CG_HTTP_HSTS_CONTEXT);
++#endif
+ 		//is a marker used by the server to indicate that the MIME types advertised in the Content-Type headers should not be changed and be followed.
+ 		cg_http_response_setheadervalue(httpRes, CG_HTTP_X_CTO, CG_HTTP_X_CTO_NOSNIFF);
+ 		//provide protections for users of older web browsers that don't yet support CSP.
+@@ -1430,4 +1436,4 @@
+ 	return httpReq->httpRes;
+ 	
+ }
+-//#endif
+\ No newline at end of file
++//#endif

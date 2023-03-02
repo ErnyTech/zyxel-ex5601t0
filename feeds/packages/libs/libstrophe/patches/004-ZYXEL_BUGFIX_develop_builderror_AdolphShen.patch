@@ -1,0 +1,29 @@
+Index: libstrophe-0.10.0/src/sock.c
+===================================================================
+--- libstrophe-0.10.0.orig/src/sock.c
++++ libstrophe-0.10.0/src/sock.c
+@@ -29,6 +29,7 @@
+ #include <sys/socket.h>
+ #include <netinet/in.h>
+ #include <netinet/tcp.h>
++//#include <linux/tcp.h>
+ #include <netdb.h>
+ #include <fcntl.h>
+ #endif
+@@ -109,6 +110,8 @@ sock_t sock_connect(const char *const ho
+     return sock;
+ }
+ //ZYXEL set TCP_USER_TIMEOUT
++#define TCP_USER_TIMEOUT 18
++
+ int sock_set_timeout(const sock_t sock, int timeout)
+ {
+ 	if (-1 == setsockopt(sock, IPPROTO_TCP, TCP_USER_TIMEOUT, &timeout, sizeof (timeout))) {
+@@ -116,6 +119,7 @@ int sock_set_timeout(const sock_t sock,
+ 	}
+ }
+ 
++
+ int sock_set_keepalive(const sock_t sock, int timeout, int interval)
+ {
+     int ret;

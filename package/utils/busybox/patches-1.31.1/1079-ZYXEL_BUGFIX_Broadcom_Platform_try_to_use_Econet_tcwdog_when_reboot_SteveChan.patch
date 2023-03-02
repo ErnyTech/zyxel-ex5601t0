@@ -1,0 +1,23 @@
+Index: busybox-1.31.1/init/init.c
+===================================================================
+--- busybox-1.31.1.orig/init/init.c	2021-03-31 19:51:25.248133731 +0800
++++ busybox-1.31.1/init/init.c	2021-03-31 19:27:49.076070800 +0800
+@@ -961,15 +961,17 @@
+ 
+ 	kill(-1, SIGKILL);
+ 	message(L_CONSOLE, "Sent SIG%s to all processes", "KILL");
++#ifdef PLATFORM_ECONET
+ #ifdef  TCSUPPORT_WAN_GPON
+ 	message(L_CONSOLE | L_LOG, "Disable PON PHY!!");
+ 	system("echo gpon startup 2 > /proc/gpon/debug");
+ 	sleep(1);
+-#endif
++#endif //#ifdef TCSUPPORT_WAN_GPON
+ 	sync();
+ 	/*Use the watchdog reset system*/
+ 	system("killall tcwdog");
+ 	system("echo 1 > /proc/watchdog_reset");
++#endif //#ifdef PLATFORM_ECONET
+ 	sync();
+ 	/*sleep(1); - callers take care about making a pause */
+ }

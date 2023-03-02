@@ -1,0 +1,13 @@
+Index: busybox-1.31.1/networking/wget.c
+===================================================================
+--- busybox-1.31.1.orig/networking/wget.c	2021-04-13 20:45:51.949893555 +0800
++++ busybox-1.31.1/networking/wget.c	2021-04-13 20:47:18.513891058 +0800
+@@ -1456,7 +1456,7 @@
+ 
+ 	redir_limit = 16;
+  resolve_lsa:
+-	lsa = xhost2sockaddr(server.host, server.port);
++	lsa = host2sockaddr(server.host, server.port);
+ #if defined(ZCFG_SUPPORT) //TR143
+ 	if(!lsa) {
+ 		strcpy(DiagnosticsState, "Error_InitConnectionFailed");

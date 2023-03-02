@@ -1,0 +1,19 @@
+Index: linux-5.4.168/net/netfilter/xt_nat.c
+===================================================================
+--- linux-5.4.168.orig/net/netfilter/xt_nat.c
++++ linux-5.4.168/net/netfilter/xt_nat.c
+@@ -49,6 +49,14 @@ static void xt_nat_convert_range(struct
+ 	dst->max_addr.ip = src->max_ip;
+ 	dst->min_proto	 = src->min;
+ 	dst->max_proto	 = src->max;
++
++    /*+++ Kide@zyxel:
++     * Support one-to-one port mapping. __TELEFONICA__, ZyXEL Stan Su, 20120307.
++     */
++    dst->mappingFlag = src->mappingFlag;
++    dst->mappingMin = src->mappingMin;
++    dst->mappingMax = src->mappingMax;
++    /*---*/
+ }
+ 
+ static unsigned int

@@ -1,0 +1,250 @@
+Index: pure-ftpd-1.0.30/src/ftp_parser.c
+===================================================================
+--- pure-ftpd-1.0.30.orig/src/ftp_parser.c	2020-09-04 11:27:03.584205850 +0800
++++ pure-ftpd-1.0.30/src/ftp_parser.c	2020-09-04 14:05:26.745269868 +0800
+@@ -355,7 +355,7 @@
+ #ifdef MSTC_TTNET_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
+ 			char *ReturnLoginValue[16] = {0}; 
+ 			dopass(arg,ReturnLoginValue);
+-			if ( strcmp(ReturnLoginValue, "2")) {
++			if ( !strcmp(ReturnLoginValue, "2")) {
+ 				//control_printf(SL_FAILURE, "421 This user is not allow to log in.");
+ 				printf("104051 FTP Server Login UserName or Password Error\n");
+ 				exit(0);
+Index: pure-ftpd-1.0.30/src/ftpd.c
+===================================================================
+--- pure-ftpd-1.0.30.orig/src/ftpd.c	2020-09-04 11:27:03.584205850 +0800
++++ pure-ftpd-1.0.30/src/ftpd.c	2020-09-04 14:07:12.730106252 +0800
+@@ -2061,63 +2061,160 @@
+ 
+ #ifdef MSTC_TTNET_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
+ //Send message to ssk for get some information of User info.
+-zcfgRet_t queryUserInfo(GetUserInfoMsgBody *GetUserInfo,char *password)
++bool checkIsFromWan(char *addr){
++
++	char localAddr[64] = {0};
++	bool isFromWan = false;
++	objIndex_t ipIfaceIid, ipv4AddressIid;
++	rdm_IpIface_t *ipIfaceJobj = NULL;
++	rdm_IpIfaceV4Addr_t *ipIfacev4AddressJobj = NULL;
++	unsigned int n;
++	char subnetMask[32] = {0};
++	char perfix[10]={0};
++	//CgHttpResponse *httpRes = NULL;
++
++	strcpy(localAddr,addr);
++	IID_INIT(ipIfaceIid);
++	IID_INIT(ipv4AddressIid);
++	if(ipType(localAddr) == AF_INET)//if is v4 address, need to check
++	{
++		while((zcfgFeObjStructGetNextWithoutUpdate(RDM_OID_IP_IFACE, &ipIfaceIid, (void **)&ipIfaceJobj)) == ZCFG_SUCCESS){
++			if(strstr(ipIfaceJobj->X_ZYXEL_IfName, "br") == NULL){
++				ipv4AddressIid.idx[0] = ipIfaceIid.idx[0];
++				ipv4AddressIid.idx[1] = 1;
++				ipv4AddressIid.level = 2;
++				if(zcfgFeObjStructGetWithoutUpdate(RDM_OID_IP_IFACE_V4_ADDR, &ipv4AddressIid, (void **)&ipIfacev4AddressJobj) == ZCFG_SUCCESS){
++					strcpy(subnetMask, ipIfacev4AddressJobj->SubnetMask);
++					inet_pton(AF_INET, subnetMask, &n);
++					int i = 0;
++
++					n = ntohl(n);
++					while (n) {
++							n = n << 1;
++							i++;
++					}
++					sprintf(perfix, "%d", i);
++
++					if((localAddr) && (checkCidrBlock(ipIfacev4AddressJobj->IPAddress, perfix, addr) == 1)){
++						isFromWan = true;
++						//strcpy(userName, (char *)json_object_get_string(json_object_object_get(logCfgJobj, "Username")));
++						zcfgFeObjStructFree(ipIfaceJobj);
++						zcfgFeObjStructFree(ipIfacev4AddressJobj);
++						break;
++					}
++					zcfgFeObjStructFree(ipIfacev4AddressJobj);
++				}
++			}
++			zcfgFeObjStructFree(ipIfaceJobj);
++		}
++	}else{
++		/*Not support the IPv6 yet*/
++		printf("%s(%d): [CBT] IPv6 are not support user_login_process_v4 yet.. \n",__FUNCTION__,__LINE__);
++		isFromWan = false;
++	}
++	if(isFromWan)
++		return true;
++	else
++		return false;
++}
++
++bool queryUserInfo(char *password,char *hostip)
+ {
+-	void *msgBuf[sizeof(zcfgMsg_t) + sizeof(GetUserInfoMsgBody)] ={0};
+-	zcfgMsg_t *msg = (zcfgMsg_t *)msgBuf;
+-	GetUserInfoMsgBody *body = (GetUserInfoMsgBody*) (msg+1);
+-   	void *re_msgBuf;
++	rdm_TtUser_t *UsersUserObj= NULL;
++	objIndex_t iidStack,userIid;
++	rdm_ZyLogCfgGpAccount_t * UserLoginInfoObj=NULL;
++	char *copy_protocol = NULL;
++	char *token;
++	char *encodepassword = NULL;
+    	zcfgRet_t ret = ZCFG_SUCCESS;
++	bool isLan = false,isWan = false;
++	char username[257]={0},paword[257]={0};
++	bool IsAllow = false;
+    
+-	msg->type = ZCFG_MSG_FTP_USER_INFO;
+-	msg->srcEid = ZCFG_EID_PUREFTPD;  	
+-	msg->dstEid = ZCFG_EID_ESMD;
+-	msg->length = sizeof(GetUserInfoMsgBody);
++	IID_INIT(userIid);
+ 
+-   	strncpy(body->username,account, 257);
+-   	strncpy(body->password,password, 257);
++	strncpy(username,account, 257);
++	strncpy(paword,password, 257);
+ 
+-   	if ((ret = zcfgMsgRepSend(msg)) != ZCFG_SUCCESS)
++	IID_INIT(iidStack);
++	while ((ret = zcfgFeObjStructGetNext(RDM_OID_TT_USER, &iidStack, (void **) &UsersUserObj)) == ZCFG_SUCCESS)
+    	{
+-		printf("Failed to send message (ret=%d)", ret);
+-   	}
+-  	else
++		if(strcmp(UsersUserObj->Username, username) == 0 )
+    	{
+-		if ((ret = zcfgMsgReqRecv(&msg, 140)) != ZCFG_SUCCESS)
++			userIid.level = 2;
++			//Mapping to original object.
++			if(UsersUserObj->Level == 1)//Level 1
+       	{
+-         	printf("Failed to receive message (ret=%d)", ret);
++				userIid.idx[0] = 2;
++				userIid.idx[1] = 1; 
++				//user_iidStack.idx[0] = 1
+       	}
+-      	else
++			else//Level 2
+       	{
+-			switch(msg->type)
++				userIid.idx[0] = 1; 
++				userIid.idx[1] = 1;
++				//user_iidStack.idx[0] = 1
++			}
++
++			if(zcfgFeObjStructGet(RDM_OID_ZY_LOG_CFG_GP_ACCOUNT, &userIid, (void **)&UserLoginInfoObj) == ZCFG_SUCCESS) {			
++				bool isFromWAN = false;
++				if(checkIsFromWan(hostip)){
++					isFromWAN = true;
++				}
++
++				//if(strcmp(UserLoginInfoObj->Password, paword) == 0){				
++					if(UsersUserObj->Enable == 1){
++						//LAN
++						if( (isFromWAN == false) && (UsersUserObj->LocalAccessCapable == 1))
+          	{
+-         		case ZCFG_MSG_FTP_USER_INFO:
+-         			if(msg->length != sizeof(GetUserInfoMsgBody))
++							copy_protocol = strdup(UsersUserObj->Allowed_LA_Protocols);
++							if(copy_protocol !=NULL){
++								token = strtok(copy_protocol, ",");
++								while (token != NULL) {
++									if( strcmp(token, "FTP") == 0){
++										IsAllow = true;
++										break;
++									}
++									token = strtok(NULL, ",");
++								}
++								free(copy_protocol);
++							}	
++						}
++						//WAN
++						else if( (isFromWAN == true) && (UsersUserObj->RemoteAccessCapable == 1))
+          			{
+-         				printf("Invalid Data Length: received %d != expected %d", msg->length, sizeof(GetUserInfoMsgBody));               
+-         				ret = ZCFG_INTERNAL_ERROR;
++							copy_protocol = strdup(UsersUserObj->Allowed_RA_Protocols);
++							if(copy_protocol !=NULL){
++								token = strtok(copy_protocol, ",");
++								while (token != NULL) {
++									if( strcmp(token, "FTP") == 0){
++										IsAllow = true;
+          				break;
+          			}
+-         			re_msgBuf = (GetUserInfoMsgBody *)(msg + 1);
+-         			memcpy(GetUserInfo,re_msgBuf,sizeof(GetUserInfoMsgBody));
++									token = strtok(NULL, ",");
++								}
++								free(copy_protocol);
++							}
++						}
++					}
++				//}
++				zcfgFeObjStructFree(UserLoginInfoObj);
++			}
++			zcfgFeObjStructFree(UsersUserObj);
+          			break;
+-         	
+-         		default:
+-         			printf("Invalid message type (%x), expects CMS_MSG_FTP_USER_INFO (%x)", (unsigned int)msg->type,ZCFG_MSG_FTP_USER_INFO);
+-         			ret = ZCFG_INTERNAL_ERROR;
+          	}
++		zcfgFeObjStructFree(UsersUserObj);
+       	} 
++			
++   	return IsAllow;
+ 	}
+-   	return ret;
+-}
+-int UserAllow(char *password) 
++int UserAllow(char *password,char *hostip) 
+ {
+-	GetUserInfoMsgBody *GetUserInfo;
+-	
+-	if (queryUserInfo(GetUserInfo,password) != ZCFG_SUCCESS)
+-		return -1;
++	bool IsAllow = false;
+ 
+-	if(GetUserInfo->IsAllow == 1)
++	IsAllow = queryUserInfo(password,hostip);
++
++	if(IsAllow == 1)
+ 		return 0;
+ 
+ 	return -1;
+@@ -2280,14 +2377,9 @@
+ 	}
+ 	
+ #ifdef MSTC_TTNET_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
+-	//Determine user can log in or not by using FTP.
+-	if (UserAllow(password) == -1)
+-	{
+-		logfile(LOG_WARNING, "This user is not allow to log in.");
+-		printf("This user is not allow to log in.");
+-		strcpy(val, "2");
+-		return;
+-	}
++	char passwordCopy[128] = {0};
++	if(strlen(password))
++		strcpy(passwordCopy,password);
+ #endif	/*_MSTC_, Linda, CPE User Definitions and Rights_END.*/
+ 	
+     authresult = pw_check(account, password, &ctrlconn, &peer);
+@@ -2327,6 +2419,16 @@
+         doreply();
+         return;
+     }
++#ifdef MSTC_TTNET_MULTI_USER /*__MSTC__, Linda, CPE User Definitions and Rights. */
++		//Determine user can log in or not by using FTP.
++		if (UserAllow(passwordCopy,hostip) == -1)
++		{
++			logfile(LOG_WARNING, "This user is not allow to log in.");
++			printf("This user is not allow to log in.");
++			strcpy(val, "2");
++			return;
++		}
++#endif	/*_MSTC_, Linda, CPE User Definitions and Rights_END.*/
+     reset_authorize_fail_cnt(cur_user_idx);
+ #ifdef PER_USER_LIMITS
+     if (per_user_max > 0U && ftpwho_read_count(account) >= per_user_max) {

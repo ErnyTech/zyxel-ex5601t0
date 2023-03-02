@@ -1,0 +1,152 @@
+Index: busybox-1.31.1/networking/wget.c
+===================================================================
+--- busybox-1.31.1.orig/networking/wget.c	2021-04-13 20:50:15.773885944 +0800
++++ busybox-1.31.1/networking/wget.c	2021-04-13 20:51:15.497884221 +0800
+@@ -283,6 +283,11 @@
+ static unsigned long TotalBytesReceived = 0;
+ static unsigned long TotalBytesSent = 0;
+ static unsigned long TestBytesReceived = 0;
++#ifdef ZYXEL_DL_DIAG_CALCULATION
++char Latency[33] = {0};
++static unsigned long BOMTimeMs = 0;
++static unsigned long EOMTimeMs = 0;
++#endif
+ static unsigned long ifBytesReceivedStart = 0;
+ static unsigned long ifBytesReceivedEnd = 0;
+ static unsigned long ifBytesSentStart = 0;
+@@ -339,9 +344,37 @@
+ #if defined(ZCFG_SUPPORT)//TR143
+ zcfgRet_t ResultMsgSend(int msg_type, int payloadLen, const char *payload);
+ static size_t safe_fwrite(void *ptr, size_t size, size_t nmemb, FILE *stream);
++#ifdef ZYXEL_DL_DIAG_CALCULATION
++unsigned long getDateTime(char *buf);
++#else
+ void getDateTime(char *buf);
++#endif
+ 
+ 
++#ifdef ZYXEL_DL_DIAG_CALCULATION
++char* getLatency(char* ip);
++char* getLatency(char* ip){
++	FILE *fpRead;
++	char cmd[513] = {0};
++	char* renewCh;
++
++	strcpy(cmd, "ping ");
++	strcat(cmd, ip);
++	strcat(cmd, " -c 10 | awk 'BEGIN{avg = 0; i = 0} { if($7 ~ /time=*/ ){avg += substr($7,6); i++} } END{ if(i > 2) {print avg/i} else {print 0} }'");
++	fpRead = popen(cmd, "r");
++	if(!fpRead){
++		Latency[0] = '\0';
++		return Latency;
++	}
++
++	fgets(Latency, sizeof(Latency), fpRead);
++	renewCh = strstr(Latency,"\n");
++	if(renewCh) *renewCh= '\0';
++
++	pclose(fpRead);
++	return Latency;
++}
++#endif
+ 
+ static void outputDiagDlData(void)
+ {
+@@ -351,6 +384,9 @@
+ 	char testByteRecv[21] = {0};
+ 	char totalByteRecv[21] = {0};
+ 	char totalByteSent[21] = {0};
++#ifdef ZYXEL_DL_DIAG_CALCULATION
++	char tmpBuf[21] = {0};
++#endif
+ 
+ 	if(!strcmp(DiagnosticsState, "Requested")) {
+ 		strcpy(DiagnosticsState, "Completed");
+@@ -373,6 +409,14 @@
+ 	sprintf(totalByteSent, "%lu", TotalBytesSent);
+ 	json_object_object_add(diag_result, "TotalBytesSent", json_object_new_string(totalByteSent));
+ 
++#ifdef ZYXEL_DL_DIAG_CALCULATION
++	json_object_object_add(diag_result, "X_ZYXEL_Latency", json_object_new_string(Latency));
++	sprintf(tmpBuf, "%lu", EOMTimeMs - BOMTimeMs);
++	json_object_object_add(diag_result, "X_ZYXEL_RoundTripTime", json_object_new_string(tmpBuf));
++	sprintf(tmpBuf, "%.3f", ( (TotalBytesReceived > 0) ? ( (double)(TotalBytesReceived * 8) / 1024 / 1024 ) / ( (double)(EOMTimeMs - BOMTimeMs) / 1000000 ) : 0 ) );
++	json_object_object_add(diag_result, "X_ZYXEL_DownloadSpeed", json_object_new_string(tmpBuf));
++#endif
++
+ 	json_object_object_add(diag_result, "TCPOpenRequestTime", json_object_new_string(TCPOpenRequestTime));
+ 	json_object_object_add(diag_result, "TCPOpenResponseTime", json_object_new_string(TCPOpenResponseTime));
+ 
+@@ -454,7 +498,11 @@
+ 	return ret;
+ }
+ 
++#ifdef ZYXEL_DL_DIAG_CALCULATION
++unsigned long getDateTime(char *buf)
++#else
+ void getDateTime(char *buf)
++#endif
+ {
+ 	struct timeval c_tv;
+ 	struct timezone c_tz;
+@@ -462,7 +510,11 @@
+ 	gettimeofday(&c_tv,&c_tz);
+ 	p = localtime(&c_tv.tv_sec);
+ 	sprintf(buf, "%d-%02d-%02dT%02d:%02d:%02d.%ld", (1900+p->tm_year), (1+p->tm_mon), p->tm_mday, p->tm_hour, p->tm_min, p->tm_sec, c_tv.tv_usec);
++#ifdef ZYXEL_DL_DIAG_CALCULATION
++	return (1000000 * c_tv.tv_sec + c_tv.tv_usec);
++#else
+ 	return;
++#endif
+ }
+ 
+ unsigned long getReceiveByte(char *ifName)
+@@ -1506,6 +1558,10 @@
+  resolve_lsa:
+ 	lsa = host2sockaddr(server.host, server.port);
+ #if defined(ZCFG_SUPPORT) //TR143
++#ifdef ZYXEL_DL_DIAG_CALCULATION
++	strcpy(Latency, getLatency(server.host) );
++#endif
++
+ 	if(!lsa) {
+ 		strcpy(DiagnosticsState, "Error_InitConnectionFailed");
+ 		outputDiagDlData();
+@@ -1754,8 +1810,12 @@
+ 		/* Success responses */
+ 		case 200:
+ #if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++#ifdef ZYXEL_DL_DIAG_CALCULATION
++			BOMTimeMs = getDateTime(BOMTime);
++#else
+ 			getDateTime(BOMTime);
+ #endif
++#endif
+ 			/* fall through */
+ 		case 201: /* 201 Created */
+ /* "The request has been fulfilled and resulted in a new resource being created" */
+@@ -1917,8 +1977,12 @@
+ 		 */
+ 		sfp = prepare_ftp_session(&dfp, &target, lsa);
+ #if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++#ifdef ZYXEL_DL_DIAG_CALCULATION
++		BOMTimeMs = getDateTime(BOMTime);
++#else
+ 		getDateTime(BOMTime);
+ #endif
++#endif
+ 	}
+ 
+ 	free(lsa);
+@@ -1974,7 +2038,11 @@
+ 			(ifBytesSentEnd - ifBytesSentStart) : 0;
+ 		//printf("Sent data end: %ld\n", ifBytesSentEnd);
+ 	}
++#ifdef ZYXEL_DL_DIAG_CALCULATION
++	EOMTimeMs = getDateTime(EOMTime);
++#else
+ 	getDateTime(EOMTime);
++#endif
+ 
+ 	outputDiagDlData();
+ #endif

@@ -1,0 +1,40 @@
+Index: linux-5.4.171/net/bridge/netfilter/ebt_policer.c
+===================================================================
+--- linux-5.4.171.orig/net/bridge/netfilter/ebt_policer.c
++++ linux-5.4.171/net/bridge/netfilter/ebt_policer.c
+@@ -23,6 +23,8 @@
+ #define MODE_TBF   0
+ #define MODE_SRTCM 1
+ #define MODE_TRTCM 2
++/* Kide@zyxel */
++#define CREDITS_PER_JIFFY   (1000/HZ)
+ #endif
+ static DEFINE_SPINLOCK(policer_lock);
+ #if 0
+@@ -64,7 +66,7 @@ ebt_policer_match(const struct sk_buff *
+ 	/* The algorithm used is the Simple Token Bucket Filter (TBF)
+ 	   see net/sched/sch_tbf.c in the linux source tree. */
+ 	case MODE_TBF: 
+-		r->credit += (now - xchg(&r->prev, now)) * r->rate; /* Add TBF cerdit */ 
++		r->credit += (now - xchg(&r->prev, now)) * r->rate * CREDITS_PER_JIFFY; /* Add TBF cerdit */ 
+ 		if (r->credit > r->creditCap) {
+ 			r->credit = r->creditCap;
+ 		}
+@@ -86,7 +88,7 @@ ebt_policer_match(const struct sk_buff *
+ 	/* Single Rate Three Color Marker (srTCM) Mode */
+ 	case MODE_SRTCM:
+ 		/* Add CBS first */
+-		r->credit += (now - xchg(&r->prev, now)) * r->rate; /* Add CBS cerdit */
++		r->credit += (now - xchg(&r->prev, now)) * r->rate * CREDITS_PER_JIFFY; /* Add CBS cerdit */
+ 		if (r->credit > r->creditCap) {
+ 			extraCredit = r->credit - r->creditCap;
+ 			r->credit = r->creditCap;
+@@ -136,7 +138,7 @@ ebt_policer_match(const struct sk_buff *
+ 
+ 	/* Two Rate Three Color Marker (srTCM) Mode */
+ 	case MODE_TRTCM:
+-		timePassed = (now - xchg(&r->prev, now));
++		timePassed = (now - xchg(&r->prev, now)) * CREDITS_PER_JIFFY;
+ 		r->credit += timePassed * r->rate;            /* Add CBS cerdit */
+ 		r->pbsCredit += timePassed * r->pRate;        /* Add PBS cerdit */
+ 		if (r->credit > r->creditCap) {

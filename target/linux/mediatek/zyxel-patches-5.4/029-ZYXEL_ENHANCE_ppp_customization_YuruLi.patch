@@ -1,0 +1,75 @@
+Index: linux-5.4.171/drivers/net/ppp/ppp_generic.c
+===================================================================
+--- linux-5.4.171.orig/drivers/net/ppp/ppp_generic.c
++++ linux-5.4.171/drivers/net/ppp/ppp_generic.c
+@@ -74,6 +74,12 @@
+ #define MPHDRLEN	6	/* multilink protocol header length */
+ #define MPHDRLEN_SSN	4	/* ditto with short sequence numbers */
+ 
++#if 1//defined(ZYXEL)
++#define FIELD0    4        /* ppp device number ppp0, ppp1, the third digit (max 16) */
++#define FIELD1    8        /* if 0, default mode, 1 vlan mux, 2 msc */
++#define FIELD2    19       /* if FILED1 is 0, add no extension, 1 add vlan id, 2 add conId for msc */
++#endif
++
+ /*
+  * An instance of /dev/ppp can be associated with either a ppp
+  * interface unit or a ppp channel.  In both cases, file->private_data
+@@ -997,8 +1003,57 @@ static int ppp_unit_register(struct ppp
+ 	}
+ 	ppp->file.index = ret;
+ 
++#if 1//defined(ZYXEL)
++	if (!ifname_is_set)
++	{
++		unsigned num[3]={0,0,0};
++		unsigned u=unit;
++	
++		/* req_name will beused as ifname and	for
++		* num[1] == 0:  default connection mdoe: ppp0, ppp1...
++		* num[1] == 1:  vlanMux mode: ppp0.100, ppp1.200...
++		* num[1] == 2:  msc (multiple service mode) ppp0_1, ppp1_3...
++		* num[1] == 3:  pppoa0, pppoa1...
++		* num[1] == 4:  pppowwan
++		*/
++		num[0] = u<<(32-(FIELD2+FIELD1+FIELD0))>>(32-FIELD0);
++		num[1] = u<<(32-(FIELD2+FIELD1))>>(32-FIELD1);
++		num[2] = u<<(32-(FIELD2))>>(32-FIELD2);
++		if (num[1] == 0)
++		{
++#if defined(CONFIG_ZYXEL_PPTP_SUPPORT)/* __ZyXEL__, MelissaChen, 20171122, Support PPTP VPN.  */
++			if (num[2] == 11 ){
++				snprintf(ppp->dev->name, IFNAMSIZ, "ppp%d", num[2]);
++			}else
++#endif
++			snprintf(ppp->dev->name, IFNAMSIZ, "ppp%d", num[0]);
++		}
++		else if (num[1] == 1) /* vlan mux */
++		{
++			snprintf(ppp->dev->name, IFNAMSIZ, "ppp%d.%d", num[0], num[2]);
++		}
++		else if (num[1] == 2) /* msc */
++		{
++			snprintf(ppp->dev->name, IFNAMSIZ, "ppp%d_%d", num[0], num[2]);
++		}
++		else if (num[1] == 3) /* pppoa */
++		{
++			snprintf(ppp->dev->name, IFNAMSIZ, "pppoa%d", num[0]);
++		}
++		else if (num[1] == 4){ /* pppowwan */
++			snprintf(ppp->dev->name, IFNAMSIZ, "pppowwan%d", num[0]);
++		}
++#if defined(CONFIG_ZYXEL_L2TP_SUPPORT)
++		else if (num[1] == 5) /* l2tp */
++		{
++			snprintf(ppp->dev->name, IFNAMSIZ, "l2tp%d", num[0]);
++		}
++#endif
++	}
++#else
+ 	if (!ifname_is_set)
+ 		snprintf(ppp->dev->name, IFNAMSIZ, "ppp%i", ppp->file.index);
++#endif
+ 
+ 	mutex_unlock(&pn->all_ppp_mutex);
+ 

@@ -1,0 +1,108 @@
+Index: ppp-2.4.3/pppd/chap-new.c
+===================================================================
+--- ppp-2.4.3.orig/pppd/chap-new.c	2020-09-09 16:17:30.300630896 +0800
++++ ppp-2.4.3/pppd/chap-new.c	2020-09-09 16:31:39.251592041 +0800
+@@ -36,6 +36,15 @@
+ #include "chap-new.h"
+ #include "chap-md5.h"
+ 
++#ifdef CONFIG_TT_CUSTOMIZATION_TR069 
++#include "zcfg_common.h"
++#include "zcfg_fe_rdm_access.h"
++#include "zcfg_msg.h"
++#include "zcfg_net.h"
++
++#include <json/json.h>
++#endif
++
+ #ifdef CHAPMS
+ #include "chap_ms.h"
+ #define MDTYPE_ALL (MDTYPE_MICROSOFT_V2 | MDTYPE_MICROSOFT | MDTYPE_MD5)
+@@ -532,6 +541,29 @@
+ 		return;
+ 	len -= CHAP_HDRLEN;
+ 
++#ifdef CONFIG_TT_CUSTOMIZATION_TR069  
++	if(code == CHAP_FAILURE){
++		struct json_object *ppp_arg = NULL;
++		const char *payload = NULL;
++		int payloadLen = 0;
++		char intfdowncode[64]={0};
++		//char name[64]={0};
++		strcpy(intfdowncode,"PPP disconnection");
++		//strcpy(name,cs->name);
++		
++		ppp_arg = json_object_new_object();
++		json_object_object_add(ppp_arg, "downcode", json_object_new_string(intfdowncode));
++		//json_object_object_add(ppp_arg, "name", json_object_new_string(name));
++		
++		notice("Json PPP %s", json_object_to_json_string(ppp_arg));
++		payload = json_object_to_json_string(ppp_arg);
++		payloadLen = strlen(payload) + 1;
++		pppdMsgSend(ZCFG_MSG_PPPD_USERNAME_FAIL , ZCFG_EID_ESMD, payloadLen, payload);
++		
++		json_object_put(ppp_arg);
++	}
++#endif
++
+ 	switch (code) {
+ 	case CHAP_CHALLENGE:
+ 		chap_respond(cs, id, pkt, len);
+Index: ppp-2.4.3/pppd/upap.c
+===================================================================
+--- ppp-2.4.3.orig/pppd/upap.c	2002-12-05 07:03:33.000000000 +0800
++++ ppp-2.4.3/pppd/upap.c	2020-09-09 16:32:00.953369861 +0800
+@@ -52,6 +52,15 @@
+ #include "pppd.h"
+ #include "upap.h"
+ 
++#ifdef CONFIG_TT_CUSTOMIZATION_TR069 
++#include "zcfg_common.h"
++#include "zcfg_fe_rdm_access.h"
++#include "zcfg_msg.h"
++#include "zcfg_net.h"
++
++#include <json/json.h>
++#endif
++
+ static const char rcsid[] = RCSID;
+ 
+ static bool hide_password = 1;
+@@ -305,6 +314,10 @@
+     upap_lowerdown(unit);
+ }
+ 
++#ifdef CONFIG_TT_CUSTOMIZATION_TR069 /* ZyXEL, ZCFG */
++extern zcfgRet_t pppdMsgSend(uint32_t, zcfgEid_t, int, const char *);
++#endif
++/*
+ 
+ /*
+  * upap_input - Input UPAP packet.
+@@ -342,6 +355,26 @@
+     }
+     len -= UPAP_HEADERLEN;
+ 
++#ifdef CONFIG_TT_CUSTOMIZATION_TR069  
++		if(code == UPAP_AUTHNAK){
++			struct json_object *ppp_arg = NULL;
++			const char *payload = NULL;
++			int payloadLen = 0;
++			char intfdowncode[64]={0};
++			strcpy(intfdowncode,"PPP disconnection");
++			
++			ppp_arg = json_object_new_object();
++			json_object_object_add(ppp_arg, "downcode", json_object_new_string(intfdowncode));
++			
++			notice("Json PPP %s", json_object_to_json_string(ppp_arg));
++			payload = json_object_to_json_string(ppp_arg);
++			payloadLen = strlen(payload) + 1;
++			pppdMsgSend(ZCFG_MSG_PPPD_USERNAME_FAIL , ZCFG_EID_ESMD, payloadLen, payload);
++			
++			json_object_put(ppp_arg);
++		}
++#endif
++
+     /*
+      * Action depends on code.
+      */

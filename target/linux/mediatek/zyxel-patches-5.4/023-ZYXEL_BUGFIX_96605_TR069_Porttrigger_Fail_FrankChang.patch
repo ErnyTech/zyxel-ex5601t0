@@ -1,0 +1,19 @@
+Index: linux-5.4.168/net/netfilter/nf_conntrack_expect.c
+===================================================================
+--- linux-5.4.168.orig/net/netfilter/nf_conntrack_expect.c
++++ linux-5.4.168/net/netfilter/nf_conntrack_expect.c
+@@ -692,7 +692,13 @@ int nf_conntrack_expect_init(void)
+ 		if (!nf_ct_expect_hsize)
+ 			nf_ct_expect_hsize = 1;
+ 	}
+-	nf_ct_expect_max = nf_ct_expect_hsize * 4;
++//	nf_ct_expect_max = nf_ct_expect_hsize * 4;
++
++// Frank:  Fix for the port range of porttrigger
++// BugFix:  #96605  [NAT] Port Triggering(Port Range) can't work.
++
++	nf_ct_expect_max = 1000;
++
+ 	nf_ct_expect_cachep = kmem_cache_create("nf_conntrack_expect",
+ 				sizeof(struct nf_conntrack_expect),
+ 				0, 0, NULL);

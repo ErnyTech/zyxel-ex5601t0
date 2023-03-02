@@ -1,0 +1,103 @@
+Index: libstrophe-0.10.0/src/conn.c
+===================================================================
+--- libstrophe-0.10.0.orig/src/conn.c	2021-07-21 18:06:01.481663795 +0800
++++ libstrophe-0.10.0/src/conn.c	2021-07-21 18:06:54.851431992 +0800
+@@ -72,7 +72,8 @@
+                          unsigned short port,
+                          xmpp_conn_type_t type,
+                          xmpp_conn_handler callback,
+-                         void *const userdata);
++                         void *const userdata,
++						 int keepAlive);
+ 
+ void xmpp_send_error(xmpp_conn_t *const conn,
+                      xmpp_error_type_t const type,
+@@ -515,8 +516,7 @@
+         //port = altport ? altport : _conn_default_port(conn, XMPP_CLIENT);
+ 		printf("ServerConnectAlgorithm is ServerTable,Port setting sucess!\n");
+ 		port = xmppcData->serverPort;
+-		//printf("%d %s\n", __LINE__, __func__);
+-        found = XMPP_DOMAIN_ALTDOMAIN;
++		found = XMPP_DOMAIN_ALTDOMAIN;
+     }
+ #endif
+ 
+@@ -528,7 +528,7 @@
+             rr = rr->next;
+         }
+         rc = _conn_connect(conn, domain, host, port, XMPP_CLIENT, callback,
+-                           userdata);
++                           userdata, xmppcData->keepAlive);
+     } while (rc != 0 && rr != NULL);
+ 
+     xmpp_free(conn->ctx, domain);
+@@ -583,7 +583,7 @@
+     /* JID serves as an identifier here and will be used as "to" attribute
+        of the stream */
+     return _conn_connect(conn, conn->jid, server, port, XMPP_COMPONENT,
+-                         callback, userdata);
++                         callback, userdata,NULL);
+ }
+ 
+ /** Initiate a raw connection to the XMPP server.
+@@ -1337,13 +1337,17 @@
+     handler_system_delete_all(conn);
+ }
+ 
++
++
+ static int _conn_connect(xmpp_conn_t *const conn,
+                          const char *const domain,
+                          const char *const host,
+                          unsigned short port,
+                          xmpp_conn_type_t type,
+                          xmpp_conn_handler callback,
+-                         void *const userdata)
++                         void *const userdata,
++						 int keepAlive
++						 )
+ {
+     xmpp_open_handler open_handler;
+ 
+@@ -1368,7 +1372,11 @@
+         return XMPP_EINT;
+     if (conn->ka_timeout || conn->ka_interval)
+         sock_set_keepalive(conn->sock, conn->ka_timeout, conn->ka_interval);
+-
++		
++	if(keepAlive){
++		keepAlive=keepAlive*1000*2+2000;//2*keepAlive+2 sec
++		sock_set_timeout(conn->sock, keepAlive);
++	}
+     /* setup handler */
+     conn->conn_handler = callback;
+     conn->userdata = userdata;
+Index: libstrophe-0.10.0/src/sock.c
+===================================================================
+--- libstrophe-0.10.0.orig/src/sock.c	2020-03-04 15:09:41.000000000 +0800
++++ libstrophe-0.10.0/src/sock.c	2021-07-21 18:06:54.107743966 +0800
+@@ -108,6 +108,13 @@
+ 
+     return sock;
+ }
++//ZYXEL set TCP_USER_TIMEOUT
++int sock_set_timeout(const sock_t sock, int timeout)
++{
++	if (-1 == setsockopt(sock, IPPROTO_TCP, TCP_USER_TIMEOUT, &timeout, sizeof (timeout))) {
++     printf("set TCP_USER_TIMEOUT error\n");
++	}
++}
+ 
+ int sock_set_keepalive(const sock_t sock, int timeout, int interval)
+ {
+Index: libstrophe-0.10.0/src/sock.h
+===================================================================
+--- libstrophe-0.10.0.orig/src/sock.h	2020-03-04 15:09:41.000000000 +0800
++++ libstrophe-0.10.0/src/sock.h	2021-07-21 18:06:53.310360798 +0800
+@@ -41,5 +41,6 @@
+ /* checks for an error after connect, return 0 if connect successful */
+ int sock_connect_error(const sock_t sock);
+ int sock_set_keepalive(const sock_t sock, int timeout, int interval);
++int sock_set_timeout(const sock_t sock, int timeout);
+ 
+ #endif /* __LIBSTROPHE_SOCK_H__ */

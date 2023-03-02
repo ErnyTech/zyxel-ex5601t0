@@ -1,0 +1,136 @@
+Index: json-c-0.15/arraylist.c
+===================================================================
+--- json-c-0.15.orig/arraylist.c
++++ json-c-0.15/arraylist.c
+@@ -41,6 +41,28 @@ struct array_list *array_list_new(array_
+ 	return array_list_new2(free_fn, ARRAY_LIST_DEFAULT_SIZE);
+ }
+ 
++
++struct array_list*
++array_list_new_list(int array_list_size, array_list_free_fn *free_fn)
++{
++	struct array_list *arr;
++
++	arr = (struct array_list*)calloc(1, sizeof(struct array_list));
++	if(!arr) return NULL;
++
++	array_list_size = (array_list_size > 0) ? array_list_size : ARRAY_LIST_DEFAULT_SIZE;
++
++	arr->size = array_list_size;
++	arr->length = 0;
++	arr->free_fn = free_fn;
++	if(!(arr->array = (void**)calloc(sizeof(void*), arr->size))) {
++		free(arr);
++		return NULL;
++	}
++
++	return arr;
++}
++
+ struct array_list *array_list_new2(array_list_free_fn *free_fn, int initial_size)
+ {
+ 	struct array_list *arr;
+Index: json-c-0.15/arraylist.h
+===================================================================
+--- json-c-0.15.orig/arraylist.h
++++ json-c-0.15/arraylist.h
+@@ -43,6 +43,8 @@ typedef struct array_list array_list;
+  */
+ extern struct array_list *array_list_new(array_list_free_fn *free_fn);
+ 
++extern struct array_list *array_list_new_list(int array_list_size, array_list_free_fn *free_fn);
++
+ /**
+  * Allocate an array_list of the desired size.
+  *
+Index: json-c-0.15/json_object.c
+===================================================================
+--- json-c-0.15.orig/json_object.c
++++ json-c-0.15/json_object.c
+@@ -576,6 +576,20 @@ struct json_object *json_object_new_obje
+ 	return &jso->base;
+ }
+ 
++struct json_object* json_object_new_c_object(int table_entries)
++{
++	struct json_object_object *jso = JSON_OBJECT_NEW(object);
++	if(!jso) return NULL;
++
++	if(table_entries <= 0) table_entries = JSON_OBJECT_DEF_HASH_ENTRIES;
++
++	//jso->base._user_delete = &json_object_object_delete;
++	jso->base._to_json_string = &json_object_object_to_json_string;
++	jso->c_object = lh_kchar_table_new(table_entries, &json_object_lh_entry_free);
++
++	return &jso->base;
++}
++
+ struct lh_table *json_object_get_object(const struct json_object *jso)
+ {
+ 	if (!jso)
+@@ -1500,6 +1514,16 @@ struct array_list *json_object_get_array
+ 	}
+ }
+ 
++struct json_object* json_object_new_array_list(int array_list_size)
++{
++	struct json_object_array *jso = JSON_OBJECT_NEW(array);
++	if(!jso) return NULL;
++	//jso->base._user_delete = &json_object_array_delete;
++	jso->base._to_json_string = &json_object_array_to_json_string;
++	jso->c_array = array_list_new_list(array_list_size, &json_object_array_entry_free);
++	return &jso->base;
++}
++
+ void json_object_array_sort(struct json_object *jso, int (*sort_fn)(const void *, const void *))
+ {
+ 	assert(json_object_get_type(jso) == json_type_array);
+Index: json-c-0.15/json_object.h
+===================================================================
+--- json-c-0.15.orig/json_object.h
++++ json-c-0.15/json_object.h
+@@ -341,6 +341,11 @@ JSON_EXPORT json_object_to_json_string_f
+  */
+ JSON_EXPORT struct json_object *json_object_new_object(void);
+ 
++/** Create a new empty object and set table entries num
++ * @returns a json_object of type json_type_object
++ */
++JSON_EXPORT struct json_object* json_object_new_c_object(int table_entries);
++
+ /** Get the hashtable of a json_object of type json_type_object
+  * @param obj the json_object instance
+  * @returns a linkhash
+@@ -527,6 +532,11 @@ JSON_EXPORT void json_object_object_del(
+  */
+ JSON_EXPORT struct json_object *json_object_new_array(void);
+ 
++/** Create a new empty json_object of type json_type_array and set its item num
++ * @returns a json_object of type json_type_array
++ */
++JSON_EXPORT struct json_object* json_object_new_array_list(int array_list_size);
++
+ /** Create a new empty json_object of type json_type_array
+  * with the desired number of slots allocated.
+  * @see json_object_array_shrink()
+Index: json-c-0.15/json-c.sym
+===================================================================
+--- json-c-0.15.orig/json-c.sym
++++ json-c-0.15/json-c.sym
+@@ -94,6 +94,7 @@ JSONC_0.14 {
+     json_object_iter_peek_name;
+     json_object_iter_peek_value;
+     json_object_new_array;
++    json_object_new_array_list;
+     json_object_new_boolean;
+     json_object_new_double;
+     json_object_new_double_s;
+@@ -101,6 +102,7 @@ JSONC_0.14 {
+     json_object_new_int;
+     json_object_new_null;
+     json_object_new_object;
++    json_object_new_c_object;
+     json_object_new_string;
+     json_object_new_string_len;
+     json_object_new_uint64;

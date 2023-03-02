@@ -1,0 +1,20 @@
+set_preinit_account() {
+
+	echo "root:x:0:0:root:/home/root:/bin/sh" > /var/passwd
+	echo "daemon:*:1:1:daemon:/var:/bin/false" >> /var/passwd
+	echo "ubus:x:81:81:ubus:/var/run/ubus:/bin/false" >> /var/passwd
+	
+	echo "root::0:0:99999:7:::" > /var/shadow
+	echo "daemon:*:0:0:99999:7:::" >> /var/shadow
+	echo "ubus:x:0:0:99999:7:::" >> /var/shadow
+	
+	echo "root:x:0:" > /var/group
+	echo "daemon:x:1:" >> /var/group
+	echo "adm:x:4:" >> /var/group
+	echo "dialout:x:20:" >> /var/group
+	echo "audio:x:29:" >> /var/group
+	echo "ubus:x:81:ubus" >> /var/group
+}
+
+boot_hook_add preinit_main set_preinit_account
+

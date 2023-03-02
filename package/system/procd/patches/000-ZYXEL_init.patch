@@ -1,0 +1,46 @@
+Index: procd-2021-02-23-37eed131/initd/early.c
+===================================================================
+--- procd-2021-02-23-37eed131.orig/initd/early.c
++++ procd-2021-02-23-37eed131/initd/early.c
+@@ -81,6 +81,12 @@ early_mounts(void)
+ 	mkdir("/tmp/run", 0755);
+ 	mkdir("/tmp/lock", 0755);
+ 	mkdir("/tmp/state", 0755);
++
++	mkdir("/tmp/var", 0755);
++	mkdir("/tmp/var/run", 0755);
++	mkdir("/tmp/var/lock", 0755);
++	mkdir("/tmp/var/state", 0755);
++	
+ 	umask(oldumask);
+ }
+ 
+Index: procd-2021-02-23-37eed131/rcS.c
+===================================================================
+--- procd-2021-02-23-37eed131.orig/rcS.c
++++ procd-2021-02-23-37eed131/rcS.c
+@@ -94,13 +94,18 @@ static void q_initd_run(struct runqueue
+ 	}
+ 	close(pipefd[0]);
+ 
+-	int devnull = open("/dev/null", O_RDONLY);
+-	dup2(devnull, STDIN_FILENO);
+-	dup2(pipefd[1], STDOUT_FILENO);
+-	dup2(pipefd[1], STDERR_FILENO);
++	if(strstr(s->file, "zcmd.sh") || strstr(s->file,"zywifid.sh")){ //show STDOUT to console for ZYXEL ACTS
++		//do nothing
++	}
++	else{
++		int devnull = open("/dev/null", O_RDONLY);
++		dup2(devnull, STDIN_FILENO);
++		dup2(pipefd[1], STDOUT_FILENO);
++		dup2(pipefd[1], STDERR_FILENO);
+ 
+-	if (devnull > STDERR_FILENO)
+-		close(devnull);
++		if (devnull > STDERR_FILENO)
++			close(devnull);
++	}
+ 
+ 	execlp(s->file, s->file, s->param, NULL);
+ 	exit(1);

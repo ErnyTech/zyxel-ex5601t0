@@ -1,0 +1,29 @@
+Index: ppp-2.4.3/pppd/sys-linux.c
+===================================================================
+--- ppp-2.4.3.orig/pppd/sys-linux.c	2020-10-09 11:13:09.898344415 +0800
++++ ppp-2.4.3/pppd/sys-linux.c	2020-10-09 14:14:23.140898847 +0800
+@@ -643,6 +643,7 @@
+ 	unsigned num[3]={0, 0, 0};
+ 	char *p;
+ 	char req_name[MAXPATHLEN] = "";
++	int isL2tp = 0;
+ 
+ 	if(strcmp(pppname, "") != 0) {
+ 		strcpy(req_name, pppname);
+@@ -671,6 +672,7 @@
+ #ifdef CONFIG_ZYXEL_VPN_CLIENT
+ 		else if ((p = strstr(req_name, "l2tp")) != NULL)
+ 		{
++			isL2tp = 1;
+ 			num[0] = req_unit;
+ 			num[1] = 5;
+ 		}
+@@ -709,7 +711,7 @@
+ #ifdef BROADCOM_PLATFORM /* ZyXEL */
+ 	else {
+ #if 1 /* tty device, ZyXEL */
+-		if(!tty_dev){
++		if(!tty_dev && !isL2tp){
+ #endif
+ 			//x = ioctl(ppp_dev_fd, PPPIOCSREALDEV, devnam);
+ 			x = ioctl(ppp_dev_fd, PPPIOCSREALDEV, devname);

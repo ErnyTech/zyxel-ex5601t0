@@ -1,0 +1,40 @@
+Index: linux-5.4.168/net/netfilter/nf_conntrack_core.c
+===================================================================
+--- linux-5.4.168.orig/net/netfilter/nf_conntrack_core.c
++++ linux-5.4.168/net/netfilter/nf_conntrack_core.c
+@@ -1466,7 +1466,7 @@ __nf_conntrack_alloc(struct net *net,
+ 		  !strncmp(skb->dev->name, "br", 2)) {
+ 		if (nf_session_reserve) {
+ 			/* Sorry, we have to kick LRU out regardlessly. */
+-                        unsigned int hash = hash_conntrack(net, zone, orig);
++                        unsigned int hash = hash_conntrack(net, orig);
+                         if (!early_drop(net, hash)) {
+ 				atomic_dec(&net->ct.count);
+ 				net_warn_ratelimited("nf_conntrack: total connection track reaches to 90 percent of max connection track , dropping lan(brx) packet\n");
+@@ -1514,7 +1514,7 @@ __nf_conntrack_alloc(struct net *net,
+ 				{
+ 					//if (h_max->sess_Cnt >= nf_guest_ap_session_ctl_max) {
+ 					if ( unlikely(atomic_read(&h_max->sess_Cnt) >= nf_guest_ap_session_ctl_max) ) {
+-						unsigned int hash1 = hash_conntrack(net, zone, orig);
++						unsigned int hash1 = hash_conntrack(net, orig);
+ 						if (!early_drop(net, hash1)) {
+ 							atomic_dec(&net->ct.count);
+ 							net_warn_ratelimited("nf_conntrack: %u.%u.%u.%u exceeds the maximum number of session per Guest AP host.\n", NIPQUAD(orig->src.u3.ip));
+@@ -1534,7 +1534,7 @@ __nf_conntrack_alloc(struct net *net,
+ 				/* MAX Session Per Host */
+ 				//if(h_max->sess_Cnt >= nf_session_ctl_max){
+ 				if( unlikely(atomic_read(&h_max->sess_Cnt) >= nf_session_ctl_max) ) {
+-					unsigned int hash1 = hash_conntrack(net, zone, orig);
++					unsigned int hash1 = hash_conntrack(net, orig);
+ 					if (!early_drop(net, hash1)){
+ 					    atomic_dec(&net->ct.count);
+ 					    net_warn_ratelimited(KERN_WARNING "NAT WARNING: %u.%u.%u.%u exceeds the max. number of session per host!\n"
+@@ -1547,7 +1547,7 @@ __nf_conntrack_alloc(struct net *net,
+ 				/* Reserved for well known services(known_port<1024) */
+ 				//if(h_max->sess_Cnt >= (nf_session_ctl_max*8/10) &&  known_port > 1024){
+ 				if( unlikely(atomic_read(&h_max->sess_Cnt) >= (nf_session_ctl_max*8/10)) &&  (known_port > 1024) ){
+-					unsigned int hash2 = hash_conntrack(net, zone, orig);
++					unsigned int hash2 = hash_conntrack(net, orig);
+ 					if (!early_drop(net, hash2)){
+ 						atomic_dec(&net->ct.count);
+ 						net_warn_ratelimited(KERN_WARNING

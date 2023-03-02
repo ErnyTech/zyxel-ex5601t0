@@ -1,0 +1,285 @@
+Index: busybox-1.31.1/networking/nslookup.c
+===================================================================
+--- busybox-1.31.1.orig/networking/nslookup.c	2021-03-17 18:05:01.658256649 +0800
++++ busybox-1.31.1/networking/nslookup.c	2021-03-17 18:05:01.750256649 +0800
+@@ -106,7 +106,11 @@
+ 
+ #define MAX_IPADDR_LEN    1601
+ 
+-void usage()
++
++void usage(void);
++zcfgRet_t nslookupMsgSend(int msg_type, int payloadLen, const char *payload);
++
++void usage(void)
+ {
+ 	fprintf(stderr, "\nUsage: nslookup -h [HOST] <-s [DNS server]>\n");
+ 	fprintf(stderr, "Queries the nameserver for the IP address of the given HOST\n");
+@@ -276,10 +280,12 @@
+ #endif
+ }
+ 
++
+ int nslookup_main(int argc, char **argv) MAIN_EXTERNALLY_VISIBLE;
+-int nslookup_main(int argc, char **argv){
++int nslookup_main(int argc, char **argv)
++{
+ #ifdef ZCFG_SUPPORT
+-	char *server = NULL, *hostname = NULL;
++	char *server = NULL, *hostname = NULL, *file = NULL;
+ 	unsigned int nscount = 1, deadline = 1000;
+ 	char *str_I = NULL;
+ 	int opt;
+@@ -287,11 +293,12 @@
+ 	struct json_object *lookup_result = NULL, *lookup_stat = NULL;
+ 	const char *payload = NULL;
+ 	int payloadLen = 0;
+-	unsigned long timevals, timevale, timeintv;
++	unsigned long timevals, timevale;
+ 	char iplist[MAX_IPADDR_LEN] = {0}, srvip[46] = {0};
+ 	int c = 0, successc = 0;
+ 	char cStr[4] = {0};
+-	char syscmd[128] = {0};
++	//char syscmd[128] = {0};
++	bool setStatus = false;
+ 
+ 	zcfgEidInit(ZCFG_EID_NSLOOKUP, NULL);
+ #endif
+@@ -306,7 +313,7 @@
+ 		return EXIT_FAILURE;
+ 	}
+ 
+-	while((opt = getopt(argc, argv, "h:s:c:w:I:")) != -1)
++	while((opt = getopt(argc, argv, "h:s:c:w:I:f:")) != -1)
+ 	{
+ 		switch(opt)
+ 		{
+@@ -325,6 +332,10 @@
+ 			case 'I': /*not yet support now*/
+ 				str_I= optarg;
+ 				break;
++			case 'f':
++				file= optarg;
++				break;
++
+ 			default:
+ 				break;
+ 		}
+@@ -334,6 +345,10 @@
+ 		usage();
+ 		return EXIT_FAILURE;
+ 	}
++
++	if(str_I){
++
++	}
+ #else
+ 	if (!argv[1] || argv[1][0] == '-' || argc > 3)
+ 		bb_show_usage();
+@@ -353,18 +368,27 @@
+ 
+ 	ret = server_print(srvip);
+ 
++#if 0 //?
+ 	if (server){
+ 		/*work around, because the server option not work ?*/
+ 		snprintf(syscmd, sizeof(syscmd),"echo nameserver %s >> /var/fyi/sys/dns", srvip);
+ 		system(syscmd);
+ 	}
++#endif
+ 
+ 	if(ret != 0){
+ 		json_object_object_add(lookup_stat, "DiagnosticsState", json_object_new_string(DIAG_DNS_SERVER_NOT_RESOLVE));
+ 		json_object_object_add(lookup_stat, "SuccessCount", json_object_new_int(0));
+-		payload = json_object_to_json_string(lookup_stat);
+-		payloadLen = strlen(payload) + 1;
+-		nslookupMsgSend(ZCFG_MSG_NSLOOKUP_MSG, payloadLen, payload);
++
++		if(file != NULL){
++			printf("lookup_stat=%s\n", json_object_to_json_string(lookup_stat));
++			json_object_to_file(file, lookup_stat);
++		}
++		else{
++			payload = json_object_to_json_string(lookup_stat);
++			payloadLen = strlen(payload) + 1;
++			nslookupMsgSend(ZCFG_MSG_NSLOOKUP_MSG, payloadLen, payload);
++		}
+ 		json_object_put(lookup_stat);
+ 
+ 		return EXIT_SUCCESS;
+@@ -395,13 +419,25 @@
+ 
+ 		if(!ret){
+ 			json_object_object_add(lookup_result, "Status", json_object_new_string(DIAG_SUCCESS));
++			if(!setStatus){
++				json_object_object_add(lookup_stat, "Status", json_object_new_string(DIAG_SUCCESS));
++				setStatus = true;
++			}
+ 		}
+ 		else{
+ 			if((deadline>0) && ((timevale - timevals) >= deadline)){
+ 				json_object_object_add(lookup_result, "Status", json_object_new_string(DIAG_TIMEOUT));
++				if(!setStatus){
++					json_object_object_add(lookup_stat, "Status", json_object_new_string(DIAG_TIMEOUT));
++					setStatus = true;
++				}
+ 			}
+ 			else{
+ 				json_object_object_add(lookup_result, "Status", json_object_new_string(DIAG_HOST_NAME_NOT_RESOLV));
++				if(!setStatus){
++					json_object_object_add(lookup_stat, "Status", json_object_new_string(DIAG_HOST_NAME_NOT_RESOLV));
++					setStatus = true;
++				}
+ 			}
+ 			sprintf(cStr,"%d", c);
+ 			json_object_object_add(lookup_stat, cStr, lookup_result);
+@@ -415,10 +451,22 @@
+ 
+ 	json_object_object_add(lookup_stat, "DiagnosticsState", json_object_new_string(DIAG_COMPLETE));
+ 	json_object_object_add(lookup_stat, "SuccessCount", json_object_new_int(successc));
++	if(successc > 0){
++		json_object_object_add(lookup_stat, "Status", json_object_new_string(DIAG_SUCCESS));
++	}
++	else if(!setStatus){
++		json_object_object_add(lookup_stat, "Status", json_object_new_string(DIAG_TIMEOUT));
++	}
+ 
+-	payload = json_object_to_json_string(lookup_stat);
+-	payloadLen = strlen(payload) + 1;
+-	nslookupMsgSend(ZCFG_MSG_NSLOOKUP_MSG, payloadLen, payload);
++	if(file != NULL){
++		printf("lookup_stat=%s\n", json_object_to_json_string(lookup_stat));
++		json_object_to_file(file, lookup_stat);
++	}
++	else{
++		payload = json_object_to_json_string(lookup_stat);
++		payloadLen = strlen(payload) + 1;
++		nslookupMsgSend(ZCFG_MSG_NSLOOKUP_MSG, payloadLen, payload);
++	}
+ 	json_object_put(lookup_stat);
+ 
+ 	return EXIT_SUCCESS;
+Index: busybox-1.31.1/networking/ping.c
+===================================================================
+--- busybox-1.31.1.orig/networking/ping.c	2021-03-17 18:05:01.714256649 +0800
++++ busybox-1.31.1/networking/ping.c	2021-03-17 18:05:31.154256791 +0800
+@@ -377,7 +377,7 @@
+ /* Full(er) version */
+ 
+ /* -c NUM, -t NUM, -w NUM, -W NUM */
+-#define OPT_STRING "qvAc:+s:t:+w:+W:+I:np:i:4"IF_PING6("6")
++#define OPT_STRING "qvAc:+s:t:+w:+W:+I:np:i:zf:4"IF_PING6("6")
+ enum {
+ 	OPT_QUIET = 1 << 0,
+ 	OPT_VERBOSE = 1 << 1,
+@@ -391,8 +391,10 @@
+ 	/*OPT_n = 1 << 9, - ignored */
+ 	OPT_p = 1 << 10,
+ 	OPT_i = 1 << 11,
+-	OPT_IPV4 = 1 << 12,
+-	OPT_IPV6 = (1 << 13) * ENABLE_PING6,
++	OPT_z = (1 << 12),
++	OPT_f = (1 << 13),
++	OPT_IPV4 = (1 << 14),
++	OPT_IPV6 = (1 << 15) * ENABLE_PING6,
+ };
+ 
+ 
+@@ -428,11 +430,13 @@
+ #ifdef ZCFG_SUPPORT
+ 	int pingsvrs, pings;
+ 	int nhost;
++	int sendzcfgmsg;
+ 	unsigned timeoutstart;
+ 	unsigned svrstmin, svrstmax, svrstavg;
+ 	char pingsdiagstat[100];
+ 	char diagstat[100];
+ 	char svrhostname[257];
++	char *jsonfilename;
+ #endif
+ } FIX_ALIASING;
+ #define G (*(struct globals*)bb_common_bufsiz1)
+@@ -455,6 +459,7 @@
+ #define pingaddr     (G.pingaddr    )
+ #define rcvd_tbl     (G.rcvd_tbl    )
+ #ifdef ZCFG_SUPPORT
++#define sendzcfgmsg (G.sendzcfgmsg)
+ #define timeoutstart (G.timeoutstart)
+ #define pings        (G.pings       )
+ #define pingsdiagstat (G.pingsdiagstat)
+@@ -467,6 +472,7 @@
+ #define svrstavg     (G.svrstavg    )
+ #define pingsvrs     (G.pingsvrs    )
+ #define svrhostname  (G.svrhostname )
++#define jsonfilename (G.jsonfilename)
+ #endif
+ 
+ #define INIT_G() do { \
+@@ -475,6 +481,7 @@
+ 	datalen = DEFDATALEN; \
+ 	timeout = MAXWAIT; \
+ 	tmin = UINT_MAX; \
++	jsonfilename = NULL; \
+ } while (0)
+ 
+ 
+@@ -617,6 +624,10 @@
+ 	else{
+ 		if(strstr(diagstat, "Error")){
+ 			json_object_object_add(ping_stat, "DiagnosticsState", json_object_new_string(diagstat));
++			if(!sendzcfgmsg){ //TT Customization
++				json_object_object_add(ping_stat, "SuccessCount", json_object_new_int(0));
++				json_object_object_add(ping_stat, "FailureCount", json_object_new_int(0));
++			}
+ 		}else{
+ 			json_object_object_add(ping_stat, "DiagnosticsState", json_object_new_string(DIAG_COMPLETE));
+ 			json_object_object_add(ping_stat, "SuccessCount", json_object_new_int(recv_count));
+@@ -638,14 +649,20 @@
+ 
+ 	payloadLen = strlen(payload);
+ 
+-	if(pings){
+-		pingMsgSend(ZCFG_MSG_PINGSVRS_RST, payloadLen, payload);
+-	}else if(pingsvrs && !strcmp(pingsdiagstat, "pings_complete")){
+-		pingMsgSend(ZCFG_MSG_PINGSVRS_RST, payloadLen, payload);
+-	}else
+-	pingMsgSend(ZCFG_MSG_PING_MSG, payloadLen, payload);
++	if(sendzcfgmsg){
++		if(pings){
++			pingMsgSend(ZCFG_MSG_PINGSVRS_RST, payloadLen, payload);
++		}else if(pingsvrs && !strcmp(pingsdiagstat, "pings_complete")){
++			pingMsgSend(ZCFG_MSG_PINGSVRS_RST, payloadLen, payload);
++		}else
++			pingMsgSend(ZCFG_MSG_PING_MSG, payloadLen, payload);
++	}
++	else if(jsonfilename != NULL){
++		json_object_to_file(jsonfilename, ping_stat);
++	}
+ 
+ 	json_object_put(ping_stat);
++
+ #endif
+ 	/* if condition is true, exit with 1 -- 'failure' */
+ 	exit(nrecv == 0 || (G.deadline_us && nrecv < pingcount));
+@@ -1309,7 +1326,7 @@
+ 			OPT_STRING
+ 			/* exactly one arg; -v and -q don't mix */
+ 			"\0" "=1:q--v:v--q",
+-			&pingcount, &str_s, &opt_ttl, &G.deadline_us, &timeout, &str_I, &str_p, &str_i
++			&pingcount, &str_s, &opt_ttl, &G.deadline_us, &timeout, &str_I, &str_p, &str_i, &jsonfilename
+ 	);
+ 	if (opt & OPT_s)
+ 		datalen = xatou16(str_s); // -s
+@@ -1321,6 +1338,12 @@
+ 			str_I = NULL; /* don't try to bind to device later */
+ 		}
+ 	}
++	if (opt & OPT_z) { // -z
++		sendzcfgmsg = 0;
++	}
++	else{
++		sendzcfgmsg = 1;
++	}
+ 
+ 	if(timeout == 0){
+ 		timeout = 1;

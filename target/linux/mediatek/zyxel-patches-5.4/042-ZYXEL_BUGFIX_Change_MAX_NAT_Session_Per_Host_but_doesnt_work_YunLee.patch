@@ -1,0 +1,42 @@
+Index: linux-5.4.171/net/netfilter/nf_conntrack_standalone.c
+===================================================================
+--- linux-5.4.171.orig/net/netfilter/nf_conntrack_standalone.c
++++ linux-5.4.171/net/netfilter/nf_conntrack_standalone.c
+@@ -713,6 +713,9 @@ enum nf_ct_sysctl_index {
+ 	NF_SYSCTL_CT_BUCKETS,
+ 	NF_SYSCTL_CT_CHECKSUM,
+ 	NF_SYSCTL_CT_LOG_INVALID,
++#ifdef CONFIG_ZYXEL_NF_SESSION_CTL
++	NF_SYSCTL_SE_MAX,
++#endif
+ 	NF_SYSCTL_CT_EXPECT_MAX,
+ 	NF_SYSCTL_CT_ACCT,
+ 	NF_SYSCTL_CT_HELPER,
+@@ -813,7 +816,7 @@ static struct ctl_table nf_ct_sysctl_tab
+ 		.extra2		= &log_invalid_proto_max,
+ 	},
+ #ifdef CONFIG_ZYXEL_NF_SESSION_CTL//__ZYXEL__, Chi-Hsiang /proc/net/nf_session_ctl
+-	{
++	[NF_SYSCTL_SE_MAX] = {
+ 		.procname	= "nf_session_ctl_max",
+ 		.data		= &nf_session_ctl_max,
+ 		.maxlen		= sizeof(unsigned int),
+@@ -1286,12 +1289,18 @@ static int nf_conntrack_standalone_init_
+ #ifdef CONFIG_NF_CONNTRACK_EVENTS
+ 		table[NF_SYSCTL_CT_EVENTS].procname = NULL;
+ #endif
++#ifdef CONFIG_ZYXEL_NF_SESSION_CTL
++		table[NF_SYSCTL_SE_MAX].procname = NULL;
++#endif
+ 	}
+ 
+ 	if (!net_eq(&init_net, net)) {
+ 		table[NF_SYSCTL_CT_MAX].mode = 0444;
+ 		table[NF_SYSCTL_CT_EXPECT_MAX].mode = 0444;
+ 		table[NF_SYSCTL_CT_BUCKETS].mode = 0444;
++#ifdef CONFIG_ZYXEL_NF_SESSION_CTL
++		table[NF_SYSCTL_SE_MAX].mode = 0444;
++#endif
+ 	}
+ 
+ 	net->ct.sysctl_header = register_net_sysctl(net, "net/netfilter", table);

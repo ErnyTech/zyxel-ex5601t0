@@ -1,0 +1,16 @@
+Index: ppp-2.4.3/pppd/ipv6cp.c
+===================================================================
+--- ppp-2.4.3.orig/pppd/ipv6cp.c	2020-09-29 06:14:34.086176638 +0000
++++ ppp-2.4.3/pppd/ipv6cp.c	2020-09-29 06:20:25.678173285 +0000
+@@ -966,7 +966,11 @@
+ 	    }
+ 	    if (!eui64_iszero(wo->hisid) && 
+ 		!eui64_equals(ifaceid, wo->hisid) && 
++#ifdef ABUU_CUSTOMIZATION /* Workaround: skip on demand case*/
++		eui64_iszero(go->hisid) && !demand ) {
++#else
+ 		eui64_iszero(go->hisid)) {
++#endif
+ 		    
+ 		orc = CONFNAK;
+ 		ifaceid = wo->hisid;

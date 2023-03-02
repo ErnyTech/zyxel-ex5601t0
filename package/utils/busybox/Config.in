@@ -1,0 +1,39 @@
+if PACKAGE_busybox
+
+config BUSYBOX_CUSTOM
+	bool "Customize busybox options"
+	default n
+	help
+	  Enabling this allows full customization of busybox settings.
+	  Note that there are many options here that can result in a build
+	  that doesn't work properly.  Enabling customization will mark your
+	  build as "tainted" for the purpose of bug reports.
+	  See the variables written to /etc/openwrt_release
+
+	  Unless you know what you are doing, you should leave this as 'n'
+
+	source "Config-defaults.in"
+
+config BUSYBOX_CONFIG_NOMMU
+	bool
+	depends on NOMMU
+	default y if NOMMU
+	#deselect BUSYBOX_CONFIG_ASH
+	#deselect BUSYBOX_CONFIG_FEATURE_SH_IS_ASH
+	#deselect BUSYBOX_CONFIG_LOCK
+
+config CONFIG_BUSYBOX_CONFIG_FEATURE_SH_IS_HUSH
+	bool
+	default y if NOMMU
+	default n if !NOMMU
+
+config BUSYBOX_CONFIG_HUSH
+	bool
+	default y if NOMMU
+	default n if !NOMMU
+
+	if BUSYBOX_CUSTOM
+	source "config/Config.in"
+	endif
+
+endif

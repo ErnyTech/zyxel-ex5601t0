@@ -1,0 +1,25 @@
+Index: busybox-1.31.1/networking/ftpgetput.c
+===================================================================
+--- busybox-1.31.1.orig/networking/ftpgetput.c	2021-03-30 18:39:12.711695203 +0800
++++ busybox-1.31.1/networking/ftpgetput.c	2021-03-30 18:39:18.475695231 +0800
+@@ -742,9 +742,8 @@
+ 
+ 	ftp_login();
+ #ifdef ZCFG_SUPPORT
+-	if(testSendLength) {
++	{
+ 		int rt;
+-
+ 		if(!diagStateErrCode) {
+ 			rt = ftp_action(argv[1], argv[2] ? argv[2] : argv[1]);
+ 		}else rt = EXIT_FAILURE;
+@@ -753,9 +752,6 @@
+ 		outputDiagUlData(rt);
+ 
+ 		return rt;
+-	}else {
+-		outputDiagUlData(EXIT_FAILURE);
+-		return EXIT_FAILURE;
+ 	}
+ #else
+ 	return ftp_action(argv[1], argv[2] ? argv[2] : argv[1]);

@@ -1,0 +1,12 @@
+Index: linux-5.4.171/drivers/spi/spidev.c
+===================================================================
+--- linux-5.4.171.orig/drivers/spi/spidev.c	2022-07-11 11:28:17.202997143 +0800
++++ linux-5.4.171/drivers/spi/spidev.c	2022-07-11 15:00:52.904194511 +0800
+@@ -679,6 +679,7 @@ static const struct of_device_id spidev_
+ 	{ .compatible = "dh,dhcom-board" },
+ 	{ .compatible = "menlo,m53cpld" },
+ 	{ .compatible = "siliconlabs,si3210" },
++	{ .compatible = "spidev,slic" },
+ 	{},
+ };
+ MODULE_DEVICE_TABLE(of, spidev_dt_ids);

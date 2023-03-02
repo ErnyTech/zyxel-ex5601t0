@@ -1,0 +1,24 @@
+diff -ruN a/iwpriv.c b/iwpriv.c
+--- a/iwpriv.c	2007-02-17 09:17:43.000000000 +0800
++++ b/iwpriv.c	2022-07-22 10:46:27.208910274 +0800
+@@ -259,7 +259,7 @@
+ 		int		priv_num)	/* Number of descriptions */
+ {
+   struct iwreq	wrq;
+-  u_char	buffer[4096];	/* Only that big in v25 and later */
++  u_char	buffer[32768];	/* Only that big in v25 and later */
+   int		i = 0;		/* Start with first command arg */
+   int		k;		/* Index in private description table */
+   int		temp;
+diff -ruN a/wireless.21.h b/wireless.21.h
+--- a/wireless.21.h	2022-07-22 08:40:13.870315000 +0800
++++ b/wireless.21.h	2022-07-22 10:46:12.397062781 +0800
+@@ -537,7 +537,7 @@
+ #define IW_SCAN_TYPE_ACTIVE 0
+ #define IW_SCAN_TYPE_PASSIVE 1
+ /* Maximum size of returned data */
+-#define IW_SCAN_MAX_DATA	4096	/* In bytes */
++#define IW_SCAN_MAX_DATA	32768	/* In bytes */
+ 
+ /* Max number of char in custom event - use multiple of them if needed */
+ #define IW_CUSTOM_MAX		256	/* In bytes */

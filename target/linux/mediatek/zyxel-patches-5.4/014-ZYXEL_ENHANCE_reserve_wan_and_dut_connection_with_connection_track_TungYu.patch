@@ -1,0 +1,103 @@
+Index: linux-5.4.171/net/netfilter/nf_conntrack_core.c
+===================================================================
+--- linux-5.4.171.orig/net/netfilter/nf_conntrack_core.c
++++ linux-5.4.171/net/netfilter/nf_conntrack_core.c
+@@ -176,6 +176,11 @@ EXPORT_SYMBOL_GPL(nf_conntrack_max);
+ seqcount_t nf_conntrack_generation __read_mostly;
+ static unsigned int nf_conntrack_hash_rnd __read_mostly;
+ 
++#ifdef CONFIG_ZYXEL_NF_SESSION_RSV
++unsigned int nf_session_reserve __read_mostly; /* Location in /proc/sys/net/netfilter/nf_session_reserve */
++EXPORT_SYMBOL_GPL(nf_session_reserve);
++#endif
++
+ #ifdef CONFIG_ZYXEL_NF_SESSION_CTL//__ZYXEL__, Chi-Hsiang /proc/net/nf_session_ctl
+ //unsigned  int nf_session_ctl_max = 2048  __read_mostly;;	/*setup with /proc/sys/net/netfilter/ */
+ unsigned  int nf_session_ctl_max __read_mostly;
+@@ -1424,6 +1429,30 @@ __nf_conntrack_alloc(struct net *net,
+ 		}
+ 	}
+ 
++#if defined(CONFIG_ZYXEL_NF_SESSION_RSV)
++	/* ZYXEL - Session Reservation judgement function                    */
++	/* Session Reservation -                                             */
++	/*   Drop lan(from br0) flow when                                    */
++	/*   total connection track reaches to 90% of max connection track.  */
++	/* Session Reservation run time flag - nf_session_reserve            */
++	/*   1 - Session Reservation on, set by default.                     */
++	/*   0 - Session Reservation off.                                    */
++	if (nf_conntrack_max &&
++	      unlikely(atomic_read(&net->ct.count) > (nf_conntrack_max*9/10)) &&
++		  skb->dev != NULL &&
++		  !strncmp(skb->dev->name, "br", 2)) {
++		if (nf_session_reserve) {
++			/* Sorry, we have to kick LRU out regardlessly. */
++                        unsigned int hash = hash_conntrack(net, zone, orig);
++                        if (!early_drop(net, hash)) {
++				atomic_dec(&net->ct.count);
++				net_warn_ratelimited("nf_conntrack: total connection track reaches to 90 percent of max connection track , dropping lan(brx) packet\n");
++				return ERR_PTR(-ENOMEM);
++			}
++		}
++	}
++#endif
++
+ #ifdef CONFIG_ZYXEL_NF_SESSION_CTL
+ 	/*	== ZYXEL, Session_Control max num judgement function. /proc/net/nf_session_ctl ==*/
+ 	/*		0					session max number						*/
+@@ -2568,6 +2597,9 @@ int nf_conntrack_init_start(void)
+ #ifdef CONFIG_ZYXEL_NF_SESSION_CTL//__ZYXEL__, Chi-Hsiang /proc/net/nf_session_ctl
+ 	nf_session_ctl_max =2048;
+ #endif
++#ifdef CONFIG_ZYXEL_NF_SESSION_RSV
++	nf_session_reserve = 1;
++#endif
+ 
+ 	/* struct nf_ct_ext uses u8 to store offsets/size */
+ 	BUILD_BUG_ON(total_extension_size() > 255u);
+Index: linux-5.4.171/net/netfilter/nf_conntrack_standalone.c
+===================================================================
+--- linux-5.4.171.orig/net/netfilter/nf_conntrack_standalone.c
++++ linux-5.4.171/net/netfilter/nf_conntrack_standalone.c
+@@ -821,6 +821,15 @@ static struct ctl_table nf_ct_sysctl_tab
+ 		.proc_handler	= proc_dointvec,
+ 	},
+ #endif
++#ifdef CONFIG_ZYXEL_NF_SESSION_RSV
++	{
++		.procname	= "nf_session_reserve",
++		.data		= &nf_session_reserve,
++		.maxlen		= sizeof(unsigned int),
++		.mode		= 0644,
++		.proc_handler	= proc_dointvec,
++	},
++#endif
+ 	[NF_SYSCTL_CT_EXPECT_MAX] = {
+ 		.procname	= "nf_conntrack_expect_max",
+ 		.data		= &nf_ct_expect_max,
+Index: linux-5.4.171/Kconfig.zyxel
+===================================================================
+--- linux-5.4.171.orig/Kconfig.zyxel
++++ linux-5.4.171/Kconfig.zyxel
+@@ -3,3 +3,6 @@
+ #
+ config ZYXEL_NF_SESSION_CTL
+ 	bool "ZyXEL feature - netfilter session control"
++	
++config ZYXEL_NF_SESSION_RSV
++	bool "ZyXEL feature - netfilter session reserve"
+\ No newline at end of file
+Index: linux-5.4.171/include/net/netfilter/nf_conntrack.h
+===================================================================
+--- linux-5.4.171.orig/include/net/netfilter/nf_conntrack.h
++++ linux-5.4.171/include/net/netfilter/nf_conntrack.h
+@@ -291,6 +291,9 @@ extern unsigned int nf_conntrack_max;
+ #ifdef CONFIG_ZYXEL_NF_SESSION_CTL//__ZYXEL__, Chi-Hsiang /proc/net/nf_session_ctl
+ extern unsigned int nf_session_ctl_max;
+ #endif
++#ifdef CONFIG_ZYXEL_NF_SESSION_RSV
++extern unsigned int nf_session_reserve;
++#endif
+ 
+ /* must be called with rcu read lock held */
+ static inline void

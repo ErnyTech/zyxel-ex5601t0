@@ -1,0 +1,29 @@
+Index: pure-ftpd-1.0.30/src/ftpd.c
+===================================================================
+--- pure-ftpd-1.0.30.orig/src/ftpd.c
++++ pure-ftpd-1.0.30/src/ftpd.c
+@@ -874,6 +874,13 @@ static int checknamesanity(const char *n
+     if (name == NULL || *name == 0) {
+         return -1;
+     }
++
++#ifdef ZYXEL_TT_CUSTOMIZATION
++			if(strstr(name,"/mnt")==NULL){
++			  return -1; 
++			}
++#endif
++
+     /* optimize . and .. */
+     if (name[0] == '.' && (name[1] == 0 || (name[1] == '.' && name[2] == 0))) {
+         return 0;
+@@ -2471,6 +2478,10 @@ void dopass(char *password)
+ #endif
+     }
+ 
++#ifdef ZYXEL_TT_CUSTOMIZATION
++		sprintf(authresult.dir,"%s","/mnt");
++#endif
++
+     /* handle /home/user/./public_html form */
+     if ((root_directory = strdup(authresult.dir)) == NULL) {
+         die_mem();

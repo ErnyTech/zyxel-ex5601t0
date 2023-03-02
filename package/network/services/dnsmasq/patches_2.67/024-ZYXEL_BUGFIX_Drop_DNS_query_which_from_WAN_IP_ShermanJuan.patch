@@ -1,0 +1,52 @@
+Index: dnsmasq-2.67/src/forward.c
+===================================================================
+--- dnsmasq-2.67.orig/src/forward.c	2020-10-19 10:58:03.878810953 +0800
++++ dnsmasq-2.67/src/forward.c	2020-10-19 11:06:41.942814734 +0800
+@@ -717,7 +717,11 @@
+ 		 CMSG_SPACE(sizeof(struct sockaddr_dl))];
+ #endif
+   } control_u;
+-  
++
++#ifdef ZYXEL_SUPPORT_NESSUS
++  struct irec *iface;
++  int iFound = 0;
++#endif
+   /* packet buffer overwritten */
+   daemon->srv_save = NULL;
+   
+@@ -843,8 +847,9 @@
+ 
+       if (listen->family == AF_INET && option_bool(OPT_LOCALISE))
+ 	{
++#ifndef ZYXEL_SUPPORT_NESSUS
+ 	  struct irec *iface;
+-	  
++#endif
+ 	  /* get the netmask of the interface whch has the address we were sent to.
+ 	     This is no neccessarily the interface we arrived on. */
+ 	  
+@@ -869,7 +874,22 @@
+ 	    dst_addr_4.s_addr = 0;
+ 	}
+     }
+-  
++
++#ifdef ZYXEL_SUPPORT_NESSUS
++   for (iface = daemon->interfaces; iface; iface = iface->next)
++   {
++        if (dst_addr_4.s_addr && iface->addr.sa.sa_family == AF_INET &&
++            iface->addr.in.sin_addr.s_addr == dst_addr_4.s_addr)
++        {
++                iFound = 1;
++                break;
++        }
++  }
++
++  if (!iFound)
++        return;
++#endif
++
+   if (extract_request(header, (size_t)n, daemon->namebuff, &type))
+     {
+       char types[20];

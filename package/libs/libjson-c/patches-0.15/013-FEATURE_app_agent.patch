@@ -1,0 +1,52 @@
+Index: json-c-0.15/json_object.c
+===================================================================
+--- json-c-0.15.orig/json_object.c
++++ json-c-0.15/json_object.c
+@@ -1255,6 +1255,34 @@ static void json_object_string_delete(st
+ 	json_object_generic_delete(jso);
+ }
+ 
++int json_object_set_param(struct json_object *jso, char* v)
++{
++	if(!jso) return 0;
++
++	switch(jso->o_type) {
++	case json_type_boolean:
++		JC_BOOL(jso)->c_boolean = (json_bool)atoi(v);
++		break;
++	case json_type_int:
++		JC_INT(jso)->cint.c_int64 = (int32_t)atoi(v);
++		break;
++	case json_type_string:
++		if(JC_STRING(jso)->c_string.pdata) {
++			free(JC_STRING(jso)->c_string.pdata);
++			JC_STRING(jso)->c_string.pdata = NULL;
++			JC_STRING(jso)->len = 0;
++		}
++		JC_STRING(jso)->c_string.pdata = strdup(v);
++		JC_STRING(jso)->len = strlen(v);
++		break;
++	case json_type_double:
++	default:
++		break;
++	}
++
++	return 0;
++}
++
+ static struct json_object *_json_object_new_string(const char *s, const size_t len)
+ {
+ 	size_t objsize;
+Index: json-c-0.15/json_object.h
+===================================================================
+--- json-c-0.15.orig/json_object.h
++++ json-c-0.15/json_object.h
+@@ -1073,6 +1073,8 @@ extern int json_object_array_delete_idx(
+ 
+ #endif
+ 
++int json_object_set_param(struct json_object *obj, char *v);
++
+ #ifdef __cplusplus
+ }
+ #endif

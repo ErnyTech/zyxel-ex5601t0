@@ -1,0 +1,719 @@
+Package: 1905daemon
+Version: 1
+Depends: libc, wapp, libnl-tiny1, ip-bridge, zy1905, zyMAPSteer
+Section: MTK Properties
+Architecture: aarch64_cortex-a53
+Installed-Size: 283642
+Filename: 1905daemon_1_aarch64_cortex-a53.ipk
+Size: 284474
+SHA256sum: 6416c7038749ec4160b2affd51486da89b667e7eef8438eedf3502ad7f5bed56
+Description:  wifi app daemon
+
+Package: 8021xd
+Version: 1
+Depends: libc
+Section: MTK Properties
+Architecture: aarch64_cortex-a53
+Installed-Size: 66972
+Filename: 8021xd_1_aarch64_cortex-a53.ipk
+Size: 67724
+SHA256sum: 37fea7adab4d13c3c96bf00e24a35eff996ac49ebd54cc0ddb931b85cfafd4f6
+Description:  802.1X Daemon
+
+Package: SpeedTest
+Version: 2.0-1
+Depends: libc, libpthread, libzcfg_fe_rdm_struct, libzyutil, libzcfg_msg, libjson-c2, libzcfg_fe_rdm_access, libzcmd_tool, libopenssl1.1
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 9151
+Filename: SpeedTest_2.0-1_aarch64_cortex-a53.ipk
+Size: 9929
+SHA256sum: e037056bd49cb02aa24c41841dde51864183c12e2b7d44eb04dff7740f112633
+Description:  Speed test between internet and gateway
+
+Package: ZyIMS
+Version: 0.7.1-1
+Depends: libc, iptk_8_2_2, libsrtp, libjson-c2, libexpat, zcfg, libzyuitimer, libpthread, alsa-lib, libopenssl1.1
+Section: VoIP
+Architecture: aarch64_cortex-a53
+Installed-Size: 1922780
+Filename: ZyIMS_0.7.1-1_aarch64_cortex-a53.ipk
+Size: 1918643
+SHA256sum: be1be263481fb6f54faa5d1b915516486c6a0632bb040f2072725fb50b1e0945
+Description:  ZyXEL VoIP daemon
+
+Package: ated_ext
+Version: 2
+Depends: libc
+Section: MTK Properties
+Architecture: aarch64_cortex-a53
+Installed-Size: 14517
+Filename: ated_ext_2_aarch64_cortex-a53.ipk
+Size: 15160
+SHA256sum: 689a32d2f9fa4e43d20ffec78ea28baa5a2fb92ebee36ea77d91e94eb2d79b76
+Description:  ated_ext Daemon
+
+Package: dalcmd
+Version: 2.0-1
+Depends: libc, libzcfg_fe_dal
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 21959
+Filename: dalcmd_2.0-1_aarch64_cortex-a53.ipk
+Size: 22629
+SHA256sum: 815151e1c0b62e46b03a55c92330ee4729afc12e4aceb534d8977735e6332f16
+Description:  ZyXEL DAL Command Line
+
+Package: datconf-lua
+Version: 1
+Depends: libc, datconf, liblua5.1.5
+Section: MTK Properties
+Architecture: aarch64_cortex-a53
+Installed-Size: 5947
+Filename: datconf-lua_1_aarch64_cortex-a53.ipk
+Size: 6700
+SHA256sum: 98847bba7694fa8f8ac37ae7923604e8f9c814bf93effdbfd6ed4a0be99df4a0
+Description:  Lua plugin for datconf
+
+Package: datconf
+Version: 1
+Depends: libc, kvcedit
+Section: MTK Properties
+Architecture: aarch64_cortex-a53
+Installed-Size: 5717
+Filename: datconf_1_aarch64_cortex-a53.ipk
+Size: 6510
+SHA256sum: ad74a40f5a832dde3d8a3cdf75e0f87d43d3262205eeadab3f7cc1391e9c77f7
+Description:  Utility for editing dat files used by MediaTek Wi-Fi drivers
+
+Package: esmd
+Version: 2.0-1
+Depends: libc, zcfg, libzcfg_msg, libzos, libzlog, libzyutil, libzywwan, libzcfg_fe_rdm_struct, libzcfg_fe_rdm_string, libzyuitimer, libzcfg_fe_rdm_access, libzcmd_tool, libjson-c2, libnl-tiny1, libzcfg_dbg, libpthread, libopenssl1.1
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 62964
+Filename: esmd_2.0-1_aarch64_cortex-a53.ipk
+Size: 63784
+SHA256sum: 6d1ba0274b16954e9a981208cfecb96b95a4e67501320f6b00b59428b12ec28a
+Description:  ZyXEL System Message Daemon
+
+Package: fw_upgrade
+Version: 2.0-1
+Depends: libc, zcmd, libzyutil
+Section: base
+Architecture: aarch64_cortex-a53
+Installed-Size: 4636
+Filename: fw_upgrade_2.0-1_aarch64_cortex-a53.ipk
+Size: 5349
+SHA256sum: bdcdbae3f652c5eedde64f003a898d06a5cacf06dee7b120a088c6ed6d15ea6a
+Description:  ZyXEL Firmware Upgrade Watcher Daemon
+
+Package: fwdd
+Version: 1
+Depends: libc
+Section: MTK Properties
+Architecture: aarch64_cortex-a53
+Installed-Size: 10734
+Filename: fwdd_1_aarch64_cortex-a53.ipk
+Size: 11440
+SHA256sum: fb1eb5da033cf2bcba5d53f27c773ec9fb3446d9eb077dea5c6687399b76d18a
+Description:  forward daemon
+
+Package: hostpolling
+Version: 2.0-1
+Depends: libc, zcmd, libsqlite3-0, netprobe
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 5488
+Filename: hostpolling_2.0-1_aarch64_cortex-a53.ipk
+Size: 6232
+SHA256sum: e63ffc9a1ff5f0fd0633481a184736c82cb4b4487b13a687758be32069800e03
+Description:  One Connect polling host by ping check
+
+Package: iptk_8_2_2
+Version: 1.0-1
+Depends: libc
+Section: VoIP
+Architecture: aarch64_cortex-a53
+Installed-Size: 1310274
+Filename: iptk_8_2_2_1.0-1_aarch64_cortex-a53.ipk
+Size: 1304079
+SHA256sum: 30c9ce55bc808458595ac781b98b64d432fe45a4371a6108365aea2bcaa73b12
+Description:  ZyXEL VoIP daemon (ZyIMS)'s Third-party SIP module
+
+Package: kmod-TMS_Module
+Version: 5.4.171+6.92-1
+Depends: kernel (=5.4.171-1-ae6babfebe6630d72ad9e1e615b9c55c)
+Section: kernel
+Architecture: aarch64_cortex-a53
+Installed-Size: 129637
+Filename: kmod-TMS_Module_5.4.171+6.92-1_aarch64_cortex-a53.ipk
+Size: 128879
+SHA256sum: defdc818f6c6de7f87741f006aaafbd0db0c46066ee7913b32d2e2c56968ecb1
+Description:  This package contains TMS Module 
+
+Package: kmod-conninfra
+Version: 5.4.171-1
+Depends: kernel (=5.4.171-1-ae6babfebe6630d72ad9e1e615b9c55c)
+Section: kernel
+Architecture: aarch64_cortex-a53
+Installed-Size: 48287
+Filename: kmod-conninfra_5.4.171-1_aarch64_cortex-a53.ipk
+Size: 48714
+SHA256sum: 221df2937db6a61ed47a681f2e0f79d82ff25816937c990080a109c71f0c257a
+Description:  Support for connectivity conninfra driver.
+
+Package: kmod-mapfilter
+Version: 5.4.171-1
+Depends: kernel (=5.4.171-1-ae6babfebe6630d72ad9e1e615b9c55c)
+Section: kernel
+Architecture: aarch64_cortex-a53
+Installed-Size: 32437
+Filename: kmod-mapfilter_5.4.171-1_aarch64_cortex-a53.ipk
+Size: 33172
+SHA256sum: 85380dd1b4dd8301459162d944c90215bc1b8c670b8c44bd819ddf1e715274a5
+Description:  MTK map filter
+
+Package: kmod-mt_wifi
+Version: 5.4.171+TEST-1
+Depends: kernel (=5.4.171-1-ae6babfebe6630d72ad9e1e615b9c55c), wifi-profile, kmod-conninfra, kmod-mediatek_hnat, kmod-warp
+Section: kernel
+Architecture: aarch64_cortex-a53
+Installed-Size: 3762066
+Filename: kmod-mt_wifi_5.4.171+TEST-1_aarch64_cortex-a53.ipk
+Size: 3675265
+SHA256sum: 8bfbb4192456512009bef402c094d8e6f7d146af81b104d6dd606ce430c126cb
+Description:  MTK wifi AP driver
+
+Package: kmod-mtfwd
+Version: 5.4.171-1
+Depends: kernel (=5.4.171-1-ae6babfebe6630d72ad9e1e615b9c55c)
+Section: kernel
+Architecture: aarch64_cortex-a53
+Installed-Size: 10942
+Filename: kmod-mtfwd_5.4.171-1_aarch64_cortex-a53.ipk
+Size: 11663
+SHA256sum: dd8a20159a2be7ebadd4ccb29f77fc85e149a7db42e9e5df0c0891f8153b872c
+Description:  MTK forward module
+
+Package: kmod-warp
+Version: 5.4.171-1
+Depends: kernel (=5.4.171-1-ae6babfebe6630d72ad9e1e615b9c55c), kmod-mediatek_hnat
+Section: kernel
+Architecture: aarch64_cortex-a53
+Installed-Size: 209558
+Filename: kmod-warp_5.4.171-1_aarch64_cortex-a53.ipk
+Size: 195832
+SHA256sum: 87f4973f4890f22c85356b705bfdffa3b196c3f77ef3d032a19db61d761d41a3
+Description:  MTK warp driver
+
+Package: kmod-zybsp
+Version: 5.4.171+1.0.0-1
+Depends: kernel (=5.4.171-1-ae6babfebe6630d72ad9e1e615b9c55c)
+Section: kernel
+Architecture: aarch64_cortex-a53
+Installed-Size: 3741
+Filename: kmod-zybsp_5.4.171+1.0.0-1_aarch64_cortex-a53.ipk
+Size: 4574
+SHA256sum: ec28aa37cddb6f45119d1215e0003c9ac0bd650effb86e06d7ebf9791d9862d0
+Description:  1. support board detect by GPIO(CONFIG_KERNEL_ZYXEL_ZYBSP_BOARD_DETECT)
+ 2. support DYING GASP(CONFIG_KERNEL_ZYXEL_ZYBSP_DYING_GASP)
+ 3. support vendor board detect by GPIO(CONFIG_KERNEL_ZYXEL_ZYBSP_VENDOR_BOARD_DETECT)
+
+Package: kmod-zyinetled
+Version: 5.4.171+2.0.0-2
+Depends: kernel (=5.4.171-1-ae6babfebe6630d72ad9e1e615b9c55c)
+Section: kernel
+Architecture: aarch64_cortex-a53
+Installed-Size: 9872
+Filename: kmod-zyinetled_5.4.171+2.0.0-2_aarch64_cortex-a53.ipk
+Size: 10705
+SHA256sum: 63608284cab868ff87b38125fb1c17566d0106d54ec5dfa9259b50f661d3b733
+Description:  Control all WAN connection Internet LED display.
+ When WAN network interface(by ifconfig check) has TX packets, Internet LED blinks.
+
+Package: kvcedit
+Version: 1
+Depends: libc, libkvcutil
+Section: util
+Architecture: aarch64_cortex-a53
+Installed-Size: 3629
+Filename: kvcedit_1_aarch64_cortex-a53.ipk
+Size: 4373
+SHA256sum: 8e3a35312995c3c752294e315fd15564a445f0dbca0fe25e990385366c95eff6
+Description:  Utility for editing key-value based config files
+
+Package: libkvcutil
+Version: 1
+Depends: libc
+Section: libs
+Architecture: aarch64_cortex-a53
+Installed-Size: 6575
+Filename: libkvcutil_1_aarch64_cortex-a53.ipk
+Size: 7374
+SHA256sum: c4da7f60e75f37c0f1eba275acbfba152c96dcbc759d7f2489eaac0e7f32e0d0
+Description:  C library for Key-value based config files
+
+Package: libmapd
+Version: 1
+Depends: libc
+Section: MTK Properties
+Architecture: aarch64_cortex-a53
+Installed-Size: 12789
+Filename: libmapd_1_aarch64_cortex-a53.ipk
+Size: 13518
+SHA256sum: 1f98a20e7b9d11cdec84bcec4c0f774a9517d40d3e763ac04e2753ce6342d10b
+Description:  mtk mapd library
+
+Package: libzywwan
+Version: 2.0-1
+Depends: libc, zcfg, zcmd
+Section: usb
+Architecture: aarch64_cortex-a53
+Installed-Size: 3134
+Filename: libzywwan_2.0-1_aarch64_cortex-a53.ipk
+Size: 3837
+SHA256sum: 1cc7ccbf1a19a2d16be68c8b830eee3d1f21f859d7dfcd53bffe41e0c11b43e8
+Description:  ZyXEL Wireless Wan Library
+
+Package: mapd
+Version: 1
+Depends: libc, wapp, 1905daemon, libmapd
+Section: MTK Properties
+Architecture: aarch64_cortex-a53
+Installed-Size: 795216
+Filename: mapd_1_aarch64_cortex-a53.ipk
+Size: 795555
+SHA256sum: b92fbf62c573985bb3777703471aca0b9644ec473081f53f31d0d12f3e33afad
+Description:  Multi AP daemon from mediatek.
+ yogender.pathak@mediatek.com
+
+Package: netprobe
+Version: 4.0-1
+Depends: libc, libzcfg_msg, libzcfg_fe_rdm_struct, libzcfg_fe_rdm_string, libzcfg_fe_rdm_access, libsqlite3-0, libjson-c2, libzcmd_tool, libzyutil
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 29808
+Filename: netprobe_4.0-1_aarch64_cortex-a53.ipk
+Size: 30318
+SHA256sum: 83305cbccc03938c634570f9a41833b8b4e6c6545aa0e9e5f310950ad08c4f2c
+Description:  NetProbe
+
+Package: ramonitor
+Version: 1.0-1
+Depends: libc, libpthread, zcfg, libzyutil, libzcfg_msg, libzcmd_tool, libjson-c2
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 5000
+Filename: ramonitor_1.0-1_aarch64_cortex-a53.ipk
+Size: 5731
+SHA256sum: 3f7ca7e19e59b8c531b2384226ea1b910df751b7e616e337fcd9f7d1fe1dcb45
+Description:  ZyXEL Router Advertisement Monitor
+
+Package: redirect_console
+Version: 1.0-1
+Depends: libc
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 1959
+Filename: redirect_console_1.0-1_aarch64_cortex-a53.ipk
+Size: 2639
+SHA256sum: 93c1970dbe463b53023f2bb05431682aec723a693e4941caf5f2e6dae788d77a
+Description:  Redirece Console
+
+Package: sigma_daemon
+Version: 1
+Depends: libc, libpthread, librt
+Section: MTK Properties
+Architecture: aarch64_cortex-a53
+Installed-Size: 164603
+Filename: sigma_daemon_1_aarch64_cortex-a53.ipk
+Size: 165215
+SHA256sum: ca755c1388cd7151521a8bfaa5e2a962dc692d1c03a22a8ff5519f8656cdeb43
+Description:  SIGMA_DAEMON
+
+Package: sigma_dut
+Version: 1
+Depends: libc, libpthread, librt
+Section: MTK Properties
+Architecture: aarch64_cortex-a53
+Installed-Size: 94437
+Filename: sigma_dut_1_aarch64_cortex-a53.ipk
+Size: 95046
+SHA256sum: 2414e6bc7defd04d44879565a77e31c04b7e7ce0b0e495e94f80f28192ded1fc
+Description:  SIGMA_DUT
+
+Package: tmsctl
+Version: 1.0.3-1
+Depends: libc, kmod-TMS_Module, libpthread, libzyutil, libzcfg_msg, libopenssl1.1, libjson-c2
+Section: BRCM
+Architecture: aarch64_cortex-a53
+Installed-Size: 23938
+Filename: tmsctl_1.0.3-1_aarch64_cortex-a53.ipk
+Size: 24693
+SHA256sum: f24f6ecf8e608ef3fb51bbd77f8613e44a56e923fcd6e526dd527f8bee7258f2
+Description:  Control TMS Module (1ag/3ah/Y.1731).
+
+Package: tty_log_echo
+Version: 1.0-1
+Depends: libc, libzcfg_msg, libzcfg_fe_rdm_struct, libzcfg_fe_rdm_string
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 3066
+Filename: tty_log_echo_1.0-1_aarch64_cortex-a53.ipk
+Size: 3784
+SHA256sum: 5ca97033dee4bb7e79c40f495781f460d497fbecbc01733211ab304222c9494d
+Description:  ZCFG tty_echo Utilities
+
+Package: vlanautohunt
+Version: 2.0-1
+Depends: libc, zcmd
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 10016
+Filename: vlanautohunt_2.0-1_aarch64_cortex-a53.ipk
+Size: 10728
+SHA256sum: 1ec2cb529f277b3de48b7187d8f013102d97be36f4a165f1923c5bece3e4f304
+Description:  ZyXEL vlan auto-hunt daemon
+
+Package: wapp
+Version: 1
+Depends: libc, libkvcutil, libopenssl1.1, libnl-tiny1, libzyutil
+Section: MTK Properties
+Architecture: aarch64_cortex-a53
+Installed-Size: 367510
+Filename: wapp_1_aarch64_cortex-a53.ipk
+Size: 367109
+SHA256sum: 53b1a1e65447ebe93f00a48a7108296b6ce3975fbaefbc894768f085202f0ddc
+Description:  wifi app daemon
+
+Package: webgui_vue
+Version: 1.0-1
+Depends: libc
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 2743959
+Filename: webgui_vue_1.0-1_aarch64_cortex-a53.ipk
+Size: 2743848
+SHA256sum: 9a7c3db3b8913a047f5fbc8678d66bdfa2bc10bb283ca32a202d5ce3ed0d3f3e
+Description:  ZyXEL vue GUI
+
+Package: wwan
+Version: 1.2-1
+Depends: libc, zcmd, libpthread, libzyutil, libzcfg_msg, libzcfg_fe_rdm_access, libzcmd_tool, libzcfg_fe_rdm_struct, libjson-c2
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 23473
+Filename: wwan_1.2-1_aarch64_cortex-a53.ipk
+Size: 24241
+SHA256sum: 1171ff0a15c59a32ea95643b3465db1f7fa916acb29ecf028b27a10526174f2f
+Description:  ZyXEL WWAN feature
+
+Package: wwanbackupd
+Version: 2.0-1
+Depends: libc, zcmd, libpthread, libzyutil, libzcfg_msg, libzcfg_fe_rdm_access, libzcmd_tool, libzcfg_fe_rdm_struct, libjson-c2
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 10345
+Filename: wwanbackupd_2.0-1_aarch64_cortex-a53.ipk
+Size: 11129
+SHA256sum: 989dc158ef6ef4f860e990f7d57e61de5bdf40a1897b77813c1e799ef3e5a0ff
+Description:  ZyXEL 3G backup and ping check daemon
+
+Package: zcfg
+Version: 1.0-1
+Depends: libc
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 57556
+Filename: zcfg_1.0-1_aarch64_cortex-a53.ipk
+Size: 58340
+SHA256sum: 30d0c41c4c52300653f96bab7bfcce312ecf7b67fe87331de546627f968d8a75
+Description:  ZyXEL Configuration Management
+
+Package: zcfg_be
+Version: 3.0-1
+Depends: libc, libzyutil, libzlog, libzos, zcmd, libzcfg_dbg, libzcfg_fe_rdm_string, libzcfg_fe_schema, libzcfg_fe_rdm_struct, clinkc, libzyutil, libzlog, libzos
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 550566
+Filename: zcfg_be_3.0-1_aarch64_cortex-a53.ipk
+Size: 546635
+SHA256sum: 5b13b00ae703df9010c48941311debda53017b4c0f9ab02758a826e94324c9d4
+Description:  Support Super WAN Management
+
+Package: zcfg_util
+Version: 2.0-1
+Depends: libc, libzcfg_fe_schema, libzcfg_fe_rdm_string, libzcfg_fe_rdm_struct, libzcfg_fe_tr98, zcfg, libzyutil, libzyutil, libzcfg_fe_rdm_access, libzcmd_tool, libjson-c2, libzcfg_msg, libzlog, libzos, libsqlite3-0, libzcfg_fe_dal
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 11246
+Filename: zcfg_util_2.0-1_aarch64_cortex-a53.ipk
+Size: 12013
+SHA256sum: 163eaebb89429507e232ba0df178d6a52b1b654cb99f239e11635d51350a2b51
+Description:  ZCFG utilities
+
+Package: zcmd
+Version: 3.0-1
+Depends: libc, zcfg, libpthread, libzyutil, libzcfg_msg, libzos, libzlog, libzcmd_tool, libopenssl1.1, zyee, libzyuitimer, libzcfg_fe_rdm_struct
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 167178
+Filename: zcmd_3.0-1_aarch64_cortex-a53.ipk
+Size: 167832
+SHA256sum: f9e2522501b3b3a9cd727c86ff39028f0241b424ba2c4446589145d24b57a2f4
+Description:  ZyXEL Configuration Management Daemon
+
+Package: zhotplugd
+Version: 1.0-1
+Depends: libc, zcmd, libzyutil, libzcfg_msg, libzcfg_fe_rdm_access, libzcmd_tool, libzcfg_fe_rdm_string, libzcfg_fe_rdm_struct, libjson-c2, libzlog, libzos
+Section: usb
+Architecture: aarch64_cortex-a53
+Installed-Size: 13717
+Filename: zhotplugd_1.0-1_aarch64_cortex-a53.ipk
+Size: 14449
+SHA256sum: f3fa3ec3047e26117bcded67b7943cad930775c7800fb74d6f46a3f0e93d1fde
+Description:  ZyXEL USB hotplug daemon
+
+Package: zhttpd
+Version: 2.0-1
+Depends: libc, libpthread, clinkc, libexpat, openssl-util, libuuid1, libzcfg_fe_dal, libzywwan, libzyuitimer
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 94610
+Filename: zhttpd_2.0-1_aarch64_cortex-a53.ipk
+Size: 95111
+SHA256sum: 2b0d646dd754f0611e724046d0635f74396566a559fe61e02365bcf55f5b9bbe
+Description:  Zyxel HTTP Server
+
+Package: zhttpd_rest
+Version: 2.0-1
+Depends: libc, zhttpd, libpthread, clinkc, libexpat, openssl-util, libzos, libzlog, libzyutil, libuuid1, libzyuitimer, libzcfg_fe_dal, libzywwan, libsqlite3-0, netprobe
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 45910
+Filename: zhttpd_rest_2.0-1_aarch64_cortex-a53.ipk
+Size: 46695
+SHA256sum: 631a2ce013c5d332273c6c4fa99fec257febb4ecd3b3c4abd50556ae4cbd490b
+Description:  Zyxel RESTful API HTTPs Server
+
+Package: zipq
+Version: 2.0-1
+Depends: libc, libzcmd_tool, libzcfg_fe_rdm_string, libzcfg_fe_rdm_struct, libmnl0
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 24185
+Filename: zipq_2.0-1_aarch64_cortex-a53.ipk
+Size: 24884
+SHA256sum: 6359c1bf0b5ab6c398cf817e3e0660f50dfcbd0d0217d36e19f9d0210b173f1f
+Description:  ZyXEL handle the parental control url filter Deamon
+
+Package: zqmictl
+Version: 1.0-1
+Depends: libc, zcmd
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 9445
+Filename: zqmictl_1.0-1_aarch64_cortex-a53.ipk
+Size: 10165
+SHA256sum: 8bbe157c05d908296789d04eb7985c750fe9003ff4edea048a21fb26e67b24f1
+Description:  ZyXEL QMICTL feature
+
+Package: zstun
+Version: 1.0-1
+Depends: libc, libzcfg_fe_rdm_string, libzcfg_fe_rdm_struct, libzcmd_tool
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 11349
+Filename: zstun_1.0-1_aarch64_cortex-a53.ipk
+Size: 11927
+SHA256sum: 33838f0de9e692f0cd587d23c1f116f867aa5a4177591f952b29d18f02f99996
+Description:  ZyXEL TR-111 part 2 Daemon
+
+Package: ztr143
+Version: 2.0-1
+Depends: libc, libpthread, libzcfg_fe_rdm_access, libzcfg_fe_rdm_struct, libzcfg_fe_rdm_string, libzyutil, libopenssl1.1, libzcmd_tool, libjson-c2, libzcfg_msg, libzos, libzlog, libzcfg_fe_dal, libzcfg_fe_schema
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 36365
+Filename: ztr143_2.0-1_aarch64_cortex-a53.ipk
+Size: 36736
+SHA256sum: 275039069380ac5e2c583d373052064af327f1be8a3b8a953194b757da609805
+Description:  ZyXEL TR-143 app
+
+Package: ztr69
+Version: 2.0-1
+Depends: libc, libpthread, clinkc, libexpat, openssl-util, libuuid1, libzos, libzlog, libuuid1, zcfg, libzcfg_fe_rdm_struct, libzcfg_fe_rdm_string, libzcfg_fe_rdm_access, libzcfg_msg, libzcmd_tool, libzlog, libzos, libjson-c2, libzyutil, libzcfg_fe_dal, libsqlite3-0, libzcfg_fe_tr98, libzywwan
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 153409
+Filename: ztr69_2.0-1_aarch64_cortex-a53.ipk
+Size: 151665
+SHA256sum: bfbb5fa93d47279f44a7e12296140b4b4f9b7af22bab384c28c8ec92c586e3ae
+Description:  ZyXEL TR-069 Daemon
+
+Package: ztr69cmd
+Version: 2.0-1
+Depends: libc, libpthread, ztr69, libzcfg_fe_dal, libzcmd_tool, libsqlite3-0
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 4887
+Filename: ztr69cmd_2.0-1_aarch64_cortex-a53.ipk
+Size: 5627
+SHA256sum: 17c9adbe25e64bd5a9589a308e902540921017cf2bf70878afa01e7ef3184aeb
+Description:  ZyXEL TR-069 Command Daemon
+
+Package: ztzu
+Version: 1.0-1
+Depends: libc
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 2228
+Filename: ztzu_1.0-1_aarch64_cortex-a53.ipk
+Size: 2912
+SHA256sum: 4ecd8f8cefb621992f579a0b0f1fe8b76b3d0868de082b96eb041ad3ba49c1b6
+Description:  ZyXEL Time Zone Updater
+
+Package: zupnp
+Version: 1.0-1
+Depends: libc, libpthread, clinkc, libexpat, openssl-util, libzos, libzlog, libuuid1, libzcfg_fe_rdm_access, libzcmd_tool, libjson-c2, libzcfg_msg, libzlog, libzos, libzcfg_fe_schema, libzcfg_fe_rdm_string, libzcfg_fe_rdm_struct, libzcfg_fe_tr98, libzyutil, libsqlite3-0, libzcfg_fe_dal
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 25365
+Filename: zupnp_1.0-1_aarch64_cortex-a53.ipk
+Size: 26087
+SHA256sum: ac8badc084144b68dc4fc38ec4ded6a8d600421244cf2e700b3f5a9bc6093c4c
+Description:  Zyxel UPnP
+
+Package: zwol
+Version: 1.0-1
+Depends: libc
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 3644
+Filename: zwol_1.0-1_aarch64_cortex-a53.ipk
+Size: 4333
+SHA256sum: f4f09850a160f7603efcce01e96bc54c13409097868f4bd91a7d81f37ed56324
+Description:  ZyXEL wake on lan feature
+
+Package: zxmppc
+Version: 1.0-1
+Depends: libc, glib2, libstrophe, libzcfg_fe_rdm_struct, libzcfg_fe_rdm_string, libzcmd_tool, libzyutil, libzlog, libzos
+Section: base
+Architecture: aarch64_cortex-a53
+Installed-Size: 9197
+Filename: zxmppc_1.0-1_aarch64_cortex-a53.ipk
+Size: 9979
+SHA256sum: c0bd3b834afab6fafb8c50405e398679bc9dc9bfdb689ebebd571d356c102feb
+Description:  Zyxel
+
+Package: zy1905
+Version: 3.0-1
+Depends: libc, zyMAPLog, libzcfg_fe_rdm_struct, libzcfg_fe_rdm_access, libzcfg_msg, libzyutil, libjson-c2, libzlog, libzos, libzcmd_tool, libopenssl1.1
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 137411
+Filename: zy1905_3.0-1_aarch64_cortex-a53.ipk
+Size: 137262
+SHA256sum: ded6ce5076d7f5ae79b1f8d4cbcaead2847baaa90e2cf20b1d0b3802da4e0c18
+Description:  zy1905
+
+Package: zyMAPLog
+Version: 1.0
+Depends: libc
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 3916
+Filename: zyMAPLog_1.0_aarch64_cortex-a53.ipk
+Size: 4571
+SHA256sum: bf45b81a297ce7d41b2c759d13a2d27f78bbe77c009f6769c1bb200c49cbd111
+Description:  zyMAPLog
+
+Package: zyMAPSteer
+Version: 1.0-1
+Depends: libc, libzcfg_msg, libzyuitimer, zyMAPLog, libzcfg_fe_rdm_struct, libzcfg_fe_rdm_string, libzcmd_tool
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 64942
+Filename: zyMAPSteer_1.0-1_aarch64_cortex-a53.ipk
+Size: 65401
+SHA256sum: bbc7319412e9c3b70aa545aa6ad34089e91e672a34fa96425c14210d5d239d17
+Description:  Zyxel steering logic under EasyMesh
+
+Package: zybtnchk
+Version: 2.0.0-1
+Depends: libc, zcfg, libzcfg_msg, libzcfg_fe_rdm_access, libzcfg_fe_rdm_string, libzcmd_tool, libzcfg_fe_rdm_struct
+Section: utils
+Architecture: aarch64_cortex-a53
+Installed-Size: 7150
+Filename: zybtnchk_2.0.0-1_aarch64_cortex-a53.ipk
+Size: 7931
+SHA256sum: 10f6611e8a167bf64ae27915f194e035c2ff4e09629358cd626947a904b2f016
+Description:  ZyXEL tool for check button state.
+
+Package: zycfgfilter
+Version: 2.0-1
+Depends: libc, zcfg
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 12196
+Filename: zycfgfilter_2.0-1_aarch64_cortex-a53.ipk
+Size: 12504
+SHA256sum: 1ec2e40623841d168255a74eafdcabcdfffaeab91eaaba27f298343bc4c9721a
+Description:  ZyXEL Configuration Filter
+
+Package: zycli
+Version: 2.0-1
+Depends: libc, zcmd, libzyutil
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 44636
+Filename: zycli_2.0-1_aarch64_cortex-a53.ipk
+Size: 45381
+SHA256sum: ae91b979607a893c270620f714a3a74adb652808785d57282c8d2e366d2db561
+Description:  ZyXEL CLI
+
+Package: zyee
+Version: 1.0-1
+Depends: libc, glib2, libzcfg_fe_rdm_struct, libzcfg_fe_rdm_string, libzcmd_tool, libzyutil, libzos
+Section: base
+Architecture: aarch64_cortex-a53
+Installed-Size: 21881
+Filename: zyee_1.0-1_aarch64_cortex-a53.ipk
+Size: 22615
+SHA256sum: d3cfd5d5ace03ccfd1a6faf7a62c821bd3283107b1b2a1b8823b765d1acd03e0
+Description:  ZyXEL Execution Environment Daemon 
+
+Package: zyschedule
+Version: 2.0-1
+Depends: libc, zcfg
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 3990
+Filename: zyschedule_2.0-1_aarch64_cortex-a53.ipk
+Size: 4704
+SHA256sum: dd81e85aad1b4bf0d8fc9e1b2e2a2e3d6b0c08fd1014bbab497580e3f8f64fb7
+Description:  zyschedule is a process to check schedule rule time .
+
+Package: zysh
+Version: 3.0-7
+Depends: libc, zcmd, libedit, libncurses6, libzcfg_dbg, liboutput_redirect, libzcfg_fe_dal
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 93493
+Filename: zysh_3.0-7_aarch64_cortex-a53.ipk
+Size: 93971
+SHA256sum: 467c0cc1f8b452e10f7fc4df694198b6909ee07256e910edef2f89b080edfbf6
+Description:  ZyXEL Shell and Command Line Interface
+
+Package: zywifid
+Version: 3.0-1
+Depends: libc, zcfg, libzcfg_msg, libzcmd_tool, libzyutil, netprobe, libzcfg_fe_rdm_struct, libzcfg_fe_rdm_string, libzcfg_fe_rdm_access, libzlog, libzos, libjson-c2, libzyuitimer, libpthread, mapd, zyMAPSteer
+Section: net
+Architecture: aarch64_cortex-a53
+Installed-Size: 145611
+Filename: zywifid_3.0-1_aarch64_cortex-a53.ipk
+Size: 144811
+SHA256sum: c3b29b4e8c8f088c6e4dda50bf260fc1f5b547c01de4634f86aa75b99bd67382
+Description:  ZyXEL WiFi Daemon
+

@@ -1,0 +1,23 @@
+Index: busybox-1.31.1/loginutils/login.c
+===================================================================
+--- busybox-1.31.1.orig/loginutils/login.c	2019-06-10 18:50:53.000000000 +0800
++++ busybox-1.31.1/loginutils/login.c	2021-03-22 11:25:23.423001400 +0800
+@@ -507,6 +507,8 @@
+ 		bb_do_delay(LOGIN_FAIL_DELAY);
+ 		/* TODO: doesn't sound like correct English phrase to me */
+ 		puts("Login incorrect");
++		if (!strncmp("p",short_tty,1))
++			syslog(LOG_INFO, "Account: Enter an invalid password for User '%s' from the host %s by telnetd.",username,short_tty);
+ 		if (++count == 3) {
+ 			syslog(LOG_WARNING, "invalid password for '%s'%s",
+ 						username, fromhost);
+@@ -572,7 +574,8 @@
+ 
+ 	if (pw->pw_uid == 0)
+ 		syslog(LOG_INFO, "root login%s", fromhost);
+-
++	if (!strncmp("p",short_tty,1))
++		syslog(LOG_INFO, "Account: User '%s' login from the host %s by telnetd.", username, short_tty);
+ 	if (ENABLE_FEATURE_CLEAN_UP)
+ 		free(fromhost);
+ 

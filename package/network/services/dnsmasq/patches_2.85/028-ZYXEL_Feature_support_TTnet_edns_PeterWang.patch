@@ -1,0 +1,127 @@
+Index: dnsmasq-2.85/src/dns-protocol.h
+===================================================================
+--- dnsmasq-2.85.orig/src/dns-protocol.h
++++ dnsmasq-2.85/src/dns-protocol.h
+@@ -78,7 +78,14 @@
+ #define T_ANY		255
+ #define T_CAA           257
+ 
++#ifdef ZYXEL_TTNET_EDNS //add ppp username to edns option for TT
++#define EDNS0_OPTION_USERNAME       65001 /* Nominum temporary assignment *///according to TT request set it to 65001
++#define EDNS0_MAC_HEAD 16389
++#define EDNS0_USERNAME_HEAD 32 
++#define EDNS0_OPTION_MAC            38       /* dyndns.org temporary assignment *///according to TT request set it to 38
++#else
+ #define EDNS0_OPTION_MAC            65001       /* dyndns.org temporary assignment */
++#endif
+ #define EDNS0_OPTION_CLIENT_SUBNET  8   /* IANA */
+ #define EDNS0_OPTION_NOMDEVICEID    65073       /* Nominum temporary assignment */
+ #define EDNS0_OPTION_NOMCPEID       65074       /* Nominum temporary assignment */
+Index: dnsmasq-2.85/src/dnsmasq.h
+===================================================================
+--- dnsmasq-2.85.orig/src/dnsmasq.h
++++ dnsmasq-2.85/src/dnsmasq.h
+@@ -1174,6 +1174,9 @@ extern struct daemon
+   unsigned long local_ttl, neg_ttl, max_ttl, min_cache_ttl, max_cache_ttl,
+     auth_ttl, dhcp_ttl, use_dhcp_ttl;
+   char *dns_client_id;
++#ifdef ZYXEL_TTNET_EDNS// add ppp username to edns option for TT
++  char *dns_ppp_username;
++#endif
+   struct hostsfile *addn_hosts;
+   struct dhcp_context *dhcp, *dhcp6;
+   struct ra_interface *ra_interfaces;
+Index: dnsmasq-2.85/src/edns0.c
+===================================================================
+--- dnsmasq-2.85.orig/src/edns0.c
++++ dnsmasq-2.85/src/edns0.c
+@@ -102,6 +102,9 @@ add_pseudoheader (struct dns_header * he
+   int rdlen = 0, is_sign, is_last;
+   unsigned short flags = set_do ? 0x8000 : 0, rcode = 0;
+ 
++#ifdef ZYXEL_TTNET_EDNS//  add ppp username to edns option for TT
++  int ttnet_edns0_opt_head = 0 ;
++#endif
+   p = find_pseudoheader (header, plen, NULL, &udp_len, &is_sign, &is_last);
+ 
+   if (is_sign)
+@@ -222,6 +225,18 @@ add_pseudoheader (struct dns_header * he
+     if (p + 4 > limit)
+       return plen;              /* Too big */
+     PUTSHORT (optno, p);
++#ifdef ZYXEL_TTNET_EDNS//  add ppp username to edns option for TT
++	if(optno == EDNS0_OPTION_MAC)
++	  ttnet_edns0_opt_head = EDNS0_MAC_HEAD ;
++	else if(optno == EDNS0_OPTION_USERNAME)
++	  ttnet_edns0_opt_head = EDNS0_USERNAME_HEAD ;
++	if(ttnet_edns0_opt_head != 0)
++	{ 
++	  PUTSHORT(optlen+2, p);
++	  PUTSHORT(ttnet_edns0_opt_head, p);
++	}
++	else
++#endif
+     PUTSHORT (optlen, p);
+     if (p + optlen > limit)
+       return plen;              /* Too big */
+@@ -292,6 +307,11 @@ add_mac (struct dns_header *header, size
+ 
+   if ((maclen = find_mac (l3, mac, 1, now)) != 0) {
+     *cacheablep = 0;
++#ifdef ZYXEL_TTNET_EDNS//  add ppp username to edns option for TT
++	if (daemon->dns_ppp_username)
++	  plen = add_pseudoheader(header, plen, limit, PACKETSZ, EDNS0_OPTION_USERNAME, 
++				(unsigned char *)daemon->dns_ppp_username, strlen(daemon->dns_ppp_username), 0, 0);
++#endif
+     plen =
+       add_pseudoheader (header, plen, limit, PACKETSZ, EDNS0_OPTION_MAC, mac,
+                         maclen, 0, 0);
+Index: dnsmasq-2.85/src/option.c
+===================================================================
+--- dnsmasq-2.85.orig/src/option.c
++++ dnsmasq-2.85/src/option.c
+@@ -177,6 +177,9 @@ struct myoption
+ #define LOPT_TAG_IFNAME   364
+ #define LOPT_VENDOREXACT  365
+ #endif
++#ifdef ZYXEL_TTNET_EDNS// add ppp username to edns option for TT
++#define LOPT_PPP_USER      366
++#endif
+ 
+ #ifdef HAVE_GETOPT_LONG
+ static const struct option opts[] =
+@@ -317,6 +320,9 @@ static const struct myoption opts[] =
+   {"add-mac", 2, 0, LOPT_ADD_MAC},
+   {"add-subnet", 2, 0, LOPT_ADD_SBNET},
+   {"add-cpe-id", 1, 0, LOPT_CPE_ID},
++#ifdef ZYXEL_TTNET_EDNS// add ppp username to edns option for TT
++  { "add-ppp-username", 1, 0 , LOPT_PPP_USER },
++#endif
+   {"proxy-dnssec", 0, 0, LOPT_DNSSEC},
+   {"dhcp-sequential-ip", 0, 0, LOPT_INCR_ADDR},
+   {"conntrack", 0, 0, LOPT_CONNTRACK},
+@@ -711,6 +717,11 @@ static struct
+   LOPT_CPE_ID, ARG_ONE, "<text>",
+       gettext_noop ("Add client identification to forwarded DNS queries."),
+       NULL}, {
++#ifdef ZYXEL_TTNET_EDNS// add ppp username to edns option for TT
++  LOPT_PPP_USER, ARG_ONE, "<text>", 
++  		gettext_noop("Add CPE PPPoE username to forwarded DNS queries."), 
++  		NULL },{
++#endif
+   LOPT_DNSSEC, OPT_DNSSEC_PROXY, NULL,
+       gettext_noop
+       ("Proxy DNSSEC validation results from upstream nameservers."), NULL}, {
+@@ -2733,6 +2744,12 @@ one_opt (int option, char *arg, char *er
+     if (arg)
+       daemon->dns_client_id = opt_string_alloc (arg);
+     break;
++#ifdef ZYXEL_TTNET_EDNS// add ppp username to edns option for TT
++		case LOPT_PPP_USER: /* --add-ppp-username */
++			if(arg)
++				daemon->dns_ppp_username = opt_string_alloc(arg);
++			break;
++#endif
+ 
+   case LOPT_ADD_MAC:           /* --add-mac */
+     if (!arg)

@@ -1,0 +1,21 @@
+Index: busybox-1.31.1/networking/wget.c
+===================================================================
+--- busybox-1.31.1.orig/networking/wget.c	2021-04-13 21:08:18.877854698 +0800
++++ busybox-1.31.1/networking/wget.c	2021-04-13 21:08:19.093854691 +0800
+@@ -2777,11 +2777,12 @@
+ 	}
+ #endif
+ #if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
+-	if(strstr(G.dir_prefix, "TR143Download")){
+-		printf("output dir: %s\n", G.dir_prefix);
+-		tr143options |= TR143OPTIONS_DOWNLOAD_NOWRITEDOWN;
++	if(G.dir_prefix){
++		if(strstr(G.dir_prefix, "TR143Download")){
++			printf("output dir: %s\n", G.dir_prefix);
++			tr143options |= TR143OPTIONS_DOWNLOAD_NOWRITEDOWN;
++		}
+ 	}
+-
+ 	if (option_mask32 & WGET_OPT_ETNERPRIORITY)
+ 		priorityMark = atoi(G.ethernetPriority)<<13 | 0x1000;
+ #endif

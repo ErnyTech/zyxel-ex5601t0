@@ -1,0 +1,112 @@
+Index: busybox-1.31.1/networking/ftpgetput.c
+===================================================================
+--- busybox-1.31.1.orig/networking/ftpgetput.c
++++ busybox-1.31.1/networking/ftpgetput.c
+@@ -756,6 +756,21 @@ int ftpgetput_main(int argc UNUSED_PARAM
+ 	argv += optind;
+ 
+ #ifdef ZCFG_SUPPORT
++	//fine tune tcp parameter, FTP Upload
++	FILE* f_sh = NULL;
++	f_sh = fopen("/tmp/tr143.sh","w");
++	if(f_sh != NULL) fprintf(f_sh, "#!/bin/sh \n");
++	if(f_sh != NULL) fprintf(f_sh, "echo 1 > /proc/sys/net/ipv4/tcp_window_scaling\n");
++	if(f_sh != NULL) fprintf(f_sh, "echo 1 > /proc/sys/net/ipv4/tcp_sack\n");
++	if(f_sh != NULL) fprintf(f_sh, "echo 8760 1888888 16777216 >/proc/sys/net/ipv4/tcp_wmem\n");
++	if(f_sh != NULL){
++		fclose(f_sh);
++		f_sh = NULL;
++	}
++	sleep(3);
++	system("chmod 777 -R /tmp/tr143.sh");
++	system("/tmp/tr143.sh");
++
+ 	printf("Interface: %s\n", intf);
+ 
+ 	printf("URL: %s\n", url);
+@@ -824,6 +839,24 @@ int ftpgetput_main(int argc UNUSED_PARAM
+ 		//output test data
+ 		outputDiagUlData(rt);
+ 
++		//FTP Upload
++		f_sh = fopen("/tmp/tr143.sh","w");
++		if(f_sh != NULL) fprintf(f_sh, "#!/bin/sh \n");
++		if(f_sh != NULL) fprintf(f_sh, "echo 0 > /proc/sys/net/ipv4/tcp_window_scaling\n");
++		if(f_sh != NULL) fprintf(f_sh, "echo 0 > /proc/sys/net/ipv4/tcp_sack\n");
++#ifdef ZYXEL_USA_PRODUCT //NISC fine tune
++		if(f_sh != NULL) fprintf(f_sh, "echo 1 > /proc/sys/net/ipv4/tcp_timestamps\n");
++		if(f_sh != NULL) fprintf(f_sh, "echo 0 > /proc/sys/net/ipv4/tcp_low_latency\n");
++#endif
++		if(f_sh != NULL) fprintf(f_sh, "echo 4096 16384 2068576 > /proc/sys/net/ipv4/tcp_wmem\n");
++		if(f_sh != NULL){
++			fclose(f_sh);
++			f_sh = NULL;
++		}
++		// printf("Run script...\n");
++		system("chmod 777 -R /tmp/tr143.sh");
++		system("/tmp/tr143.sh");
++
+ 		return rt;
+ 	}
+ #else
+Index: busybox-1.31.1/networking/wget.c
+===================================================================
+--- busybox-1.31.1.orig/networking/wget.c
++++ busybox-1.31.1/networking/wget.c
+@@ -2699,7 +2699,7 @@ IF_DESKTOP(	"no-parent\0"        No_argu
+ 
+ 	INIT_G();
+ 
+-#if defined(ZCFG_SUPPORT) //TR143
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
+ 	zcfgEidInit(ZCFG_EID_WGET, NULL);
+ #endif
+ #if ENABLE_FEATURE_WGET_TIMEOUT
+@@ -2709,7 +2709,23 @@ IF_DESKTOP(	"no-parent\0"        No_argu
+ 	G.proxy_flag = "on";   /* use proxies if env vars are set */
+ 	G.user_agent = "Wget"; /* "User-Agent" header field */
+ 
+-#if defined(ZCFG_SUPPORT) //TR143
++#if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
++	FILE* f_sh = NULL;
++	//fine tune tcp parameter
++	f_sh = fopen("/tmp/tr143.sh","w");
++	if(f_sh != NULL) fprintf(f_sh, "#!/bin/sh \n");
++	if(f_sh != NULL) fprintf(f_sh, "echo 1 > /proc/sys/net/ipv4/tcp_window_scaling\n");
++	if(f_sh != NULL) fprintf(f_sh, "echo 1 > /proc/sys/net/ipv4/tcp_sack\n");
++	if(f_sh != NULL) fprintf(f_sh, "echo 0 > /proc/sys/net/ipv4/tcp_timestamps\n");
++	if(f_sh != NULL) fprintf(f_sh, "echo 1 > /proc/sys/net/ipv4/tcp_low_latency\n");
++	if(f_sh != NULL) fprintf(f_sh, "echo 8760 1888888 16777216 >/proc/sys/net/ipv4/tcp_rmem\n");
++	if(f_sh != NULL){
++		fclose(f_sh);
++		f_sh = NULL;
++	}
++	sleep(3);
++	system("chmod 777 -R /tmp/tr143.sh");
++	system("/tmp/tr143.sh");
+ #if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET)
+ 	GETOPT32(argv, "^"
+ 		"cqSO:o:P:Y:U:T:i:wd:M:E:R:+"
+@@ -2876,5 +2892,22 @@ IF_DESKTOP(	"no-parent\0"        No_argu
+ #endif
+ 	FINI_G();
+ 
++#if defined(ZCFG_SUPPORT)//TR143:DownloadDiagnstic
++	f_sh = fopen("/tmp/tr143.sh","w");
++	if(f_sh != NULL) fprintf(f_sh, "#!/bin/sh \n");
++	if(f_sh != NULL) fprintf(f_sh, "echo 0 > /proc/sys/net/ipv4/tcp_window_scaling\n");
++	if(f_sh != NULL) fprintf(f_sh, "echo 0 > /proc/sys/net/ipv4/tcp_sack\n");
++	if(f_sh != NULL) fprintf(f_sh, "echo 1 > /proc/sys/net/ipv4/tcp_timestamps\n");
++	if(f_sh != NULL) fprintf(f_sh, "echo 0 > /proc/sys/net/ipv4/tcp_low_latency\n");
++	if(f_sh != NULL) fprintf(f_sh, "echo 4096 87380 3710976 > /proc/sys/net/ipv4/tcp_rmem\n");
++	if(f_sh != NULL){
++		fclose(f_sh);
++		f_sh = NULL;
++	}
++	// printf("Run script...\n");
++	system("chmod 777 -R /tmp/tr143.sh");
++	system("/tmp/tr143.sh");
++#endif
++
+ 	return EXIT_SUCCESS;
+ }

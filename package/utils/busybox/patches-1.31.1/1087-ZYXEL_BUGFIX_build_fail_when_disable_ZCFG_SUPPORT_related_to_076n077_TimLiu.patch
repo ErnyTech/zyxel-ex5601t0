@@ -1,0 +1,37 @@
+Index: busybox-1.31.1/networking/ping.c
+===================================================================
+--- busybox-1.31.1.orig/networking/ping.c	2021-03-17 16:45:01.758233450 +0800
++++ busybox-1.31.1/networking/ping.c	2021-03-17 16:45:46.922233668 +0800
+@@ -1131,7 +1131,7 @@
+ 	free(lsa);
+ 	//print_stats_and_exit(DIAG_COMPLETE);
+ }
+-
++#ifdef ZCFG_SUPPORT
+ //static char *common_ping_resolvhost(int , char *);
+ static char *common_ping_resolvhost(int opt, char *req_resolv_hostname)
+ {
+@@ -1296,7 +1296,7 @@
+ 	strcpy(pingsdiagstat, "pings_complete");
+ 	print_stats_and_exit(EXIT_SUCCESS);
+ }
+-
++#endif
+ static int common_ping_main(int opt, char **argv)
+ {
+ 	char *str_s, *str_p;
+@@ -1406,12 +1406,14 @@
+ #endif
+ 	{
+ 		hostname = argv[optind];
++#ifdef ZCFG_SUPPORT
+ 		if(strstr(hostname, "zyxel_pings_start_")){
+ 			hostname += strlen("zyxel_pings_start_");
+ 			strcpy(pingsdiagstat, "pings_start");
+ 		}else{
+ 			strcpy(pingsdiagstat, "pings_host");
+ 		}
++#endif
+ 		common_ping(opt);
+ 		print_stats_and_exit(EXIT_SUCCESS);
+ 	}

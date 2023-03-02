@@ -1,0 +1,40 @@
+Index: linux-5.4.171/net/netfilter/nf_conntrack_core.c
+===================================================================
+--- linux-5.4.171.orig/net/netfilter/nf_conntrack_core.c
++++ linux-5.4.171/net/netfilter/nf_conntrack_core.c
+@@ -1528,19 +1528,19 @@ __nf_conntrack_alloc(struct net *net,
+ 		union nf_inet_addr check_ip;
+ 		unsigned int hash_max = hash_sesscnt(&orig->src.u3);
+ 		//int cone_session_control = 0;
+-		int known_port;
++		int dst_port;
+ 		struct hlist_nulls_node *n;
+ 		spinlock_t *lockp;
+ 
+ 
+ 
+-		/* The check_ip is change to LAN IP and Reserved for well known services(known_port<1024)*/
++		/* The check_ip is change to LAN IP and Reserved for well known services(dst_port<1024)*/
+ 		//if(cone_session_control == 0){	//For the LAN init packet, Normal packets
+ 			check_ip.ip = orig->src.u3.ip;
+-			known_port = orig->dst.u.all;
++			dst_port = ntohs(orig->dst.u.all);
+ 		//}else{				//For the WAN init packet, Cone NAT used
+ 		//	check_ip.ip = h_full_cone->tuple.src.u3.ip;
+-		//	known_port = orig->src.u.all;
++		//	dst_port = ntohs(orig->src.u.all);
+ 		//}
+ 
+ 		rcu_read_lock();
+@@ -1602,9 +1602,8 @@ __nf_conntrack_alloc(struct net *net,
+ 					spin_lock(lockp);
+ 				}
+ 
+-				/* Reserved for well known services(known_port<1024) */
+-				//if(h_max->sess_Cnt >= (nf_session_ctl_max*8/10) &&  known_port > 1024){
+-				if( unlikely(atomic_read(&h_max->sess_Cnt) >= (nf_session_ctl_max*8/10)) &&  (known_port > 1024) ){
++				/* Reserved for well-known services with the port numbers in the range from 0 to 1023. */
++				if( unlikely(atomic_read(&h_max->sess_Cnt) >= (nf_session_ctl_max*8/10)) &&  (dst_port >= 1024) ){
+ 					unsigned int hash2 = hash_conntrack(net, orig);
+ 					spin_unlock(lockp);
+ 					/* 

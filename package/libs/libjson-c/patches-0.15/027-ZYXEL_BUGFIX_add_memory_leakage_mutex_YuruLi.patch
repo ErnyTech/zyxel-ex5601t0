@@ -1,0 +1,240 @@
+Index: json-c-0.15/json_object.c
+===================================================================
+--- json-c-0.15.orig/json_object.c
++++ json-c-0.15/json_object.c
+@@ -148,6 +148,7 @@ static json_object_to_json_string_fn _js
+ struct json_object *ZcfgAllocFrontendLineRecordJobj = NULL;
+ struct json_object *ZcfgAllocFrontendAddrRecordJobj = NULL;
+ pthread_mutex_t recordAllocDataMutex = PTHREAD_MUTEX_INITIALIZER;
++__thread char isRecordAllocDataMutexLock = 0;
+ #endif
+ 
+ #ifndef JSON_NORETURN
+@@ -613,9 +614,8 @@ struct json_object* _json_object_new_obj
+ 	}
+ 	else
+ 	{
+-		pthread_mutex_lock(&recordAllocDataMutex);
++
+ 		recordFrontendZcfgAllocData(jso, fileName, line);
+-		pthread_mutex_unlock(&recordAllocDataMutex);
+ 	}
+ 
+ 	return jso;
+@@ -782,6 +782,25 @@ struct json_object *json_object_new_bool
+ 	return &jso->base;
+ }
+ 
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++struct json_object* _json_object_new_boolean(json_bool b, const char *fileName, int line)
++{
++	struct json_object *jso = json_object_new_boolean(b);
++
++	if(!jso)
++	{
++		return NULL;
++	}
++	else
++	{
++
++		recordFrontendZcfgAllocData(jso, fileName, line);
++	}
++
++	return jso;
++}
++#endif
++
+ json_bool json_object_get_boolean(const struct json_object *jso)
+ {
+ 	if (!jso)
+@@ -829,6 +848,25 @@ struct json_object *json_object_new_int(
+ 	return json_object_new_int64(i);
+ }
+ 
++
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++struct json_object* _json_object_new_int(int64_t i, const char *fileName, int line)
++{
++	struct json_object *jso = json_object_new_int(i);
++
++	if(!jso)
++	{
++		return NULL;
++	}
++	else
++	{
++		recordFrontendZcfgAllocData(jso, fileName, line);
++	}
++
++	return jso;
++}
++#endif
++
+ int32_t json_object_get_int(const struct json_object *jso)
+ {
+ 	int64_t cint64=0;
+@@ -1387,9 +1425,8 @@ struct json_object* _zmld_json_object_ne
+ 	}
+ 	else
+ 	{
+-		pthread_mutex_lock(&recordAllocDataMutex);
++
+ 		recordFrontendZcfgAllocData(jso, fileName, line);
+-		pthread_mutex_unlock(&recordAllocDataMutex);
+ 	}
+ 
+ 	return jso;
+@@ -1624,9 +1661,8 @@ struct json_object* _json_object_new_arr
+ 	}
+ 	else
+ 	{
+-		pthread_mutex_lock(&recordAllocDataMutex);
++
+ 		recordFrontendZcfgAllocData(jso, fileName, line);
+-		pthread_mutex_unlock(&recordAllocDataMutex);
+ 	}
+ 
+ 	return jso;
+@@ -2009,6 +2045,8 @@ static void json_abort(const char *messa
+ #ifdef ZCFG_MEMORY_LEAK_DETECT
+ void dumpZcfgAllocFrontendRecord(void)
+ {
++	pthread_mutex_lock(&recordAllocDataMutex);
++#if 0 //hide ZcfgAllocFrontendAddrRecordJobj
+ 	if(ZcfgAllocFrontendAddrRecordJobj != NULL){
+ 		printf("============================================================\n");
+ 		printf("json-c Alloc Address Record\n");
+@@ -2017,6 +2055,7 @@ void dumpZcfgAllocFrontendRecord(void)
+ 	}
+ 	else
+ 		printf("json-c ZcfgAllocFrontendAddrRecordJobj is not init.\n");
++#endif
+ 
+ 	if(ZcfgAllocFrontendLineRecordJobj != NULL){
+ 		printf("============================================================\n");
+@@ -2026,6 +2065,7 @@ void dumpZcfgAllocFrontendRecord(void)
+ 	}
+ 	else
+ 		printf("json-c ZcfgAllocFrontendLineRecordJobj is not init.\n");
++	pthread_mutex_unlock(&recordAllocDataMutex);
+ }
+ #endif
+ 
+@@ -2034,6 +2074,10 @@ void recordFrontendAllocData(char *point
+ {
+ 	int allocCnt = 0;
+ 
++	//printf("1\n");
++	pthread_mutex_lock(&recordAllocDataMutex);
++	isRecordAllocDataMutexLock = 1;
++
+ 	if(ZcfgAllocFrontendAddrRecordJobj == NULL)
+ 		ZcfgAllocFrontendAddrRecordJobj = json_object_new_object();
+ 	if(ZcfgAllocFrontendLineRecordJobj == NULL)
+@@ -2048,6 +2092,10 @@ void recordFrontendAllocData(char *point
+ 		allocCnt++;
+ 		json_object_object_add(ZcfgAllocFrontendLineRecordJobj, fileLine, json_object_new_int(allocCnt));
+ 	}
++	isRecordAllocDataMutexLock = 0;
++	pthread_mutex_unlock(&recordAllocDataMutex);
++	//printf("2\n");
++
+ }
+ #endif
+ 
+@@ -2077,18 +2125,41 @@ void _json_object_generic_delete(void* o
+ 		return;
+ 	}
+ 	if(ZcfgAllocFrontendAddrRecordJobj != NULL){
+-		sprintf(pointerAddr, "%p", obj);
+-		fileLine = json_object_get_string(json_object_object_get(ZcfgAllocFrontendAddrRecordJobj, pointerAddr));
+-
+-		if(fileLine != NULL && *fileLine != '\0' && ZcfgAllocFrontendLineRecordJobj != NULL){
+-			allocCnt = json_object_get_int(json_object_object_get(ZcfgAllocFrontendLineRecordJobj, fileLine));
+-			allocCnt --;
+-			if(allocCnt > 0)
+-				json_object_object_add(ZcfgAllocFrontendLineRecordJobj, fileLine, json_object_new_int(allocCnt));
+-			else
+-				json_object_object_del(ZcfgAllocFrontendLineRecordJobj, fileLine);
++		if(isRecordAllocDataMutexLock){
++			sprintf(pointerAddr, "%p", obj);
++			fileLine = json_object_get_string(json_object_object_get(ZcfgAllocFrontendAddrRecordJobj, pointerAddr));
++
++			if(fileLine != NULL && *fileLine != '\0' && ZcfgAllocFrontendLineRecordJobj != NULL){
++				allocCnt = json_object_get_int(json_object_object_get(ZcfgAllocFrontendLineRecordJobj, fileLine));
++				allocCnt --;
++				if(allocCnt > 0)
++					json_object_object_add(ZcfgAllocFrontendLineRecordJobj, fileLine, json_object_new_int(allocCnt));
++				else
++					json_object_object_del(ZcfgAllocFrontendLineRecordJobj, fileLine);
++			}
++			json_object_object_del(ZcfgAllocFrontendAddrRecordJobj, pointerAddr);
++		}
++		else{
++			//printf("3\n");
++			pthread_mutex_lock(&recordAllocDataMutex);
++			isRecordAllocDataMutexLock = 1;
++			sprintf(pointerAddr, "%p", obj);
++			fileLine = json_object_get_string(json_object_object_get(ZcfgAllocFrontendAddrRecordJobj, pointerAddr));
++
++			if(fileLine != NULL && *fileLine != '\0' && ZcfgAllocFrontendLineRecordJobj != NULL){
++				allocCnt = json_object_get_int(json_object_object_get(ZcfgAllocFrontendLineRecordJobj, fileLine));
++				allocCnt --;
++				if(allocCnt > 0)
++					json_object_object_add(ZcfgAllocFrontendLineRecordJobj, fileLine, json_object_new_int(allocCnt));
++				else
++					json_object_object_del(ZcfgAllocFrontendLineRecordJobj, fileLine);
++			}
++			json_object_object_del(ZcfgAllocFrontendAddrRecordJobj, pointerAddr);
++			isRecordAllocDataMutexLock = 0;
++			pthread_mutex_unlock(&recordAllocDataMutex);
++			//printf("4\n");
+ 		}
+-		json_object_object_del(ZcfgAllocFrontendAddrRecordJobj, pointerAddr);
+ 	}
++
+ }
+ #endif
+Index: json-c-0.15/json_tokener.c
+===================================================================
+--- json-c-0.15.orig/json_tokener.c
++++ json-c-0.15/json_tokener.c
+@@ -208,9 +208,8 @@ struct json_object* _json_tokener_parse(
+ 	}
+ 	else
+ 	{
+-		pthread_mutex_lock(&recordAllocDataMutex);
++
+ 		recordFrontendZcfgAllocData(obj, fileName, line);
+-		pthread_mutex_unlock(&recordAllocDataMutex);
+ 	}
+ 
+ 	return obj;
+Index: json-c-0.15/json_util.c
+===================================================================
+--- json-c-0.15.orig/json_util.c
++++ json-c-0.15/json_util.c
+@@ -164,9 +164,8 @@ struct json_object* _json_object_from_fi
+ 	}
+ 	else
+ 	{
+-		pthread_mutex_lock(&recordAllocDataMutex);
++
+ 		recordFrontendZcfgAllocData(obj, fileName, line);
+-		pthread_mutex_unlock(&recordAllocDataMutex);
+ 	}
+ 
+ 	return obj;
+Index: json-c-0.15/json.h
+===================================================================
+--- json-c-0.15.orig/json.h
++++ json-c-0.15/json.h
+@@ -34,7 +34,7 @@ extern "C" {
+ #ifdef ZCFG_MEMORY_LEAK_DETECT
+ #define json_object_new_object(void) _json_object_new_object(__FILE__, __LINE__)
+ #define json_object_new_array(void) _json_object_new_array(__FILE__, __LINE__)
+-#define json_object_new_string(strParameter) _json_object_new_string(strParameter, __FILE__, __LINE__)
++#define json_object_new_string(strParameter) _zmld_json_object_new_string(strParameter, __FILE__, __LINE__)
+ #define json_object_from_file(strParameter) _json_object_from_file(strParameter, __FILE__, __LINE__)
+ #define json_tokener_parse(strParameter) _json_tokener_parse(strParameter, __FILE__, __LINE__)
+ #endif

@@ -1,0 +1,247 @@
+Index: linux-5.4.171/include/uapi/linux/netfilter_bridge/ebt_mark_t.h
+===================================================================
+--- linux-5.4.171.orig/include/uapi/linux/netfilter_bridge/ebt_mark_t.h
++++ linux-5.4.171/include/uapi/linux/netfilter_bridge/ebt_mark_t.h
+@@ -13,6 +13,9 @@
+ #define MARK_OR_VALUE  (0xffffffe0)
+ #define MARK_AND_VALUE (0xffffffd0)
+ #define MARK_XOR_VALUE (0xffffffc0)
++#if 1 /* Zyxel QoS vtag-set */
++#define VTAG_SET_VALUE (0xffffffb0)
++#endif
+
+ struct ebt_mark_t_info {
+    unsigned long mark;
+
+Index: linux-5.4.171/net/bridge/netfilter/ebt_mark.c
+===================================================================
+--- linux-5.4.171.orig/net/bridge/netfilter/ebt_mark.c
++++ linux-5.4.171/net/bridge/netfilter/ebt_mark.c
+@@ -31,8 +31,17 @@ ebt_mark_tg(struct sk_buff *skb, const s
+ 		skb->mark |= info->mark;
+ 	else if (action == MARK_AND_VALUE)
+ 		skb->mark &= info->mark;
++#if 1 /* Zyxel QoS vtag-set */
++    else if (action == MARK_XOR_VALUE)
++        skb->mark ^= info->mark;
++    else {
++        /* vtag: do nothing currently */
++        skb->mark ^= info->mark;
++    }
++#else
+ 	else
+ 		skb->mark ^= info->mark;
++#endif
+ 
+ 	return info->target | ~EBT_VERDICT_BITS;
+ }
+@@ -49,7 +58,11 @@ static int ebt_mark_tg_check(const struc
+ 		return -EINVAL;
+ 	tmp = info->target & ~EBT_VERDICT_BITS;
+ 	if (tmp != MARK_SET_VALUE && tmp != MARK_OR_VALUE &&
++#if 1 /* Zyxel QoS vtag-set */
++        tmp != MARK_AND_VALUE && tmp != MARK_XOR_VALUE && tmp != VTAG_SET_VALUE)
++#else
+ 	    tmp != MARK_AND_VALUE && tmp != MARK_XOR_VALUE)
++#endif
+ 		return -EINVAL;
+ 	return 0;
+ }
+Index: linux-5.4.171/net/netfilter/xt_mark.c
+===================================================================
+--- linux-5.4.171.orig/net/netfilter/xt_mark.c
++++ linux-5.4.171/net/netfilter/xt_mark.c
+@@ -22,6 +22,43 @@ MODULE_ALIAS("ipt_MARK");
+ MODULE_ALIAS("ip6t_MARK");
+ MODULE_ALIAS("arpt_MARK");
+ 
++#if 1 /* ZyXEL QoS, John */
++#include <linux/if_vlan.h>
++#include "skb_defines.h"
++
++#define QOS_1Q_ADD      1
++#define QOS_1Q_REMARK   2
++#define QOS_1Q_REMOVE   3
++
++static unsigned int
++mark_tg(struct sk_buff *skb, const struct xt_action_param *par)
++{
++    const struct xt_mark_tginfo2 *markinfo = par->targinfo;
++    int mark = 0;
++
++    switch (markinfo->mode) {
++        case XT_MARK_SET:
++            mark = markinfo->mark;
++            break;
++
++        case XT_MARK_AND:
++            mark = skb->mark & markinfo->mark;
++            break;
++
++        case XT_MARK_OR:
++            mark = skb->mark | markinfo->mark;
++            break;
++
++        case XT_MARK_VTAG_SET:
++            skb->vtag = (unsigned short)(markinfo->mark);
++            mark = skb->mark;
++            break;
++    }
++
++    skb->mark = mark;
++    return XT_CONTINUE;
++}
++#else
+ static unsigned int
+ mark_tg(struct sk_buff *skb, const struct xt_action_param *par)
+ {
+@@ -30,6 +67,7 @@ mark_tg(struct sk_buff *skb, const struc
+ 	skb->mark = (skb->mark & ~info->mask) ^ info->mark;
+ 	return XT_CONTINUE;
+ }
++#endif
+ 
+ static bool
+ mark_mt(const struct sk_buff *skb, struct xt_action_param *par)
+Index: linux-5.4.171/net/core/dev.c
+===================================================================
+--- linux-5.4.171.orig/net/core/dev.c
++++ linux-5.4.171/net/core/dev.c
+@@ -3273,7 +3273,36 @@ static struct sk_buff *validate_xmit_vla
+ 	if (skb_vlan_tag_present(skb) &&
+ 	    !vlan_hw_offload_capable(features, skb->vlan_proto))
+ 		skb = __vlan_hwaccel_push_inside(skb);
+-	return skb;
++
++#if 1 /* Kide@zyxel: Zyxel Qos vtag */
++#include "skb_defines.h"
++
++#define QOS_1Q_ADD      1
++#define QOS_1Q_REMARK   2
++#define QOS_1Q_REMOVE   3
++    /* should be the last xmit device */
++    if (skb->vtag && (skb->dev->hw_features & NETIF_F_HW_VLAN_CTAG_TX)) {
++        u16 vlan_tci = ((skb->vtag & 0xfff) - 1) | (((skb->vtag >> 13) - 1) << 13);
++
++        if (SKBMARK_GET_VID_ACTION((skb)->mark) == QOS_1Q_ADD) {
++            /* double vlan tag  */
++            if (skb_vlan_tag_present(skb))
++                skb = vlan_insert_tag_set_proto(skb, htons(ETH_P_8021Q), vlan_tci);
++            /* single vlan tag*/
++            else
++                __vlan_hwaccel_put_tag(skb, htons(ETH_P_8021Q), vlan_tci);
++        } else if (skb_vlan_tag_present(skb)) {
++            /* vid match */
++            if ((vlan_tci & 0xfff) == (skb_vlan_tag_get(skb) & 0xfff)) {
++                if (SKBMARK_GET_VID_ACTION((skb)->mark) == QOS_1Q_REMOVE)
++                    __vlan_hwaccel_clear_tag(skb);
++                else if (SKBMARK_GET_VID_ACTION((skb)->mark) == QOS_1Q_REMARK)
++                    __vlan_hwaccel_put_tag(skb, htons(ETH_P_8021Q), vlan_tci);
++           }
++        }
++    }
++#endif
++    return skb;
+ }
+ 
+ int skb_csum_hwoffload_help(struct sk_buff *skb,
+@@ -10634,4 +10663,4 @@ subsys_initcall(net_dev_init);
+ EXPORT_SYMBOL(oam_skip_smux);
+ EXPORT_SYMBOL(bcm_1ag_handle_frame_check_hook);
+ EXPORT_SYMBOL(bcm_3ah_handle_frame_check_hook);
+-#endif
+\ No newline at end of file
++#endif
+Index: linux-5.4.171/drivers/net/ethernet/mediatek/mtk_hnat/hnat_nf_hook.c
+===================================================================
+--- linux-5.4.171.orig/drivers/net/ethernet/mediatek/mtk_hnat/hnat_nf_hook.c
++++ linux-5.4.171/drivers/net/ethernet/mediatek/mtk_hnat/hnat_nf_hook.c
+@@ -44,6 +44,14 @@
+ #define do_mape_w2l_fast(dev, skb)                                          \
+ 		(mape_toggle && IS_WAN(dev) && (!is_from_mape(skb)))
+ 
++#if 1 /* Kide@zyxel: Zyxel Qos vtag */
++#include "skb_defines.h"
++
++#define QOS_1Q_ADD      1
++#define QOS_1Q_REMARK   2
++#define QOS_1Q_REMOVE   3
++#endif
++
+ static struct ipv6hdr mape_l2w_v6h;
+ static struct ipv6hdr mape_w2l_v6h;
+ static inline uint8_t get_wifi_hook_if_index_from_dev(const struct net_device *dev)
+@@ -1183,6 +1191,27 @@ static unsigned int skb_to_hnat_info(str
+ 
+ 				entry.ipv4_hnapt.vlan1 = hw_path->vlan_id;
+ 
++#if 1 /* Kide@zyxel: Zyxel Qos vtag */
++                if (skb->vtag) {
++                    u16 vlan_tci = ((skb->vtag & 0xfff) - 1) | (((skb->vtag >> 13) - 1) << 13);
++
++                    if (SKBMARK_GET_VID_ACTION((skb)->mark) == QOS_1Q_ADD) {
++                        entry.bfib1.vlan_layer += 1;
++                        if (entry.ipv4_hnapt.vlan1)
++                            entry.ipv4_hnapt.vlan2 = vlan_tci;
++                        else
++                            entry.ipv4_hnapt.vlan1 = vlan_tci;
++                    } else if ((vlan_tci & 0xfff) == (entry.ipv4_hnapt.vlan1 & 0xfff)) {
++                        /* vid match */
++                        if (SKBMARK_GET_VID_ACTION((skb)->mark) == QOS_1Q_REMOVE) {
++                            entry.bfib1.vlan_layer = 0;
++                            entry.ipv4_hnapt.vlan1 = 0;
++                        } else if (SKBMARK_GET_VID_ACTION((skb)->mark) == QOS_1Q_REMARK)
++                            entry.ipv4_hnapt.vlan1 = vlan_tci;
++                    }
++                }
++#endif
++
+ 				if (skb->vlan_present && skb->vlan_tci && FROM_GE_WAN(skb) && IS_LAN(dev)) {
+ 					entry.bfib1.vlan_layer += 1;
+ 
+@@ -1235,6 +1264,27 @@ static unsigned int skb_to_hnat_info(str
+ 
+ 			entry.ipv6_5t_route.vlan1 = hw_path->vlan_id;
+ 
++#if 1 /* Kide@zyxel: Zyxel Qos vtag */
++            if (skb->vtag) {
++                u16 vlan_tci = ((skb->vtag & 0xfff) - 1) | (((skb->vtag >> 13) - 1) << 13);
++
++                if (SKBMARK_GET_VID_ACTION((skb)->mark) == QOS_1Q_ADD) {
++                    entry.bfib1.vlan_layer += 1;
++                    if (entry.ipv6_5t_route.vlan1)
++                        entry.ipv6_5t_route.vlan2 = vlan_tci;
++                    else
++                        entry.ipv6_5t_route.vlan1 = vlan_tci;
++                } else if ((vlan_tci & 0xfff) == (entry.ipv6_5t_route.vlan1 & 0xfff)) {
++                    /* vid match */
++                    if (SKBMARK_GET_VID_ACTION((skb)->mark) == QOS_1Q_REMOVE) {
++                        entry.bfib1.vlan_layer = 0;
++                        entry.ipv6_5t_route.vlan1 = 0;
++                    } else if (SKBMARK_GET_VID_ACTION((skb)->mark) == QOS_1Q_REMARK)
++                        entry.ipv6_5t_route.vlan1 = vlan_tci;
++                }
++            }
++#endif
++
+ 			if (skb->vlan_present && skb->vlan_tci && FROM_GE_WAN(skb) && IS_LAN(dev)) {
+ 				entry.bfib1.vlan_layer += 1;
+
+Index: linux-5.4.171/include/linux/skbuff.h
+===================================================================
+--- linux-5.4.171.orig/include/linux/skbuff.h
++++ linux-5.4.171/include/linux/skbuff.h
+@@ -886,6 +886,13 @@ struct sk_buff {
+    unsigned int        truesize;
+    refcount_t      users;
+
++#if 1 /* Zyxel QoS vtag */
++    union {
++        unsigned int    vtag_word;
++        struct          { unsigned short vtag, vtag_save; };
++    };
++#endif
++
+ #ifdef CONFIG_SKB_EXTENSIONS
+    /* only useable after checking ->active_extensions != 0 */
+    struct skb_ext      *extensions; 

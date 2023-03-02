@@ -1,0 +1,245 @@
+Index: linux-5.4.171/sound/soc/mediatek/mt79xx/mt79xx-dai-etdm.c
+===================================================================
+--- linux-5.4.171.orig/sound/soc/mediatek/mt79xx/mt79xx-dai-etdm.c	2022-07-17 18:08:52.248578100 +0800
++++ linux-5.4.171/sound/soc/mediatek/mt79xx/mt79xx-dai-etdm.c	2022-07-27 09:42:43.597519700 +0800
+@@ -125,12 +125,30 @@ static const struct snd_soc_dapm_route m
+ 	{"O125", "I033_Switch", "I033"},
+ };
+ 
++
+ /* dai ops */
++#define MTK_DAI_OPS_EXEC_ONLY_FOR_FIRST_FXS_CHANNEL 0 //Add to avoid the compile/install error: warning: "MTK_DAI_OPS_FUNC_ETDM_TRIGGER_DISABLED" is not defined, evaluates to 0 [-Wundef]!! /*Zyxel Porting*/
++#define MTK_DAI_OPS_FUNC_ETDM_TRIGGER_DISABLED 1 //Add to avoid the compile/install error: warning: "MTK_DAI_OPS_FUNC_ETDM_TRIGGER_DISABLED" is not defined, evaluates to 0 [-Wundef]!! /*Zyxel Porting*/
++#define MTK_DAI_OPS_FUNC_ETDM_TRIGGER_DISABLED_EXCEPT_THE_FIRST_START 1 //Add to avoid the compile/install error: warning: "MTK_DAI_OPS_FUNC_ETDM_TRIGGER_DISABLED" is not defined, evaluates to 0 [-Wundef]!! /*Zyxel Porting*/
++#if MTK_DAI_OPS_FUNC_ETDM_TRIGGER_DISABLED_EXCEPT_THE_FIRST_START /*Zyxel Porting*/
++static int mtk_dai_etdm_trigger_disabled_for_all_starts[2] = {0}; //Reset.
++#endif
++
+ static int mtk_dai_etdm_startup(struct snd_pcm_substream *substream,
+ 				struct snd_soc_dai *dai)
+ {
+ 	struct mtk_base_afe *afe = snd_soc_dai_get_drvdata(dai);
+ 
++#if MTK_DAI_OPS_EXEC_ONLY_FOR_FIRST_FXS_CHANNEL /*Zyxel Porting*/
++	if (0 != substream->stream)
++	{
++		// TODO: Debug Message ??
++		return 0;
++	}
++#endif /*Zyxel Porting*/
++
++	printk("\n###@@@###@@@###@@@ %s()/Line-%d/{dai->id=%d, afe->regmap=%p}: Enter...substream->number=%d, substream->name='%s', substream->stream=%d...\n\n", __func__, __LINE__, dai->id, afe->regmap, substream->number, substream->name, substream->stream ); /*Zyxel Porting*/
++
+ 	mt79xx_afe_enable_clock(afe);
+ 
+ 	regmap_update_bits(afe->regmap, AUDIO_TOP_CON2, CLK_OUT5_PDN_MASK,
+@@ -138,6 +156,17 @@ static int mtk_dai_etdm_startup(struct s
+ 	regmap_update_bits(afe->regmap, AUDIO_TOP_CON2, CLK_IN5_PDN_MASK,
+ 			   0);
+ 
++#if MTK_DAI_OPS_FUNC_ETDM_TRIGGER_DISABLED_EXCEPT_THE_FIRST_START /*Zyxel Porting*/
++	mtk_dai_etdm_trigger_disabled_for_all_starts[0] = 0;
++	mtk_dai_etdm_trigger_disabled_for_all_starts[1] = 0;
++#elif MTK_DAI_OPS_FUNC_ETDM_TRIGGER_DISABLED /*Zyxel Porting*/
++	printk("\n###@@@###@@@###@@@ %s()/Line-%d/{dai->id=%d, afe->regmap=%p}: TRIGGER 'START' (substream->number=%d, substream->name='%s', substream->stream=%d)...\n\n", __func__, __LINE__, dai->id, afe->regmap, substream->number, substream->name, substream->stream); /*Zyxel Porting*/
++	regmap_update_bits(afe->regmap, ETDM_IN5_CON0, ETDM_EN_MASK,
++			   ETDM_EN);
++	regmap_update_bits(afe->regmap, ETDM_OUT5_CON0, ETDM_EN_MASK,
++			   ETDM_EN);
++#endif /*Zyxel Porting*/
++
+ 	return 0;
+ }
+ 
+@@ -146,6 +175,24 @@ static void mtk_dai_etdm_shutdown(struct
+ {
+ 	struct mtk_base_afe *afe = snd_soc_dai_get_drvdata(dai);
+ 
++#if MTK_DAI_OPS_EXEC_ONLY_FOR_FIRST_FXS_CHANNEL /*Zyxel Porting*/
++	if (0 != substream->stream)
++	{
++		// TODO: Debug Message ??
++		return;
++	}
++#endif /*Zyxel Porting*/
++
++#if MTK_DAI_OPS_FUNC_ETDM_TRIGGER_DISABLED /*Zyxel Porting*/
++		printk("\n###@@@###@@@###@@@ %s()/Line-%d/{dai->id=%d, afe->regmap=%p}: TRIGGER 'STOP' (substream->number=%d, substream->name='%s', substream->stream=%d)!!\n\n", __func__, __LINE__, dai->id, afe->regmap, substream->number, substream->name, substream->stream); /*Zyxel Porting*/
++		regmap_update_bits(afe->regmap, ETDM_IN5_CON0, ETDM_EN_MASK,
++				   0);
++		regmap_update_bits(afe->regmap, ETDM_OUT5_CON0, ETDM_EN_MASK,
++				   0);
++#endif /*Zyxel Porting*/
++
++	printk("\n###@@@###@@@###@@@ %s()/Line-%d/{dai->id=%d, afe->regmap=%p}: Enter...substream->number=%d, substream->name='%s', substream->stream=%d...\n\n", __func__, __LINE__, dai->id, afe->regmap, substream->number, substream->name, substream->stream ); /*Zyxel Porting*/
++
+ 	regmap_update_bits(afe->regmap, AUDIO_TOP_CON2, CLK_OUT5_PDN_MASK,
+ 			   CLK_OUT5_PDN);
+ 	regmap_update_bits(afe->regmap, AUDIO_TOP_CON2, CLK_IN5_PDN_MASK,
+@@ -154,6 +201,7 @@ static void mtk_dai_etdm_shutdown(struct
+ 	mt79xx_afe_disable_clock(afe);
+ }
+ 
++#if 0 // D2 MOD: Add by Zyxel to avoid the compile/install error: warning: 'get_etdm_ch_fixup' defined but not used [-Wunused-function]!!
+ static unsigned int get_etdm_ch_fixup(unsigned int channels)
+ {
+ 	if (channels > 16)
+@@ -167,6 +215,7 @@ static unsigned int get_etdm_ch_fixup(un
+ 	else
+ 		return 2;
+ }
++#endif // D2 MOD.
+ 
+ static int mtk_dai_etdm_config(struct mtk_base_afe *afe,
+ 			       struct snd_pcm_hw_params *params,
+@@ -205,6 +254,8 @@ static int mtk_dai_etdm_config(struct mt
+ 
+ 	switch (stream) {
+ 	case SNDRV_PCM_STREAM_PLAYBACK:
++		printk("\n###@@@###@@@###@@@ %s()/Line-%d/{dai->id=%d, afe->regmap=%p}/SNDRV_PCM_STREAM_PLAYBACK: (1)stream=%d, (2)mask=0x%08X, (3)val=0x%08X...\n\n", __func__, __LINE__, dai->id, afe->regmap, stream, mask, val ); /*Zyxel Porting*/
++
+ 		/* set ETDM_OUT5_CON0 */
+ 		regmap_update_bits(afe->regmap, ETDM_OUT5_CON0, mask, val);
+ 
+@@ -243,7 +294,10 @@ static int mtk_dai_etdm_config(struct mt
+         }
+ #endif // D2 MOD.
+ 		break;
++
+ 	case SNDRV_PCM_STREAM_CAPTURE:
++		printk("\n###@@@###@@@###@@@ %s()/Line-%d/{dai->id=%d, afe->regmap=%p}/SNDRV_PCM_STREAM_CAPTURE: (1)stream=%d, (2)mask=0x%08X, (3)val=0x%08X...\n\n", __func__, __LINE__, dai->id, afe->regmap, stream, mask, val ); /*Zyxel Porting*/
++
+ 		/* set ETDM_IN5_CON0 */
+ 		regmap_update_bits(afe->regmap, ETDM_IN5_CON0, mask, val);
+ 		regmap_update_bits(afe->regmap, ETDM_IN5_CON0,
+@@ -281,6 +335,7 @@ static int mtk_dai_etdm_config(struct mt
+         }
+ #endif // D2 MOD.
+ 		break;
++
+ 	default:
+ 		break;
+ 	}
+@@ -294,6 +349,16 @@ static int mtk_dai_etdm_hw_params(struct
+ {
+ 	struct mtk_base_afe *afe = snd_soc_dai_get_drvdata(dai);
+ 
++#if MTK_DAI_OPS_EXEC_ONLY_FOR_FIRST_FXS_CHANNEL /*Zyxel Porting*/
++	if (0 != substream->stream)
++	{
++		// TODO: Debug Message ??
++		return 0;
++	}
++#endif /*Zyxel Porting*/
++
++	printk("\n###@@@###@@@###@@@ %s()/Line-%d/{dai->id=%d, afe=%p}: Enter...substream->number=%d, substream->name='%s', substream->stream=%d...\n\n", __func__, __LINE__, dai->id, afe, substream->number, substream->name, substream->stream ); /*Zyxel Porting*/
++
+ 	mtk_dai_etdm_config(afe, params, dai, SNDRV_PCM_STREAM_PLAYBACK);
+ 	mtk_dai_etdm_config(afe, params, dai, SNDRV_PCM_STREAM_CAPTURE);
+ 
+@@ -305,6 +370,14 @@ static int mtk_dai_etdm_trigger(struct s
+ {
+ 	struct mtk_base_afe *afe = snd_soc_dai_get_drvdata(dai);
+ 
++#if MTK_DAI_OPS_EXEC_ONLY_FOR_FIRST_FXS_CHANNEL /*Zyxel Porting*/
++	if (0 != substream->stream)
++	{
++		// TODO: Debug Message ??
++		return 0;
++	}
++#endif /*Zyxel Porting*/
++
+ 	dev_dbg(afe->dev, "%s(), cmd %d, dai id %d\n", __func__, cmd, dai->id);
+ 	switch (cmd) {
+ 	case SNDRV_PCM_TRIGGER_START:
+@@ -312,23 +385,51 @@ static int mtk_dai_etdm_trigger(struct s
+ ////        printk("%s %d D2 debug TRIGGER START/RESUME \n", __func__, __LINE__);
+ //        printk("%s %d D2 debug TRIGGER %s\n", __func__, __LINE__, (SNDRV_PCM_TRIGGER_START == cmd) ? "START" : "RESUME" );
+ #if 1 // D2 MOD.
++#if MTK_DAI_OPS_FUNC_ETDM_TRIGGER_DISABLED_EXCEPT_THE_FIRST_START /*Zyxel Porting*/
++		if ( mtk_dai_etdm_trigger_disabled_for_all_starts[substream->stream] )
++		{
++			//printk("\n###@@@###@@@###@@@ %s()/Line-%d/{dai->id=%d, afe->regmap=%p}: TRIGGER '%s' (substream->number=%d, substream->name='%s', substream->stream=%d) ==> However, this control action has been Disabled/Suppressed!!!\n\n", __func__, __LINE__, dai->id, afe->regmap, (SNDRV_PCM_TRIGGER_START == cmd) ? "START" : "RESUME", substream->number, substream->name, substream->stream); /*Zyxel Porting*/
++			printk("\n###@@@###@@@###@@@ %s()/Line-%d: TRIGGER '%s' ==> However, this control action has been Disabled/Suppressed!!!\n\n", __func__, __LINE__, (SNDRV_PCM_TRIGGER_START == cmd) ? "START" : "RESUME"); /*Zyxel Porting*/
++		}
++		else
++		{
++			printk("\n###@@@###@@@###@@@ %s()/Line-%d/{dai->id=%d, afe->regmap=%p}: TRIGGER '%s' (substream->number=%d, substream->name='%s', substream->stream=%d)...\n\n", __func__, __LINE__, dai->id, afe->regmap, (SNDRV_PCM_TRIGGER_START == cmd) ? "START" : "RESUME", substream->number, substream->name, substream->stream); /*Zyxel Porting*/
++			regmap_update_bits(afe->regmap, ETDM_IN5_CON0, ETDM_EN_MASK,
++					ETDM_EN);
++			regmap_update_bits(afe->regmap, ETDM_OUT5_CON0, ETDM_EN_MASK,
++					ETDM_EN);
++			mtk_dai_etdm_trigger_disabled_for_all_starts[substream->stream] = 1;
++		}
++#elif MTK_DAI_OPS_FUNC_ETDM_TRIGGER_DISABLED /*Zyxel Porting*/
++		printk("\n###@@@###@@@###@@@ %s()/Line-%d/{dai->id=%d, afe->regmap=%p}: TRIGGER '%s' (substream->number=%d, substream->name='%s', substream->stream=%d) ==> However, this control action has been Disabled/Suppressed!!!\n\n", __func__, __LINE__, dai->id, afe->regmap, (SNDRV_PCM_TRIGGER_START == cmd) ? "START" : "RESUME", substream->number, substream->name, substream->stream); /*Zyxel Porting*/
++#else /*Zyxel Porting*/
++		printk("\n###@@@###@@@###@@@ %s()/Line-%d/{dai->id=%d, afe->regmap=%p}: TRIGGER '%s' (substream->number=%d, substream->name='%s', substream->stream=%d)...\n\n", __func__, __LINE__, dai->id, afe->regmap, (SNDRV_PCM_TRIGGER_START == cmd) ? "START" : "RESUME", substream->number, substream->name, substream->stream); /*Zyxel Porting*/
+ 		regmap_update_bits(afe->regmap, ETDM_IN5_CON0, ETDM_EN_MASK,
+ 				   ETDM_EN);
+ 		regmap_update_bits(afe->regmap, ETDM_OUT5_CON0, ETDM_EN_MASK,
+ 				   ETDM_EN);
++#endif /*Zyxel Porting*/
+ #endif // D2 MOD.
+ 		break;
++
+ 	case SNDRV_PCM_TRIGGER_STOP:
+ 	case SNDRV_PCM_TRIGGER_SUSPEND:
+ ////        printk("%s %d D2 debug TRIGGER STOP/SUSPEND\n", __func__, __LINE__);
+ //        printk("%s %d D2 debug TRIGGER %s\n", __func__, __LINE__, (SNDRV_PCM_TRIGGER_STOP == cmd) ? "STOP" : "SUSPEND");
+ #if 1 // D2 MOD.
++#if MTK_DAI_OPS_FUNC_ETDM_TRIGGER_DISABLED /*Zyxel Porting*/
++		//printk("\n###@@@###@@@###@@@ %s()/Line-%d/{dai->id=%d, afe->regmap=%p}: TRIGGER '%s' (substream->number=%d, substream->name='%s', substream->stream=%d) ==> However, this control action has been Disabled/Suppressed!!!\n\n", __func__, __LINE__, dai->id, afe->regmap, (SNDRV_PCM_TRIGGER_STOP == cmd) ? "STOP" : "SUSPEND", substream->number, substream->name, substream->stream); /*Zyxel Porting*/
++		printk("\n###@@@###@@@###@@@ %s()/Line-%d: TRIGGER '%s' ==> However, this control action has been Disabled/Suppressed!!!\n\n", __func__, __LINE__, (SNDRV_PCM_TRIGGER_STOP == cmd) ? "STOP" : "SUSPEND"); /*Zyxel Porting*/
++#else /*Zyxel Porting*/
++		printk("\n###@@@###@@@###@@@ %s()/Line-%d/{dai->id=%d, afe->regmap=%p}: TRIGGER '%s' (substream->number=%d, substream->name='%s', substream->stream=%d)!!\n\n", __func__, __LINE__, dai->id, afe->regmap, (SNDRV_PCM_TRIGGER_STOP == cmd) ? "STOP" : "SUSPEND", substream->number, substream->name, substream->stream); /*Zyxel Porting*/
+ 		regmap_update_bits(afe->regmap, ETDM_IN5_CON0, ETDM_EN_MASK,
+ 				   0);
+ 		regmap_update_bits(afe->regmap, ETDM_OUT5_CON0, ETDM_EN_MASK,
+ 				   0);
++#endif /*Zyxel Porting*/
+ #endif // D2 MOD.
+ 		break;
++
+ 	default:
+ 		break;
+ 	}
+@@ -343,6 +444,8 @@ static int mtk_dai_etdm_set_fmt(struct s
+ 	struct mtk_dai_etdm_priv *etdm_data;
+ 	void *priv_data;
+ 
++	printk("\n###@@@###@@@###@@@ %s()/Line-%d/dai->id=%d: Enter...fmt=0x%08X...\n\n", __func__, __LINE__, dai->id, fmt ); /*Zyxel Porting*/
++
+ 	switch (dai->id) {
+ 	case MT79XX_DAI_ETDM:
+ 		break;
+Index: linux-5.4.171/sound/soc/mediatek/mt79xx/mt79xx-si3218x.c
+===================================================================
+--- linux-5.4.171.orig/sound/soc/mediatek/mt79xx/mt79xx-si3218x.c	2022-07-17 18:08:52.248578100 +0800
++++ linux-5.4.171/sound/soc/mediatek/mt79xx/mt79xx-si3218x.c	2022-07-25 19:06:21.856531100 +0800
+@@ -73,6 +73,8 @@ static int mt79xx_si3218x_init(struct sn
+ 		snd_soc_rtdcom_lookup(rtd, AFE_PCM_NAME);
+ 	struct mtk_base_afe *afe = snd_soc_component_get_drvdata(component);
+ 
++	printk("\n###@@@###@@@###@@@ %s()/Line-%d: Enter...\n\n", __func__, __LINE__ ); /*Zyxel Porting*/
++
+ 	/* enable clk */
+ 	mt79xx_afe_enable_clock(afe);
+ 	regmap_update_bits(afe->regmap, AUDIO_TOP_CON2, CLK_OUT5_PDN_MASK,
+@@ -94,6 +96,7 @@ static int mt79xx_si3218x_init(struct sn
+ 			   ETDM_BIT_LEN(16));
+ 	regmap_update_bits(afe->regmap, ETDM_IN5_CON0, ETDM_WRD_LEN_MASK,
+ 			   ETDM_WRD_LEN(16));
++    /* PCM_16K is define in "mt79xx-afe-common.h" */
+ #ifdef PCM_16K // D2 MOD.
+ 	regmap_update_bits(afe->regmap, ETDM_IN5_CON0, ETDM_CH_NUM_MASK,
+ 			   ETDM_CH_NUM(8));
+@@ -132,6 +135,8 @@ static int mt79xx_si3218x_init(struct sn
+ #endif // D2 MOD.
+ 
+ 	/* set ETDM_OUT5_CON0 */
++	regmap_update_bits(afe->regmap, ETDM_OUT5_CON0, ETDM_SYNC_MASK,
++			   ETDM_SYNC); /*Zyxel Porting*/
+ 	regmap_update_bits(afe->regmap, ETDM_OUT5_CON0, ETDM_FMT_MASK,
+ 			   ETDM_FMT(PCMA));
+ 	regmap_update_bits(afe->regmap, ETDM_OUT5_CON0, ETDM_BIT_LEN_MASK,

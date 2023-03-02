@@ -1,0 +1,26 @@
+Index: dnsmasq-2.85/src/option.c
+===================================================================
+--- dnsmasq-2.85.orig/src/option.c	2021-04-21 17:50:10.562257139 +0800
++++ dnsmasq-2.85/src/option.c	2021-04-21 17:24:07.431323300 +0800
+@@ -160,10 +160,6 @@
+ #define LOPT_DHCPTTL       348
+ #define LOPT_TFTP_MTU      349
+ #define LOPT_REPLY_DELAY   350
+-#ifdef ZYXEL_PATCH
+-#define LOPT_TAG_IFNAME   329
+-#define LOPT_VENDOREXACT  330
+-#endif
+ #define LOPT_RAPID_COMMIT  351
+ #define LOPT_DUMPFILE      352
+ #define LOPT_DUMPMASK      353
+@@ -177,6 +173,10 @@
+ #define LOPT_PXE_VENDOR    361
+ #define LOPT_DYNHOST       362
+ #define LOPT_LOG_DEBUG     363
++#ifdef ZYXEL_PATCH
++#define LOPT_TAG_IFNAME   364
++#define LOPT_VENDOREXACT  365
++#endif
+ 
+ #ifdef HAVE_GETOPT_LONG
+ static const struct option opts[] =

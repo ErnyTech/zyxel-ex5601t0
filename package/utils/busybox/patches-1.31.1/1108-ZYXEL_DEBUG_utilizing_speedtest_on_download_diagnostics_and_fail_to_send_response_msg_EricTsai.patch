@@ -1,0 +1,183 @@
+Index: busybox-1.31.1/networking/wget.c
+===================================================================
+--- busybox-1.31.1.orig/networking/wget.c	2021-04-13 21:03:57.189862247 +0800
++++ busybox-1.31.1/networking/wget.c	2021-04-13 21:05:26.469859671 +0800
+@@ -682,7 +682,7 @@
+ 	FILE *fp;
+ 	char str[200] = {0};
+ 	bool fin_msg = false;
+-	char *f_ip, *f_url = NULL,*f_port; // *host;
++	char *f_ip, *f_url = NULL,*f_port = NULL; // *host;
+ 	int file_line_count = 0, i = 0; // tcp_scale = 0, tcp_window = 0, ret = 0
+ 	int conn = 0, diag_state = 0, err_state = 0;
+ 	//struct sockaddr_in sa, resolve_sa;
+@@ -753,7 +753,7 @@
+ 	// system(str);
+ 
+ 	/* Set destination IP */
+-	printf("f_ip=%s, f_url=%s, f_port=%s\n", f_ip, f_url, f_port);
++	printf("f_ip=%s, f_url=%s, f_port=%s\n", f_ip ? f_ip : "null", f_url ? f_url : "null", f_port ? f_port : "null");
+ 	//Only IP address, no domain name.
+ 	sprintf(str, "echo \"destip=%s\" > /proc/tc3162/speed_test", f_ip);
+ 	printf("sysCmd= %s\n",str);
+@@ -817,6 +817,7 @@
+ 			{
+ 				printf("No WAN interface!!\n");
+ 				strcpy(DiagnosticsState, "Error_InitConnectionFailed");
++				fclose(fp);
+ 				outputDiagDlData();
+ 			}
+ 		}
+@@ -864,8 +865,12 @@
+ 		//	system(str);
+ 			// free(f_url);
+ 		//}
++
+ 	}
+-	free(f_url);
++
++
++	if(f_url)
++		free(f_url);
+ 
+ 	getDateTime(BOMTime);
+ 
+@@ -885,8 +890,9 @@
+ 				fclose(fp);
+ 				break;
+ 			}
++			fclose(fp);
+ 		}
+-		fclose(fp);
++
+ 
+ 		system("cat /proc/tc3162/speed_test | grep err > /var/speed_test_tmp");
+ 		fp = fopen("/var/speed_test_tmp", "r");
+@@ -921,12 +927,15 @@
+ 					//All download complete.
+ 					printf("[%s][%d] speed_test finished 2\n",__FUNCTION__,__LINE__);
+ 					fin_msg = true;
++					fclose(fp);
+ 					break;
+ 				}
+ 
+ 			}
++			fclose(fp);
+ 		}
+-		fclose(fp);
++
++
+ 		if(fin_msg == true)
+ 		{
+ 			printf("%s: Download session complete!!\n", __FUNCTION__);
+@@ -941,10 +950,10 @@
+ 		fsize = ftell(fp);
+ 		if(fsize == 0)
+ 		{
++			fclose(fp);
+ 			printf("!!! speedtest_result_tr143 was empty!!\n");
+ 			strcpy(DiagnosticsState, "Error_TransferFailed");
+ 			outputDiagDlData();
+-			fclose(fp);
+ 			goto exit;
+ 		}
+ 
+@@ -2057,6 +2066,10 @@
+ #if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET)
+ 				if(!strcmp(G.speedTestEnable, "1") && !is_ipv6)
+ 				{
++					char *s = xmalloc_sockaddr2dotted(&lsa->u.sa);
++					printf("%s: server and port: %s\n",__FUNCTION__,s);
++					execute_speedtest(s, server.host,target.path, &rev_bytes, &send_bytes);
++					free(s);
+ 					goto speed_test;
+ 				}
+ #endif
+@@ -2096,6 +2109,10 @@
+ #if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET)
+ 			if(!strcmp(G.speedTestEnable, "1") && !is_ipv6)
+ 			{
++				char *s = xmalloc_sockaddr2dotted(&lsa->u.sa);
++				printf("%s: server and port: %s\n",__FUNCTION__,s);
++				execute_speedtest(s, server.host,target.path, &rev_bytes, &send_bytes);
++				free(s);
+ 				goto speed_test;
+ 			}
+ #endif
+@@ -2128,6 +2145,10 @@
+ #if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET)
+ 			if(!strcmp(G.speedTestEnable, "1") && !is_ipv6)
+ 			{
++				char *s = xmalloc_sockaddr2dotted(&lsa->u.sa);
++				printf("%s: server and port: %s\n",__FUNCTION__,s);
++				execute_speedtest(s, server.host,target.path, &rev_bytes, &send_bytes);
++				free(s);
+ 				goto speed_test;
+ 			}
+ #endif
+@@ -2161,6 +2182,10 @@
+ #if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET)
+ 			if(!strcmp(G.speedTestEnable, "1") && !is_ipv6)
+ 			{
++				char *s = xmalloc_sockaddr2dotted(&lsa->u.sa);
++				printf("%s: server and port: %s\n",__FUNCTION__,s);
++				execute_speedtest(s, server.host,target.path, &rev_bytes, &send_bytes);
++				free(s);
+ 				goto speed_test;
+ 			}
+ #endif
+@@ -2445,12 +2470,27 @@
+ #else
+ 		getDateTime(BOMTime);
+ #endif
++
+ #endif
+ 	}
+ 
+-	free(lsa);
+ 
++#if defined(ZCFG_SUPPORT)
++#if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET)
++	if(target.protocol == P_FTP && !strcmp(G.speedTestEnable, "1") && !is_ipv6){
++#if 0
++		char *s = xmalloc_sockaddr2dotted(&lsa->u.sa);
++		printf("%s: server and port: %s\n",__FUNCTION__,s);
++		execute_speedtest(s, server.host,target.path, &rev_bytes, &send_bytes);
++		free(s);
++#endif
++	}else if (!(option_mask32 & WGET_OPT_SPIDER)) {
++#else
+ 	if (!(option_mask32 & WGET_OPT_SPIDER)) {
++#endif
++#else
++	if (!(option_mask32 & WGET_OPT_SPIDER)) {
++#endif
+ 		if (G.output_fd < 0){
+ #if defined(ZCFG_SUPPORT) //TR143
+ 			G.output_fd = (int )xfopen(G.fname_out, ((option_mask32 & WGET_OPT_CONTINUE) ? "a" : "w"));
+@@ -2472,6 +2512,8 @@
+ 			fprintf(stderr, "remote file exists\n");
+ 	}
+ 
++	free(lsa);
++
+ 	if (dfp != sfp) {
+ 		/* It's ftp. Close data connection properly */
+ 		fclose(dfp);
+@@ -2492,6 +2534,7 @@
+ #if defined(ZCFG_SUPPORT) //TR143:DownloadDiagnstic
+ #if defined(ZYXEL_DIAGNOSTIC_SPEEDTEST) && defined(PLATFORM_ECONET)
+ speed_test:
++#if 0
+ 	if(!strcmp(G.speedTestEnable, "1") && !is_ipv6)
+ 	{
+ 		char *s = xmalloc_sockaddr2dotted(&lsa->u.sa);
+@@ -2499,6 +2542,8 @@
+ 		execute_speedtest(s, server.host,target.path, &rev_bytes, &send_bytes);
+ 		free(s);
+ 	}
++	free(lsa);
++#endif
+ 
+ 	//printf("%s: rev_bytes=%d, send_bytes=%d\n",__FUNCTION__, rev_bytes, send_bytes);
+ 	if(!strcmp(G.speedTestEnable, "1") && !is_ipv6)

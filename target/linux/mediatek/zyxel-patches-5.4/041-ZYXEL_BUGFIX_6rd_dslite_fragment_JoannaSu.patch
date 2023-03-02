@@ -1,0 +1,133 @@
+Index: linux-5.4.171/net/ipv4/ip_output.c
+===================================================================
+--- linux-5.4.171.orig/net/ipv4/ip_output.c
++++ linux-5.4.171/net/ipv4/ip_output.c
+@@ -77,6 +77,9 @@
+ #include <net/inet_ecn.h>
+ #include <net/lwtunnel.h>
+ #include <linux/bpf-cgroup.h>
++#if 1//defined(ZYXEL)
++#include <net/ip6_tunnel.h>
++#endif
+ #include <linux/igmp.h>
+ #include <linux/netfilter_ipv4.h>
+ #include <linux/netfilter_bridge.h>
+@@ -780,6 +783,22 @@ int ip_do_fragment(struct net *net, stru
+ 	struct ip_frag_state state;
+ 	int err = 0;
+ 
++#if 1//defined(ZYXEL)
++   /*
++    * Do not fragment the packets going to 4in6 tunnel:
++    * RFC2473 sec 7.2: fragmentation should happen in tunnel
++    */
++    if (rt->dst.dev->type == ARPHRD_TUNNEL6)
++    {
++        struct ip6_tnl *tunnel = netdev_priv(rt->dst.dev);
++
++        if (tunnel->parms.proto == IPPROTO_IPIP)
++        {
++            return output(net, sk, skb);
++        }
++    }
++#endif
++
+ 	/* for offloaded checksums cleanup checksum before fragmentation */
+ 	if (skb->ip_summed == CHECKSUM_PARTIAL &&
+ 	    (err = skb_checksum_help(skb)))
+Index: linux-5.4.171/net/ipv6/ip6_tunnel.c
+===================================================================
+--- linux-5.4.171.orig/net/ipv6/ip6_tunnel.c
++++ linux-5.4.171/net/ipv6/ip6_tunnel.c
+@@ -1200,6 +1200,9 @@ int ip6_tnl_xmit(struct sk_buff *skb, st
+ 	bool use_cache = false;
+ 	u8 hop_limit;
+ 	int err = -1;
++#if 1 //defined(ZYXEL)
++	u8 needFrag = 0;
++#endif
+ 
+ 	if (t->parms.collect_md) {
+ 		hop_limit = skb_tunnel_info(skb)->key.ttl;
+@@ -1288,8 +1291,12 @@ route_lookup:
+ 	skb_dst_update_pmtu_no_confirm(skb, mtu);
+ 	if (skb->len - t->tun_hlen - eth_hlen > mtu && !skb_is_gso(skb)) {
+ 		*pmtu = mtu;
++#if 1//defined(ZYXEL)
++		needFrag = 1;
++#else
+ 		err = -EMSGSIZE;
+ 		goto tx_err_dst_release;
++#endif
+ 	}
+ 
+ 	if (t->err_count > 0) {
+@@ -1368,7 +1375,17 @@ route_lookup:
+ 	ipv6h->nexthdr = proto;
+ 	ipv6h->saddr = fl6->saddr;
+ 	ipv6h->daddr = fl6->daddr;
++#if 1 //defined(ZYXEL)
++	if (needFrag) {
++		skb->ignore_df = 1;
++		ip6_fragment(net, skb->sk, skb, ip6_local_out);
++	}
++	else {
++		ip6tunnel_xmit(skb->sk, skb, dev);
++	}
++#else
+ 	ip6tunnel_xmit(NULL, skb, dev);
++#endif
+ 	return 0;
+ tx_err_link_failure:
+ 	stats->tx_carrier_errors++;
+Index: linux-5.4.171/net/ipv6/sit.c
+===================================================================
+--- linux-5.4.171.orig/net/ipv6/sit.c
++++ linux-5.4.171/net/ipv6/sit.c
+@@ -1000,8 +1000,32 @@ static netdev_tx_t ipip6_tunnel_xmit(str
+ 
+ 	skb_set_inner_ipproto(skb, IPPROTO_IPV6);
+ 
++
++
++
++
++
++#if 1 //defined(ZYXEL)
++	/*
++	 *	cd-router #1329: DF flag should not be set
++	 *	RFC 3056 sec 4: DF flag should not be set
++	 *	RFC 4213 sec 3.2.1: DF flag MUST NOT be set for static MTU cases.
++	 *	RFC 4213 sec 3.2.2: For dynamic MTU cases, the algorithm should be:
++	 *	if ( (v4MTU-20) < 1280 ) {
++	 *	    if ( v6Pkt > 1280 ) send ICMPv6 "TooBig" with MTU=1280;
++	 *	    else encapsulate to v4 packet and DF flag MUST NOT be set
++	 *	}
++	 *	else {
++	 *	    if ( v6Pkt > (v4MTU-20) ) send ICMPv6 "TooBig" with MTU=(v4MTU-20);
++	 *	    else encapsulate to v4 packet and DF flag MUST be set
++	 *	}
++	 */
++	iptunnel_xmit(NULL, rt, skb, fl4.saddr, fl4.daddr, IPPROTO_IPV6, tos, ttl,
++		      0, !net_eq(tunnel->net, dev_net(dev)));
++#else
+ 	iptunnel_xmit(NULL, rt, skb, fl4.saddr, fl4.daddr, protocol, tos, ttl,
+ 		      df, !net_eq(tunnel->net, dev_net(dev)));
++#endif
+ 	return NETDEV_TX_OK;
+ 
+ tx_error_icmp:
+Index: linux-5.4.171/net/ipv6/ip6_output.c
+===================================================================
+--- linux-5.4.171.orig/net/ipv6/ip6_output.c
++++ linux-5.4.171/net/ipv6/ip6_output.c
+@@ -1010,6 +1010,9 @@ fail:
+ 	kfree_skb(skb);
+ 	return err;
+ }
++#if 1 //defined(ZYXEL)
++EXPORT_SYMBOL_GPL(ip6_fragment);
++#endif
+ 
+ static inline int ip6_rt_check(const struct rt6key *rt_key,
+ 			       const struct in6_addr *fl_addr,

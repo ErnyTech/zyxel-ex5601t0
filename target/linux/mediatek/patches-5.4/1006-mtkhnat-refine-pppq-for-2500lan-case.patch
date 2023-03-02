@@ -1,0 +1,35 @@
+diff --git a/drivers/net/ethernet/mediatek/mtk_hnat/hnat.h b/drivers/net/ethernet/mediatek/mtk_hnat/hnat.h
+index 31a060f8..510200fc 100644
+--- a/drivers/net/ethernet/mediatek/mtk_hnat/hnat.h
++++ b/drivers/net/ethernet/mediatek/mtk_hnat/hnat.h
+@@ -886,6 +886,8 @@ enum FoeIpAct {
+ 	})
+ 
+ #define IS_DSA_LAN(dev) (!strncmp(dev->name, "lan", 3))
++#define IS_DSA_1G_LAN(dev) (!strncmp(dev->name, "lan", 3) &&			\
++			    strcmp(dev->name, "lan5"))
+ #define IS_DSA_WAN(dev) (!strncmp(dev->name, "wan", 3))
+ #define NONE_DSA_PORT 0xff
+ #define MAX_CRSN_NUM 32
+diff --git a/drivers/net/ethernet/mediatek/mtk_hnat/hnat_nf_hook.c b/drivers/net/ethernet/mediatek/mtk_hnat/hnat_nf_hook.c
+index 24275a0d..cb083231 100644
+--- a/drivers/net/ethernet/mediatek/mtk_hnat/hnat_nf_hook.c
++++ b/drivers/net/ethernet/mediatek/mtk_hnat/hnat_nf_hook.c
+@@ -1513,7 +1513,7 @@ static unsigned int skb_to_hnat_info(struct sk_buff *skb,
+ 			    (IS_PPPQ_MODE && !IS_DSA_LAN(dev) && !IS_DSA_WAN(dev)))
+ 				entry.ipv4_hnapt.iblk2.fqos = 0;
+ 			else
+-				entry.ipv4_hnapt.iblk2.fqos = 1;
++				entry.ipv4_hnapt.iblk2.fqos = (!IS_PPPQ_MODE || (IS_PPPQ_MODE && IS_DSA_1G_LAN(dev)));
+ 		} else {
+ 			entry.ipv4_hnapt.iblk2.fqos = 0;
+ 		}
+@@ -1545,7 +1545,7 @@ static unsigned int skb_to_hnat_info(struct sk_buff *skb,
+ 			    (IS_PPPQ_MODE && !IS_DSA_LAN(dev) && !IS_DSA_WAN(dev)))
+ 				entry.ipv6_5t_route.iblk2.fqos = 0;
+ 			else
+-				entry.ipv6_5t_route.iblk2.fqos = 1;
++				entry.ipv6_5t_route.iblk2.fqos = (!IS_PPPQ_MODE || (IS_PPPQ_MODE && IS_DSA_1G_LAN(dev)));
+ 		} else {
+ 			entry.ipv6_5t_route.iblk2.fqos = 0;
+ 		}

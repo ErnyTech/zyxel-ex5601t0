@@ -1,0 +1,16 @@
+Index: dnsmasq-2.67/src/forward.c
+===================================================================
+--- dnsmasq-2.67.orig/src/forward.c	2020-10-21 18:02:16.956257876 +0800
++++ dnsmasq-2.67/src/forward.c	2020-10-21 18:05:23.516259238 +0800
+@@ -757,6 +757,11 @@
+       (msg.msg_flags & MSG_TRUNC) ||
+       (header->hb3 & HB3_QR))
+     return;
++
++#ifdef ZYXEL_SUPPORT_NESSUS
++  if (!(header->hb3 & HB3_RD))
++      return;
++#endif
+  
+   /* CVE-2017-13704: Clear buffer beyond request to avoid risk of information disclosure. */
+   memset(daemon->packet + n, 0, daemon->edns_pktsz - n);

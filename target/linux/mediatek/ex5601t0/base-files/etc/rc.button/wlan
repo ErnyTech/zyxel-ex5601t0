@@ -1,0 +1,8 @@
+#!/bin/sh
+
+
+if [ "$ACTION" = "pressed" -a "$BUTTON" = "wlan" ]; then
+	echo "WLAN Button Pressed........." > /dev/console
+fi
+
+return 0

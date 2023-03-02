@@ -1,0 +1,74 @@
+Index: net-snmp-5.8/agent/mibgroup/ZYXEL-PRESTIGE-MIB/prestigeLAN.c
+===================================================================
+--- net-snmp-5.8.orig/agent/mibgroup/ZYXEL-PRESTIGE-MIB/prestigeLAN.c
++++ net-snmp-5.8/agent/mibgroup/ZYXEL-PRESTIGE-MIB/prestigeLAN.c
+@@ -984,7 +984,7 @@ handle_lanIpRipDirection(netsnmp_mib_han
+                           netsnmp_request_info         *requests)
+ {
+ #if 0
+-    int ret;
++    int ret = SNMP_ERR_NOERROR;
+     /* We are never called for a GETNEXT if it's registered as a
+        "instance", as it's "magically" handled for us.  */
+ 
+@@ -1063,7 +1063,7 @@ int handle_lanIpRipVersion(netsnmp_mib_h
+                           netsnmp_agent_request_info   *reqinfo,
+                           netsnmp_request_info         *requests)
+ {
+-    int ret;
++    int ret = SNMP_ERR_NOERROR;
+ 
+     switch(reqinfo->mode) {
+         case MODE_GET:
+Index: net-snmp-5.8/agent/mibgroup/ZYXEL-PRESTIGE-MIB/prestigeSystem.c
+===================================================================
+--- net-snmp-5.8.orig/agent/mibgroup/ZYXEL-PRESTIGE-MIB/prestigeSystem.c
++++ net-snmp-5.8/agent/mibgroup/ZYXEL-PRESTIGE-MIB/prestigeSystem.c
+@@ -575,7 +575,7 @@ int handle_sysLocation(netsnmp_mib_handl
+                           netsnmp_agent_request_info   *reqinfo,
+                           netsnmp_request_info         *requests)
+ {
+-    int ret;
++    int ret = SNMP_ERR_NOERROR;
+     switch(reqinfo->mode) {
+         case MODE_GET:
+ 			case MODE_GETBULK:
+@@ -621,7 +621,7 @@ int handle_sysConatctPersion(netsnmp_mib
+                           netsnmp_agent_request_info   *reqinfo,
+                           netsnmp_request_info         *requests)
+ {
+-    int ret;
++    int ret = SNMP_ERR_NOERROR;
+     switch(reqinfo->mode) {
+ 
+         case MODE_GET:
+@@ -857,7 +857,7 @@ int handle_sysDomainName(netsnmp_mib_han
+                           netsnmp_agent_request_info   *reqinfo,
+                           netsnmp_request_info         *requests)
+ {
+-	int ret;
++    int ret = SNMP_ERR_NOERROR;
+ 
+     switch(reqinfo->mode) {
+ 
+Index: net-snmp-5.8/agent/mibgroup/ZYXEL-PRESTIGE-MIB/zylib.c
+===================================================================
+--- net-snmp-5.8.orig/agent/mibgroup/ZYXEL-PRESTIGE-MIB/zylib.c
++++ net-snmp-5.8/agent/mibgroup/ZYXEL-PRESTIGE-MIB/zylib.c
+@@ -493,7 +493,8 @@ int IsWanInterfaceObject(char *objPath){
+ }
+ 
+ int handleOfGetNumberOfIntf(int *wanSum, int *lanSum){
+-	int i, ret, totalIpNum, isWan;
++	int i, totalIpNum, isWan;
++	int ret = SNMP_ERR_NOERROR;
+ 	zcfgRet_t zRet;
+ 	objIndex_t IpObjIid;
+ 	struct json_object *IpObj = NULL;
+@@ -1352,4 +1353,4 @@ fail:
+ 	if(dhcpObj) zcfgFeJsonObjFree(dhcpObj);
+ 	if(relayObj) zcfgFeJsonObjFree(relayObj);
+ 	return ret;
+-}
+\ No newline at end of file
++}
